@@ -165,7 +165,7 @@ function Initialize-AppContext {
             $ForceDialog = $false
         }
         $token = $null
-        if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
+        if ($cfg.mode -in @('gitlab','github')) { $token = Get-GitLabToken }
         $source = New-DataSource -Config $cfg -Token $token
 
         $r = Try-LoadAll -Source $source
@@ -261,7 +261,11 @@ $names = @(
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
 
-$ui.ModeText.Text = "{0}  |  branch: {1}" -f $Script:Config.gitlab_url, $Script:Config.branch
+$ui.ModeText.Text = switch ($Script:Config.mode) {
+    'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
+    'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
+    'local'  { "local | {0}" -f $Script:Config.local_root }
+}
 
 # ---- 状態 ----
 $Script:Entries = New-Object System.Collections.ObjectModel.ObservableCollection[object]
@@ -591,7 +595,11 @@ $ui.SettingsBtn.Add_Click({
         $Script:Projects     = @($newCtx['Projects'])
         $Script:Categories   = @($newCtx['Categories'])
         $Script:TaskPatterns = @($newCtx['TaskPatterns'])
-        $ui.ModeText.Text = "{0}  |  branch: {1}" -f $Script:Config.gitlab_url, $Script:Config.branch
+        $ui.ModeText.Text = switch ($Script:Config.mode) {
+    'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
+    'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
+    'local'  { "local | {0}" -f $Script:Config.local_root }
+}
 
         $Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
         if (-not $Script:CurrentMember) {
@@ -625,23 +633,28 @@ $ui.AdminBtn.Add_Click({
 # ---- 保存先を開く ----
 $ui.OpenFolderBtn.Add_Click({
     try {
-        if ($Script:Config.mode -eq 'local') {
-            $path = $Script:Config.local_root
-            if (-not $path -or -not (Test-Path -LiteralPath $path)) {
-                [System.Windows.MessageBox]::Show("ローカル保存先が設定されていないか、存在しません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
-                return
+        switch ($Script:Config.mode) {
+            'local' {
+                $path = $Script:Config.local_root
+                if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+                    [System.Windows.MessageBox]::Show("ローカル保存先が設定されていないか、存在しません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
+                    return
+                }
+                Start-Process explorer.exe -ArgumentList "`"$path`""
             }
-            Start-Process explorer.exe -ArgumentList "`"$path`""
-        } else {
-            # GitLab: プロジェクトの web_url を API で取得して既定ブラウザで開く
-            Set-Status '保存先 URL を取得中...' '#6b7280'
-            $proj = Test-GitLabConnection -Ctx $Script:Source.Ctx
-            $url = $proj.web_url
-            if (-not $url) {
-                $url = ('{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id)
+            'gitlab' {
+                Set-Status '保存先 URL を取得中...' '#6b7280'
+                $proj = Test-GitLabConnection -Ctx $Script:Source.Ctx
+                $url = if ($proj.web_url) { $proj.web_url } else { '{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id }
+                Set-Status "ブラウザで開く: $url" '#10b981'
+                Start-Process $url
             }
-            Set-Status "ブラウザで開く: $url" '#10b981'
-            Start-Process $url
+            'github' {
+                $url = 'https://github.com/{0}' -f $Script:Config.github_repo
+                if ($Script:Config.branch) { $url = "$url/tree/$($Script:Config.branch)" }
+                Set-Status "ブラウザで開く: $url" '#10b981'
+                Start-Process $url
+            }
         }
     } catch {
         [System.Windows.MessageBox]::Show("保存先を開けませんでした:`n$_", 'エラー', 'OK', 'Error') | Out-Null

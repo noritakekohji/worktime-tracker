@@ -3,6 +3,7 @@
 # mode = 'local'  ならローカルファイルシステム (開発・テスト用)
 
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
+. (Join-Path $PSScriptRoot 'GitHub.ps1')
 
 function Get-RepoRoot {
     param([string]$StartPath = $PSScriptRoot)
@@ -37,25 +38,34 @@ function New-DataSource {
         [Parameter(Mandatory)]$Config,
         [string]$Token
     )
-    if ($Config.mode -eq 'gitlab') {
-        $ctx = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
-                                 -Branch  $Config.branch     -Token     $Token
-        return [pscustomobject]@{ Mode = 'gitlab'; Ctx = $ctx; Root = $null }
-    } else {
-        $root = $Config.local_root
-        if (-not $root) { $root = Get-RepoRoot -StartPath $PSScriptRoot }
-        return [pscustomobject]@{ Mode = 'local'; Ctx = $null; Root = $root }
+    switch ($Config.mode) {
+        'gitlab' {
+            $ctx = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
+                                     -Branch  $Config.branch     -Token     $Token
+            return [pscustomobject]@{ Mode = 'gitlab'; Ctx = $ctx; Root = $null }
+        }
+        'github' {
+            $ctx = New-GitHubContext -Repo $Config.github_repo -Branch $Config.branch -Token $Token
+            return [pscustomobject]@{ Mode = 'github'; Ctx = $ctx; Root = $null }
+        }
+        default {
+            $root = $Config.local_root
+            if (-not $root) { $root = Get-RepoRoot -StartPath $PSScriptRoot }
+            return [pscustomobject]@{ Mode = 'local'; Ctx = $null; Root = $root }
+        }
     }
 }
 
 function Get-DataFile {
     param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)][string]$RelPath)
-    if ($Source.Mode -eq 'gitlab') {
-        return Get-GitLabFileRaw -Ctx $Source.Ctx -Path $RelPath
-    } else {
-        $p = Join-Path $Source.Root $RelPath
-        if (-not (Test-Path -LiteralPath $p)) { return $null }
-        return Get-Content -LiteralPath $p -Raw -Encoding UTF8
+    switch ($Source.Mode) {
+        'gitlab' { return Get-GitLabFileRaw -Ctx $Source.Ctx -Path $RelPath }
+        'github' { return Get-GitHubFileRaw -Ctx $Source.Ctx -Path $RelPath }
+        default  {
+            $p = Join-Path $Source.Root $RelPath
+            if (-not (Test-Path -LiteralPath $p)) { return $null }
+            return Get-Content -LiteralPath $p -Raw -Encoding UTF8
+        }
     }
 }
 
@@ -68,16 +78,23 @@ function Set-DataFile {
         [string]$AuthorName,
         [string]$AuthorEmail
     )
-    if ($Source.Mode -eq 'gitlab') {
-        $null = Set-GitLabFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
-                               -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-    } else {
-        $p = Join-Path $Source.Root $RelPath
-        $dir = Split-Path -Parent $p
-        if (-not (Test-Path -LiteralPath $dir)) {
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    switch ($Source.Mode) {
+        'gitlab' {
+            $null = Set-GitLabFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
+                                   -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
         }
-        Set-Content -LiteralPath $p -Value $Content -Encoding UTF8
+        'github' {
+            $null = Set-GitHubFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
+                                   -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+        }
+        default {
+            $p = Join-Path $Source.Root $RelPath
+            $dir = Split-Path -Parent $p
+            if (-not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            }
+            Set-Content -LiteralPath $p -Value $Content -Encoding UTF8
+        }
     }
 }
 
@@ -223,12 +240,18 @@ function Load-AllEntries {
             } catch { Write-Warning "skip $($_.FullName): $_" }
         }
     } else {
-        $tree = Get-GitLabTree -Ctx $Source.Ctx -Path 'data'
+        if ($Source.Mode -eq 'gitlab') {
+            $tree    = Get-GitLabTree    -Ctx $Source.Ctx -Path 'data'
+            $getter  = { param($p) Get-GitLabFileRaw -Ctx $Source.Ctx -Path $p }
+        } else {
+            $tree    = Get-GitHubTree    -Ctx $Source.Ctx -Path 'data'
+            $getter  = { param($p) Get-GitHubFileRaw -Ctx $Source.Ctx -Path $p }
+        }
         foreach ($item in $tree) {
             if ($item.type -ne 'blob') { continue }
             if (-not $item.path.EndsWith('.json')) { continue }
             try {
-                $raw = Get-GitLabFileRaw -Ctx $Source.Ctx -Path $item.path
+                $raw = & $getter $item.path
                 $doc = $raw | ConvertFrom-Json
                 foreach ($e in @($doc.entries)) {
                     $row = [ordered]@{ member_id = $doc.member_id }

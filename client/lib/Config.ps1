@@ -8,12 +8,13 @@ function Get-ConfigPath {
 
 function New-DefaultConfig {
     return [pscustomobject]@{
-        mode         = 'gitlab'   # 'gitlab' | 'local'
+        mode         = 'gitlab'   # 'gitlab' | 'github' | 'local'
         gitlab_url   = 'https://gitlab.example.com'
-        project_id   = ''         # GitLab プロジェクト ID または "group/project" の URL エンコード
+        project_id   = ''         # GitLab: 数値 ID または "group/project"
+        github_repo  = ''         # GitHub: "owner/repo"
         branch       = 'main'
         member_id    = ''
-        local_root   = ''         # mode=local 時のリポジトリルート (開発用)
+        local_root   = ''
     }
 }
 
@@ -22,7 +23,6 @@ function Load-Config {
     if (-not (Test-Path -LiteralPath $p)) { return New-DefaultConfig }
     try {
         $cfg = Get-Content -LiteralPath $p -Raw -Encoding UTF8 | ConvertFrom-Json
-        # 不足プロパティを補完
         $def = New-DefaultConfig
         foreach ($prop in $def.PSObject.Properties.Name) {
             if (-not $cfg.PSObject.Properties.Name.Contains($prop)) {
@@ -45,11 +45,18 @@ function Save-Config {
 function Test-ConfigComplete {
     param([Parameter(Mandatory)]$Config)
     if (-not $Config.member_id) { return $false }
-    if ($Config.mode -eq 'gitlab') {
-        if (-not $Config.gitlab_url -or -not $Config.project_id) { return $false }
-        if (-not (Test-GitLabTokenStored)) { return $false }
-    } elseif ($Config.mode -eq 'local') {
-        if (-not $Config.local_root -or -not (Test-Path -LiteralPath $Config.local_root)) { return $false }
+    switch ($Config.mode) {
+        'gitlab' {
+            if (-not $Config.gitlab_url -or -not $Config.project_id) { return $false }
+            if (-not (Test-GitLabTokenStored)) { return $false }
+        }
+        'github' {
+            if (-not $Config.github_repo) { return $false }
+            if (-not (Test-GitLabTokenStored)) { return $false }   # 同じ DPAPI ファイル流用
+        }
+        'local' {
+            if (-not $Config.local_root -or -not (Test-Path -LiteralPath $Config.local_root)) { return $false }
+        }
     }
     return $true
 }

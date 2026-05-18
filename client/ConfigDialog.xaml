@@ -129,10 +129,11 @@
             <Label Grid.Row="0" Grid.Column="0" Content="保存先モード:"/>
             <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ModeCombo">
                 <ComboBoxItem Content="gitlab" IsSelected="True"/>
+                <ComboBoxItem Content="github"/>
                 <ComboBoxItem Content="local"/>
             </ComboBox>
             <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
-                       Text="gitlab: GitLab REST API 経由で保管 / local: 指定フォルダ (共有ドライブ等) に保管"/>
+                       Text="gitlab/github: REST API 経由で保管 / local: 指定フォルダ (共有ドライブ等) に保管"/>
 
             <Label Grid.Row="2" Grid.Column="0" x:Name="UrlLabel" Content="GitLab URL:"/>
             <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="UrlBox"/>
