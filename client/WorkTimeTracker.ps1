@@ -251,7 +251,7 @@ $names = @(
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText',
-    'AdminBtn','SettingsBtn','FormHeader','ListTitle','ModeText'
+    'AdminBtn','SettingsBtn','OpenFolderBtn','FormHeader','ListTitle','ModeText'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
@@ -594,6 +594,32 @@ $ui.AdminBtn.Add_Click({
     if (-not $m -or $m.role -ne 'admin') { return }
     Show-AdminDialog -Source $Script:Source -MemberId $m.id -MemberName $m.name
     Reload-Masters
+})
+
+# ---- 保存先を開く ----
+$ui.OpenFolderBtn.Add_Click({
+    try {
+        if ($Script:Config.mode -eq 'local') {
+            $path = $Script:Config.local_root
+            if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+                [System.Windows.MessageBox]::Show("ローカル保存先が設定されていないか、存在しません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
+                return
+            }
+            Start-Process explorer.exe -ArgumentList "`"$path`""
+        } else {
+            # GitLab: プロジェクトの web_url を API で取得して既定ブラウザで開く
+            Set-Status '保存先 URL を取得中...' '#6b7280'
+            $proj = Test-GitLabConnection -Ctx $Script:Source.Ctx
+            $url = $proj.web_url
+            if (-not $url) {
+                $url = ('{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id)
+            }
+            Set-Status "ブラウザで開く: $url" '#10b981'
+            Start-Process $url
+        }
+    } catch {
+        [System.Windows.MessageBox]::Show("保存先を開けませんでした:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+    }
 })
 
 # ---- 初回ロード ----

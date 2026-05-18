@@ -4,23 +4,26 @@
     Title="WorkTime Tracker"
     Height="780" Width="1280"
     WindowStartupLocation="CenterScreen"
-    Background="#1e1e2e"
-    FontFamily="Yu Gothic UI"
-    FontSize="13">
+    Background="#f6faf8"
+    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <!-- カラーパレット (Catppuccin Mocha 風) -->
-        <SolidColorBrush x:Key="Bg"        Color="#1e1e2e"/>
-        <SolidColorBrush x:Key="Surface"   Color="#181825"/>
-        <SolidColorBrush x:Key="Surface2"  Color="#313244"/>
-        <SolidColorBrush x:Key="Border"    Color="#45475a"/>
-        <SolidColorBrush x:Key="Text"      Color="#cdd6f4"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#a6adc8"/>
-        <SolidColorBrush x:Key="Green"     Color="#a6e3a1"/>
-        <SolidColorBrush x:Key="Blue"      Color="#89b4fa"/>
-        <SolidColorBrush x:Key="Peach"     Color="#fab387"/>
-        <SolidColorBrush x:Key="Red"       Color="#f38ba8"/>
-        <SolidColorBrush x:Key="Yellow"    Color="#f9e2af"/>
-        <SolidColorBrush x:Key="Mauve"     Color="#cba6f7"/>
+        <!-- カラーパレット: エメラルドグリーン × オフホワイト (柔らかいパステル) -->
+        <SolidColorBrush x:Key="Bg"        Color="#f6faf8"/>
+        <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#ecfdf5"/>
+        <SolidColorBrush x:Key="Border"    Color="#cdebd6"/>
+        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#6b7280"/>
+        <SolidColorBrush x:Key="Emerald"   Color="#10b981"/>
+        <SolidColorBrush x:Key="EmeraldD"  Color="#059669"/>
+        <SolidColorBrush x:Key="EmeraldL"  Color="#a7f3d0"/>
+        <SolidColorBrush x:Key="Soft"      Color="#d1fae5"/>
+        <SolidColorBrush x:Key="Sky"       Color="#7dd3fc"/>
+        <SolidColorBrush x:Key="Amber"     Color="#fbbf24"/>
+        <SolidColorBrush x:Key="Rose"      Color="#fb7185"/>
 
         <Style TargetType="Label">
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -31,20 +34,23 @@
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
         <Style TargetType="ComboBox">
             <Setter Property="Margin" Value="0,2"/>
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="32"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="0,2"/>
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="32"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Background" Value="#11111b"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
@@ -52,17 +58,18 @@
         </Style>
         <Style TargetType="DatePicker">
             <Setter Property="Margin" Value="0,2"/>
-            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="MinHeight" Value="32"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
 
-        <!-- 標準ボタン -->
+        <!-- 標準ボタン (薄いミント) -->
         <Style TargetType="Button">
             <Setter Property="Margin" Value="3"/>
             <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="MinHeight" Value="34"/>
             <Setter Property="Background" Value="{StaticResource Surface2}"/>
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="13"/>
@@ -73,15 +80,19 @@
                         <Border x:Name="b" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
+                                CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#45475a"/>
+                                <Setter TargetName="b" Property="Background" Value="#d1fae5"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#585b70"/>
+                                <Setter TargetName="b" Property="Background" Value="#a7f3d0"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#f3f4f6"/>
+                                <Setter Property="Foreground" Value="#9ca3af"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -89,63 +100,68 @@
             </Setter>
         </Style>
 
-        <!-- アクセント (緑/青/赤) ボタン -->
-        <Style x:Key="AccentGreen" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Green}"/>
-            <Setter Property="Foreground" Value="#11111b"/>
+        <!-- アクセントボタン: メインアクション (エメラルド塗りつぶし) -->
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource Emerald}"/>
+            <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Emerald}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}"
-                                CornerRadius="6">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#94d68f"/>
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#7fc983"/>
+                                <Setter TargetName="b" Property="Background" Value="#047857"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="AccentBlue" TargetType="Button" BasedOn="{StaticResource AccentGreen}">
-            <Setter Property="Background" Value="{StaticResource Blue}"/>
+        <!-- セカンダリ (薄塗り) -->
+        <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="{StaticResource EmeraldL}"/>
+            <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
         </Style>
-        <Style x:Key="AccentRed" TargetType="Button" BasedOn="{StaticResource AccentGreen}">
-            <Setter Property="Background" Value="{StaticResource Red}"/>
+        <!-- 警告 (やわらかい琥珀) -->
+        <Style x:Key="Warning" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="{StaticResource Amber}"/>
+            <Setter Property="Foreground" Value="#7c2d12"/>
         </Style>
-        <Style x:Key="AccentYellow" TargetType="Button" BasedOn="{StaticResource AccentGreen}">
-            <Setter Property="Background" Value="{StaticResource Yellow}"/>
+        <!-- 危険 (やわらかいローズ) -->
+        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="{StaticResource Rose}"/>
         </Style>
 
         <!-- クイック数値ボタン -->
         <Style x:Key="QuickHour" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="MinWidth" Value="38"/>
-            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="MinWidth" Value="42"/>
+            <Setter Property="MinHeight" Value="30"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Padding" Value="4,2"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
         </Style>
 
         <!-- カードコンテナ -->
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="14"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="8"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
 
-        <!-- セクションタイトル -->
         <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Green}"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
+            <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
@@ -153,116 +169,56 @@
 
     <DockPanel>
         <!-- ===== ヘッダ ===== -->
-        <Border DockPanel.Dock="Top" Background="#11111b" Padding="16,12">
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" Padding="18,14"
+                BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
             <DockPanel>
-                <!-- 右: 設定/管理 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="AdminBtn" Content="🛠 管理者モード" Visibility="Collapsed"/>
+                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く"/>
                     <Button x:Name="SettingsBtn" Content="⚙ 設定"/>
                 </StackPanel>
-                <!-- 中: 表示年月 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
                     <TextBlock Text="📅 表示" Foreground="{StaticResource TextMuted}" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="YearCombo" Width="80"/>
+                    <ComboBox x:Name="YearCombo" Width="84"/>
                     <TextBlock Text="/" Margin="4,0" Foreground="{StaticResource TextMuted}"/>
-                    <ComboBox x:Name="MonthCombo" Width="60"/>
+                    <ComboBox x:Name="MonthCombo" Width="64"/>
                     <Button x:Name="ReloadBtn" Content="再読込" Margin="8,0,0,0"/>
                 </StackPanel>
-                <!-- 左: 作業者表示 -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="{StaticResource Surface2}" CornerRadius="20" Padding="14,6">
+                    <Border Background="{StaticResource Soft}" CornerRadius="20" Padding="14,6">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="👤" FontSize="16" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="CurrentMemberText" Text="" FontWeight="Bold" FontSize="14" Foreground="{StaticResource Text}"/>
+                            <TextBlock x:Name="CurrentMemberText" Text="" FontWeight="Bold" FontSize="14" Foreground="{StaticResource EmeraldD}"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock x:Name="StatusText" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Yellow}"/>
+                    <TextBlock x:Name="StatusText" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Amber}"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
         <!-- ===== フッタ ===== -->
-        <Border DockPanel.Dock="Bottom" Background="#11111b" Padding="16,12">
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Padding="18,14"
+                BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Left" x:Name="ModeText" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Border Background="{StaticResource Surface2}" CornerRadius="6" Padding="12,6" Margin="0,0,12,0">
+                    <Border Background="{StaticResource Soft}" CornerRadius="8" Padding="14,6" Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="⏱ 月合計" Foreground="{StaticResource TextMuted}" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="{StaticResource Yellow}"/>
+                            <TextBlock Text="⏱ 月合計" Foreground="{StaticResource EmeraldD}" Margin="0,0,8,0" FontWeight="Bold"/>
+                            <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="{StaticResource EmeraldD}"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="SaveBtn" Content="💾 保存 (GitLab へ送信)" Style="{StaticResource AccentGreen}" MinWidth="200"/>
+                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="160"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- ===== 本体 ===== -->
+        <!-- ===== 本体 (左: 当月実績 / 右: 入力フォーム) ===== -->
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="440"/>
             </Grid.ColumnDefinitions>
-
-            <!-- 右: 入力フォーム -->
-            <Border Grid.Column="1" Style="{StaticResource Card}">
-                <DockPanel>
-                    <TextBlock x:Name="FormHeader" Text="✏ 新規エントリ" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top"/>
-
-                    <!-- ボタン行 -->
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button x:Name="ClearBtn" Content="✖ クリア"/>
-                        <Button x:Name="UpdateBtn" Content="✓ 更新" Style="{StaticResource AccentYellow}" Visibility="Collapsed" MinWidth="100"/>
-                        <Button x:Name="AddBtn" Content="＋ 追加" Style="{StaticResource AccentBlue}" MinWidth="100"/>
-                    </StackPanel>
-
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <!-- 日付 -->
-                            <Label Content="日付  (バックデートOK)"/>
-                            <StackPanel Orientation="Horizontal">
-                                <DatePicker x:Name="EntryDate" Width="200"/>
-                                <Button x:Name="TodayBtn" Content="今日" MinWidth="60" Margin="6,2,0,2"/>
-                                <Button x:Name="YesterdayBtn" Content="昨日" MinWidth="60" Margin="2,2,0,2"/>
-                            </StackPanel>
-
-                            <!-- 4段カスケード -->
-                            <Label Content="プロジェクト" Margin="0,10,0,0"/>
-                            <ComboBox x:Name="ProjectCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                            <Label Content="工程"/>
-                            <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                            <Label Content="タスクグループ"/>
-                            <ComboBox x:Name="TaskGroupCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                            <Label Content="タスク"/>
-                            <ComboBox x:Name="TaskCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                            <!-- カテゴリ -->
-                            <Label Content="作業カテゴリ" Margin="0,10,0,0"/>
-                            <ComboBox x:Name="CategoryCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                            <!-- 工数 -->
-                            <Label Content="工数 (時間)" Margin="0,10,0,0"/>
-                            <TextBox x:Name="HoursBox" Text="1.0" FontSize="16" FontWeight="Bold"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                <Button x:Name="H025" Content="0.25" Style="{StaticResource QuickHour}" Tag="0.25"/>
-                                <Button x:Name="H05"  Content="0.5"  Style="{StaticResource QuickHour}" Tag="0.5"/>
-                                <Button x:Name="H1"   Content="1"    Style="{StaticResource QuickHour}" Tag="1"/>
-                                <Button x:Name="H2"   Content="2"    Style="{StaticResource QuickHour}" Tag="2"/>
-                                <Button x:Name="H4"   Content="4"    Style="{StaticResource QuickHour}" Tag="4"/>
-                                <Button x:Name="H8"   Content="8"    Style="{StaticResource QuickHour}" Tag="8"/>
-                            </StackPanel>
-
-                            <!-- コメント -->
-                            <Label Content="コメント (任意)" Margin="0,10,0,0"/>
-                            <TextBox x:Name="CommentBox" Height="60" AcceptsReturn="True" TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto"/>
-                        </StackPanel>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
 
             <!-- 左: 当月一覧 -->
             <Border Grid.Column="0" Style="{StaticResource Card}">
@@ -272,7 +228,7 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="DuplicateBtn" Content="⎘ 行を複製"/>
                             <Button x:Name="EditRowBtn" Content="✎ 編集"/>
-                            <Button x:Name="DeleteRowBtn" Content="🗑 削除" Style="{StaticResource AccentRed}"/>
+                            <Button x:Name="DeleteRowBtn" Content="🗑 削除" Style="{StaticResource Danger}"/>
                         </StackPanel>
                     </DockPanel>
 
@@ -284,20 +240,20 @@
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
                               HeadersVisibility="Column"
-                              Background="#11111b"
+                              Background="{StaticResource Surface}"
                               Foreground="{StaticResource Text}"
-                              RowBackground="#11111b"
-                              AlternatingRowBackground="#181825"
+                              RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#f0fdf4"
                               GridLinesVisibility="None"
                               BorderBrush="{StaticResource Border}"
                               BorderThickness="1"
                               FontSize="13"
-                              RowHeight="32"
-                              ColumnHeaderHeight="36">
+                              RowHeight="34"
+                              ColumnHeaderHeight="38">
                         <DataGrid.Resources>
                             <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="{StaticResource Surface2}"/>
-                                <Setter Property="Foreground" Value="{StaticResource Mauve}"/>
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Setter Property="Padding" Value="10,4"/>
                                 <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
@@ -305,10 +261,10 @@
                             </Style>
                             <Style TargetType="DataGridCell">
                                 <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="Padding" Value="8,4"/>
+                                <Setter Property="Padding" Value="10,4"/>
                                 <Style.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#45475a"/>
+                                        <Setter Property="Background" Value="{StaticResource EmeraldL}"/>
                                         <Setter Property="Foreground" Value="{StaticResource Text}"/>
                                     </Trigger>
                                 </Style.Triggers>
@@ -325,6 +281,60 @@
                             <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <!-- 右: 入力フォーム -->
+            <Border Grid.Column="1" Style="{StaticResource Card}">
+                <DockPanel>
+                    <TextBlock x:Name="FormHeader" Text="✏ 新規エントリ" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top"/>
+
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button x:Name="ClearBtn" Content="✖ クリア"/>
+                        <Button x:Name="UpdateBtn" Content="✓ 更新" Style="{StaticResource Warning}" Visibility="Collapsed" MinWidth="100"/>
+                        <Button x:Name="AddBtn" Content="＋ 追加" Style="{StaticResource Secondary}" MinWidth="100"/>
+                    </StackPanel>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Label Content="日付  (バックデートOK)"/>
+                            <StackPanel Orientation="Horizontal">
+                                <DatePicker x:Name="EntryDate" Width="200"/>
+                                <Button x:Name="TodayBtn" Content="今日" MinWidth="60" Margin="6,2,0,2"/>
+                                <Button x:Name="YesterdayBtn" Content="昨日" MinWidth="60" Margin="2,2,0,2"/>
+                            </StackPanel>
+
+                            <Label Content="プロジェクト" Margin="0,10,0,0"/>
+                            <ComboBox x:Name="ProjectCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+
+                            <Label Content="工程"/>
+                            <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+
+                            <Label Content="タスクグループ"/>
+                            <ComboBox x:Name="TaskGroupCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+
+                            <Label Content="タスク"/>
+                            <ComboBox x:Name="TaskCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+
+                            <Label Content="作業カテゴリ" Margin="0,10,0,0"/>
+                            <ComboBox x:Name="CategoryCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+
+                            <Label Content="工数 (時間)" Margin="0,10,0,0"/>
+                            <TextBox x:Name="HoursBox" Text="1.0" FontSize="16" FontWeight="Bold"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button x:Name="H025" Content="0.25" Style="{StaticResource QuickHour}" Tag="0.25"/>
+                                <Button x:Name="H05"  Content="0.5"  Style="{StaticResource QuickHour}" Tag="0.5"/>
+                                <Button x:Name="H1"   Content="1"    Style="{StaticResource QuickHour}" Tag="1"/>
+                                <Button x:Name="H2"   Content="2"    Style="{StaticResource QuickHour}" Tag="2"/>
+                                <Button x:Name="H4"   Content="4"    Style="{StaticResource QuickHour}" Tag="4"/>
+                                <Button x:Name="H8"   Content="8"    Style="{StaticResource QuickHour}" Tag="8"/>
+                            </StackPanel>
+
+                            <Label Content="コメント (任意)" Margin="0,10,0,0"/>
+                            <TextBox x:Name="CommentBox" Height="60" AcceptsReturn="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                        </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
         </Grid>
