@@ -1,51 +1,331 @@
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="管理者モード - マスタ編集"
-    Height="640" Width="900"
+    Title="🌸 管理者モード - マスタ編集"
+    Height="720" Width="1100"
     WindowStartupLocation="CenterScreen"
-    Background="#1e1e2e">
+    Background="#831843"
+    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <Style TargetType="Button">
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="Padding" Value="14,4"/>
-            <Setter Property="MinHeight" Value="28"/>
+        <!-- 桜パレット -->
+        <SolidColorBrush x:Key="Bg"        Color="#fdf2f8"/>
+        <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#fce7f3"/>
+        <SolidColorBrush x:Key="Border"    Color="#fbcfe8"/>
+        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#6b7280"/>
+        <SolidColorBrush x:Key="Sakura"    Color="#ec4899"/>
+        <SolidColorBrush x:Key="SakuraD"   Color="#db2777"/>
+        <SolidColorBrush x:Key="SakuraL"   Color="#fce7f3"/>
+        <SolidColorBrush x:Key="Soft"      Color="#fce7f3"/>
+        <SolidColorBrush x:Key="Rose"      Color="#fb7185"/>
+
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+            <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#fbcfe8"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#f9a8d4"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#f3f4f6"/>
+                                <Setter Property="Foreground" Value="#9ca3af"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource Sakura}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource SakuraD}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="{StaticResource Rose}"/>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="b" Margin="2,0" CornerRadius="8,8,0,0" Padding="{TemplateBinding Padding}"
+                                Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource Surface}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <DockPanel Margin="8">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
-            <TextBlock Text="編集対象:" Margin="4"/>
-            <ComboBox x:Name="TargetCombo" Width="200" Margin="4">
-                <ComboBoxItem Content="members" IsSelected="True"/>
-                <ComboBoxItem Content="projects"/>
-                <ComboBoxItem Content="categories"/>
-            </ComboBox>
-            <Button x:Name="ReloadBtn" Content="再読込"/>
-            <Button x:Name="ValidateBtn" Content="JSON 検証"/>
-            <TextBlock x:Name="StatusText" Margin="20,0,0,0"/>
-        </StackPanel>
+    <DockPanel>
+        <!-- ヘッダ -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" Padding="18,14"
+                BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <TextBlock Text="🌸 マスタ編集" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SakuraD}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button x:Name="ReloadBtn" Content="🔄 再読込"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelBtn" Content="閉じる"/>
-            <Button x:Name="SaveBtn" Content="保存して push" Background="#a6e3a1" Foreground="#11111b" FontWeight="Bold"/>
-        </StackPanel>
+        <!-- フッタ -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Padding="18,14"
+                BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0">
+            <DockPanel>
+                <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button x:Name="CloseBtn" Content="閉じる"/>
+                    <Button x:Name="SaveBtn"  Content="💾 保存して反映" Style="{StaticResource Primary}" MinWidth="180"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
-        <TextBox x:Name="JsonBox"
-                 AcceptsReturn="True"
-                 AcceptsTab="True"
-                 TextWrapping="NoWrap"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 FontFamily="Consolas"
-                 FontSize="12"
-                 Background="#181825"
-                 Foreground="#cdd6f4"
-                 SelectionBrush="#585b70"
-                 Padding="6"/>
+        <!-- 本体: タブ -->
+        <Border Style="{StaticResource Card}">
+            <TabControl x:Name="MainTab" Background="Transparent" BorderThickness="0">
+                <!-- ===== メンバー ===== -->
+                <TabItem Header="👥 メンバー">
+                    <DockPanel Margin="6">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="MemAddBtn" Content="＋ 追加" Style="{StaticResource Primary}"/>
+                            <Button x:Name="MemDelBtn" Content="🗑 選択行を削除" Style="{StaticResource Danger}"/>
+                        </StackPanel>
+                        <DataGrid x:Name="MembersGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  Background="{StaticResource Surface}"
+                                  RowBackground="{StaticResource Surface}"
+                                  AlternatingRowBackground="#fff1f7"
+                                  GridLinesVisibility="None"
+                                  BorderBrush="{StaticResource Border}"
+                                  BorderThickness="1"
+                                  RowHeight="34"
+                                  ColumnHeaderHeight="38"
+                                  FontSize="13">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Padding" Value="10,4"/>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ID"         Binding="{Binding id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                <DataGridTextColumn Header="氏名"       Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                                <DataGridTextColumn Header="部署"       Binding="{Binding department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                                <DataGridComboBoxColumn x:Name="MemRoleCol" Header="役割" SelectedValueBinding="{Binding role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                                <DataGridCheckBoxColumn Header="有効"   Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- ===== プロジェクト ===== -->
+                <TabItem Header="📁 プロジェクト">
+                    <Grid Margin="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- 左: ツリー -->
+                        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,6,0">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="PrjAddRootBtn" Content="＋ プロジェクト追加" Style="{StaticResource Primary}"/>
+                                </StackPanel>
+                                <TextBlock Text="階層 (4段)" FontWeight="Bold" Foreground="{StaticResource SakuraD}" DockPanel.Dock="Top" Margin="0,0,0,6"/>
+                                <TreeView x:Name="ProjectsTree"
+                                          Background="{StaticResource Surface}"
+                                          BorderBrush="{StaticResource Border}"
+                                          BorderThickness="1"
+                                          Foreground="{StaticResource Text}"
+                                          FontSize="13"/>
+                            </DockPanel>
+                        </Border>
+                        <!-- 右: 詳細編集 -->
+                        <Border Grid.Column="1" Style="{StaticResource Card}" Margin="6,0,0,0">
+                            <DockPanel>
+                                <TextBlock x:Name="PrjDetailTitle" Text="ノードを選択してください" FontWeight="Bold" Foreground="{StaticResource SakuraD}" DockPanel.Dock="Top" Margin="0,0,0,10"/>
+                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="PrjAddChildBtn" Content="＋ 子要素を追加" IsEnabled="False"/>
+                                    <Button x:Name="PrjDelBtn"      Content="🗑 この階層を削除" Style="{StaticResource Danger}" IsEnabled="False"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Label Content="種別:"/>
+                                    <TextBlock x:Name="PrjKindText" Text="" FontWeight="Bold"/>
+                                    <Label Content="コード:" Margin="0,8,0,0"/>
+                                    <TextBox x:Name="PrjCodeBox" IsEnabled="False"/>
+                                    <Label Content="名称:" Margin="0,4,0,0"/>
+                                    <TextBox x:Name="PrjNameBox" IsEnabled="False"/>
+                                    <CheckBox x:Name="PrjActiveBox" Content="有効 (active)" Margin="0,8,0,0" IsEnabled="False"/>
+                                    <TextBlock x:Name="PrjHint" Text="" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
+                <!-- ===== カテゴリ ===== -->
+                <TabItem Header="🏷 カテゴリ">
+                    <DockPanel Margin="6">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="CatAddBtn" Content="＋ 追加" Style="{StaticResource Primary}"/>
+                            <Button x:Name="CatDelBtn" Content="🗑 選択行を削除" Style="{StaticResource Danger}"/>
+                        </StackPanel>
+                        <DataGrid x:Name="CategoriesGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  Background="{StaticResource Surface}"
+                                  RowBackground="{StaticResource Surface}"
+                                  AlternatingRowBackground="#fff1f7"
+                                  GridLinesVisibility="None"
+                                  BorderBrush="{StaticResource Border}"
+                                  BorderThickness="1"
+                                  RowHeight="34"
+                                  ColumnHeaderHeight="38"
+                                  FontSize="13">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Padding" Value="10,4"/>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="コード" Binding="{Binding code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                                <DataGridTextColumn Header="名称"   Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- ===== JSON (上級) ===== -->
+                <TabItem Header="🛠 JSON 直接編集">
+                    <DockPanel Margin="6">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                            <TextBlock Text="対象:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="JsonTargetCombo" Width="160">
+                                <ComboBoxItem Content="members" IsSelected="True"/>
+                                <ComboBoxItem Content="projects"/>
+                                <ComboBoxItem Content="categories"/>
+                            </ComboBox>
+                            <Button x:Name="JsonReloadBtn"   Content="🔄 リロード"/>
+                            <Button x:Name="JsonValidateBtn" Content="JSON 検証"/>
+                            <Button x:Name="JsonApplyBtn"    Content="編集内容に適用" Style="{StaticResource Primary}"/>
+                        </StackPanel>
+                        <TextBox x:Name="JsonBox" AcceptsReturn="True" AcceptsTab="True"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas, Courier New"
+                                 FontSize="12"
+                                 Background="#fffaf6"
+                                 Foreground="{StaticResource Text}"
+                                 VerticalContentAlignment="Top"
+                                 Margin="0,8,0,0"/>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
+        </Border>
     </DockPanel>
 </Window>

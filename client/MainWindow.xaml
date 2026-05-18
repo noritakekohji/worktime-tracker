@@ -4,7 +4,7 @@
     Title="WorkTime Tracker"
     Height="780" Width="1280"
     WindowStartupLocation="CenterScreen"
-    Background="#f6faf8"
+    Background="#064e3b"
     FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
@@ -174,7 +174,6 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="AdminBtn" Content="🛠 管理者モード" Visibility="Collapsed"/>
-                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く"/>
                     <Button x:Name="SettingsBtn" Content="⚙ 設定"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
@@ -208,7 +207,8 @@
                             <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="{StaticResource EmeraldD}"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="160"/>
+                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="140"/>
+                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く" Margin="6,3,3,3"/>
                 </StackPanel>
             </DockPanel>
         </Border>
