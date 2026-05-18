@@ -28,6 +28,24 @@ if (Test-Path $InstallDir) {
 }
 Copy-Item -Path (Join-Path $srcDir '*') -Destination $InstallDir -Recurse -Force
 
+# .cmd は CRLF + Shift-JIS 必須 (cmd.exe が LF/UTF-8 BOM を誤解釈する)
+Get-ChildItem -Path $InstallDir -Recurse -Filter *.cmd | ForEach-Object {
+    $b = [System.IO.File]::ReadAllBytes($_.FullName)
+    # 既存エンコーディング判定
+    if ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) {
+        $text = [System.Text.UTF8Encoding]::new($true).GetString($b)
+    } elseif ($b.Length -ge 2 -and $b[0] -eq 0xFF -and $b[1] -eq 0xFE) {
+        $text = [System.Text.Encoding]::Unicode.GetString($b, 2, $b.Length - 2)
+    } else {
+        # BOM 無し: UTF-8 / SJIS どちらかを推定。日本語含むなら UTF-8 として扱う。
+        try { $text = [System.Text.UTF8Encoding]::new($false, $true).GetString($b) }
+        catch { $text = [System.Text.Encoding]::GetEncoding('shift_jis').GetString($b) }
+    }
+    if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+    $crlf = $text -replace "`r?`n","`r`n"
+    [System.IO.File]::WriteAllText($_.FullName, $crlf, [System.Text.Encoding]::GetEncoding('shift_jis'))
+}
+
 # 3. デスクトップにショートカット作成
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shell = New-Object -ComObject WScript.Shell

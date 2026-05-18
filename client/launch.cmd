@@ -1,9 +1,8 @@
 @echo off
 rem WorkTime Tracker launcher
-rem Window stays open on error so messages are visible.
 powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0WorkTimeTracker.ps1" %*
 if errorlevel 1 (
     echo.
-    echo === 繧ｨ繝ｩ繝ｼ邨ゆｺ�縺励∪縺励◆縲りｩｳ邏ｰ縺ｯ %APPDATA%\worktime-tracker\last_error.log ===
+    echo === エラー終了しました。詳細は %APPDATA%\worktime-tracker\last_error.log ===
     pause
 )

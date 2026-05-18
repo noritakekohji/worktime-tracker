@@ -1,0 +1,14 @@
+# Windows batch files MUST have CRLF line endings - cmd.exe misparses LF-only.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# PowerShell scripts also expect CRLF + UTF-8 BOM (handled by encoding, not git).
+*.ps1  text eol=crlf
+*.xaml text eol=crlf
+
+# Cross-platform text files - normalize to LF.
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text
+*.md   text
