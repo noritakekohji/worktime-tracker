@@ -36,6 +36,8 @@
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="MinHeight" Value="30"/>
             <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="0,2"/>
@@ -46,10 +48,12 @@
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style TargetType="DatePicker">
             <Setter Property="Margin" Value="0,2"/>
             <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
         <!-- 標準ボタン -->
@@ -196,12 +200,12 @@
         <!-- ===== 本体 ===== -->
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="420"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="440"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左: 入力フォーム -->
-            <Border Grid.Column="0" Style="{StaticResource Card}">
+            <!-- 右: 入力フォーム -->
+            <Border Grid.Column="1" Style="{StaticResource Card}">
                 <DockPanel>
                     <TextBlock x:Name="FormHeader" Text="✏ 新規エントリ" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top"/>
 
@@ -260,8 +264,8 @@
                 </DockPanel>
             </Border>
 
-            <!-- 右: 当月一覧 -->
-            <Border Grid.Column="1" Style="{StaticResource Card}">
+            <!-- 左: 当月一覧 -->
+            <Border Grid.Column="0" Style="{StaticResource Card}">
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <TextBlock x:Name="ListTitle" Text="📋 当月エントリ一覧" Style="{StaticResource SectionTitle}"/>

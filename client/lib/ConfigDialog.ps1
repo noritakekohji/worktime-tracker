@@ -1,10 +1,12 @@
-﻿# ConfigDialog.ps1 — 初回設定/設定変更ダイアログを表示
-#
-# 返り値: $true なら保存された / $false ならキャンセル
+﻿# ConfigDialog.ps1 — 初回設定/設定変更ダイアログ
+#   - mode=gitlab: URL/ProjectId/Branch/Token を表示
+#   - mode=local : データフォルダ (共有ドライブ等) を選択
 
 . (Join-Path $PSScriptRoot 'Config.ps1')
 . (Join-Path $PSScriptRoot 'Credential.ps1')
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
+
+Add-Type -AssemblyName System.Windows.Forms
 
 function Show-ConfigDialog {
     param([Parameter(Mandatory)]$Config)
@@ -17,7 +19,9 @@ function Show-ConfigDialog {
     $win = [Windows.Markup.XamlReader]::Load($reader)
 
     $u = @{}
-    foreach ($n in 'ModeCombo','UrlBox','ProjectIdBox','BranchBox','TokenBox','MemberIdBox','StatusText','TestBtn','SaveBtn','CancelBtn') {
+    foreach ($n in 'ModeCombo','UrlBox','ProjectIdBox','BranchBox','TokenBox','MemberIdBox','StatusText','TestBtn','SaveBtn','CancelBtn',
+                   'UrlLabel','ProjectIdLabel','ProjectIdHint','BranchLabel','TokenLabel','TokenHint',
+                   'LocalRootLabel','LocalRootBox','BrowseBtn','LocalRootHint') {
         $u[$n] = $win.FindName($n)
     }
 
@@ -25,7 +29,8 @@ function Show-ConfigDialog {
     $u.UrlBox.Text       = $Config.gitlab_url
     $u.ProjectIdBox.Text = $Config.project_id
     $u.BranchBox.Text    = $Config.branch
-    $u.MemberIdBox.Text  = $Config.member_id
+    $u.MemberIdBox.Text  = if ($Config.member_id) { $Config.member_id } else { $env:USERNAME }
+    $u.LocalRootBox.Text = $Config.local_root
     foreach ($i in $u.ModeCombo.Items) {
         if ($i.Content -eq $Config.mode) { $u.ModeCombo.SelectedItem = $i }
     }
@@ -34,6 +39,38 @@ function Show-ConfigDialog {
         $u.StatusText.Text = '(既存トークンを保管中。変更する場合のみ入力)'
         $u.StatusText.Foreground = [System.Windows.Media.Brushes]::Gray
     }
+
+    function _SetVis {
+        $mode = $u.ModeCombo.SelectedItem.Content
+        $gl = ($mode -eq 'gitlab')
+        $lo = ($mode -eq 'local')
+        $vGl = if ($gl) { 'Visible' } else { 'Collapsed' }
+        $vLo = if ($lo) { 'Visible' } else { 'Collapsed' }
+        foreach ($n in 'UrlLabel','UrlBox','ProjectIdLabel','ProjectIdBox','ProjectIdHint','BranchLabel','BranchBox','TokenLabel','TokenBox','TokenHint','TestBtn') {
+            $u[$n].Visibility = $vGl
+        }
+        # UrlBox/ProjectIdBox/BranchBox/TokenBox はキーに無いが個別取得済
+        $win.FindName('UrlBox').Visibility        = $vGl
+        $win.FindName('ProjectIdBox').Visibility  = $vGl
+        $win.FindName('BranchBox').Visibility     = $vGl
+        $win.FindName('TokenBox').Visibility      = $vGl
+        foreach ($n in 'LocalRootLabel','LocalRootBox','BrowseBtn','LocalRootHint') {
+            $u[$n].Visibility = $vLo
+        }
+    }
+    _SetVis
+    $u.ModeCombo.Add_SelectionChanged({ _SetVis })
+
+    $u.BrowseBtn.Add_Click({
+        $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dlg.Description = 'WorkTime データを保管するフォルダを選択 (共有ドライブ可)'
+        if ($u.LocalRootBox.Text -and (Test-Path -LiteralPath $u.LocalRootBox.Text)) {
+            $dlg.SelectedPath = $u.LocalRootBox.Text
+        }
+        if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $u.LocalRootBox.Text = $dlg.SelectedPath
+        }
+    })
 
     $script:Result = $false
 
@@ -65,6 +102,13 @@ function Show-ConfigDialog {
             if (-not $u.TokenBox.Password -and -not (Test-GitLabTokenStored)) {
                 $missing.Add('Project Access Token')
             }
+        } elseif ($mode -eq 'local') {
+            if (-not $u.LocalRootBox.Text.Trim()) { $missing.Add('データフォルダ') }
+            elseif (-not (Test-Path -LiteralPath $u.LocalRootBox.Text.Trim())) {
+                $u.StatusText.Text = '指定したデータフォルダが存在しません。'
+                $u.StatusText.Foreground = [System.Windows.Media.Brushes]::Salmon
+                return
+            }
         }
         if ($missing.Count -gt 0) {
             $u.StatusText.Text = "未入力の項目があります: " + ($missing -join '、')
@@ -77,6 +121,7 @@ function Show-ConfigDialog {
             $Config.project_id = $u.ProjectIdBox.Text.Trim()
             $Config.branch     = $u.BranchBox.Text.Trim()
             $Config.member_id  = $u.MemberIdBox.Text.Trim()
+            $Config.local_root = $u.LocalRootBox.Text.Trim()
             Save-Config -Config $Config
             if ($u.TokenBox.Password) {
                 Save-GitLabToken -Token $u.TokenBox.Password
