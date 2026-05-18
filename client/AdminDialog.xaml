@@ -150,25 +150,23 @@
     </Window.Resources>
 
     <DockPanel>
-        <!-- ヘッダ -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" Padding="18,14"
-                BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+        <!-- ヘッダ (濃色 桜) -->
+        <Border DockPanel.Dock="Top" Background="#831843" Padding="18,14">
             <DockPanel>
-                <TextBlock Text="🌸 マスタ編集" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SakuraD}" VerticalAlignment="Center"/>
-                <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+                <TextBlock Text="🌸 マスタ編集" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="#fbcfe8"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="ReloadBtn" Content="🔄 再読込"/>
+                    <Button x:Name="ReloadBtn" Content="🔄 再読込" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- フッタ -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Padding="18,14"
-                BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0">
+        <!-- フッタ (濃色 桜) -->
+        <Border DockPanel.Dock="Bottom" Background="#831843" Padding="18,14">
             <DockPanel>
-                <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#fbcfe8" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="CloseBtn" Content="閉じる"/>
+                    <Button x:Name="CloseBtn" Content="閉じる" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                     <Button x:Name="SaveBtn"  Content="💾 保存して反映" Style="{StaticResource Primary}" MinWidth="180"/>
                 </StackPanel>
             </DockPanel>

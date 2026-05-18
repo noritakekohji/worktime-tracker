@@ -592,8 +592,17 @@ $ui.SettingsBtn.Add_Click({
 $ui.AdminBtn.Add_Click({
     $m = Get-SelectedMember
     if (-not $m -or $m.role -ne 'admin') { return }
-    Show-AdminDialog -Source $Script:Source -MemberId $m.id -MemberName $m.name
-    Reload-Masters
+    try {
+        Show-AdminDialog -Source $Script:Source -MemberId $m.id -MemberName $m.name
+        Reload-Masters
+    } catch {
+        $inner = $_
+        while ($inner.Exception.InnerException) { $inner = $inner.Exception.InnerException }
+        $detail = "{0}`n`n--- 内部例外 ---`n{1}`n`n--- ScriptStackTrace ---`n{2}" -f `
+            $_.Exception.Message, ($inner | Out-String), $_.ScriptStackTrace
+        Write-FatalLog "ADMIN: $detail"
+        Show-ErrorDialog -Title 'マスタ編集エラー' -Message '管理者画面でエラーが発生しました。' -Detail $detail
+    }
 })
 
 # ---- 保存先を開く ----

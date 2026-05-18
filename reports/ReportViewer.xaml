@@ -2,96 +2,273 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="WorkTime Report Viewer"
-    Height="720" Width="1200"
+    Height="780" Width="1280"
     WindowStartupLocation="CenterScreen"
-    Background="#1e1e2e">
+    Background="#0c4a6e"
+    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
+        <!-- 青パレット -->
+        <SolidColorBrush x:Key="Bg"        Color="#f0f9ff"/>
+        <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#e0f2fe"/>
+        <SolidColorBrush x:Key="Border"    Color="#bae6fd"/>
+        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#6b7280"/>
+        <SolidColorBrush x:Key="Sky"       Color="#0284c7"/>
+        <SolidColorBrush x:Key="SkyD"      Color="#0369a1"/>
+        <SolidColorBrush x:Key="SkyDark"   Color="#0c4a6e"/>
+        <SolidColorBrush x:Key="SkyL"      Color="#7dd3fc"/>
+        <SolidColorBrush x:Key="Soft"      Color="#e0f2fe"/>
+
         <Style TargetType="Label">
-            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="MinWidth" Value="100"/>
-            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MinWidth" Value="140"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
         </Style>
         <Style TargetType="DatePicker">
-            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
+
         <Style TargetType="Button">
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="Padding" Value="12,4"/>
-            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+            <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#bae6fd"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#7dd3fc"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource Sky}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource SkyD}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="b" Margin="2,0" CornerRadius="8,8,0,0" Padding="{TemplateBinding Padding}"
+                                Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border}" BorderThickness="1,1,1,0">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource Surface}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#11111b" Padding="10">
-            <StackPanel Orientation="Horizontal">
-                <Label Content="期間:"/>
-                <DatePicker x:Name="FromDate"/>
-                <Label Content="〜"/>
-                <DatePicker x:Name="ToDate"/>
-                <Label Content="メンバー:" Margin="20,0,0,0"/>
-                <ComboBox x:Name="MemberFilter" DisplayMemberPath="display" SelectedValuePath="id"/>
-                <Label Content="プロジェクト:"/>
-                <ComboBox x:Name="ProjectFilter" DisplayMemberPath="name" SelectedValuePath="code"/>
-                <Button x:Name="ApplyBtn" Content="適用"/>
-                <Button x:Name="ReloadBtn" Content="再読込"/>
-                <Button x:Name="ExportBtn" Content="CSV エクスポート"/>
-            </StackPanel>
+        <!-- ヘッダ (濃色) -->
+        <Border DockPanel.Dock="Top" Background="#0c4a6e" Padding="18,14">
+            <DockPanel>
+                <TextBlock Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                <TextBlock x:Name="SummaryText" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="#7dd3fc"/>
+            </DockPanel>
         </Border>
 
-        <Border DockPanel.Dock="Bottom" Background="#11111b" Padding="10">
-            <TextBlock x:Name="SummaryText" Text=""/>
+        <!-- フッタ (濃色) -->
+        <Border DockPanel.Dock="Bottom" Background="#0c4a6e" Padding="18,14">
+            <DockPanel>
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#bae6fd" FontSize="11" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ReloadBtn" Content="🔄 全データ再取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
+                    <Button x:Name="ApplyBtn"  Content="フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
+                    <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="160"/>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
-        <TabControl Background="#1e1e2e">
-            <TabItem Header="明細">
-                <DataGrid x:Name="DetailGrid"
-                          AutoGenerateColumns="False"
-                          IsReadOnly="True"
-                          CanUserAddRows="False"
-                          Background="#181825" Foreground="#cdd6f4"
-                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"
-                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#313244">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="90"/>
-                        <DataGridTextColumn Header="メンバー" Binding="{Binding member_id}" Width="80"/>
-                        <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="100"/>
-                        <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="80"/>
-                        <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_code}" Width="90"/>
-                        <DataGridTextColumn Header="タスク" Binding="{Binding task_code}" Width="90"/>
-                        <DataGridTextColumn Header="カテゴリ" Binding="{Binding category}" Width="80"/>
-                        <DataGridTextColumn Header="工数" Binding="{Binding hours}" Width="60"/>
-                        <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </TabItem>
-            <TabItem Header="メンバー別集計">
-                <DataGrid x:Name="MemberSummaryGrid"
-                          AutoGenerateColumns="True"
-                          IsReadOnly="True" CanUserAddRows="False"
-                          Background="#181825" Foreground="#cdd6f4"
-                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
-            </TabItem>
-            <TabItem Header="プロジェクト別集計">
-                <DataGrid x:Name="ProjectSummaryGrid"
-                          AutoGenerateColumns="True"
-                          IsReadOnly="True" CanUserAddRows="False"
-                          Background="#181825" Foreground="#cdd6f4"
-                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
-            </TabItem>
-            <TabItem Header="カテゴリ別集計">
-                <DataGrid x:Name="CategorySummaryGrid"
-                          AutoGenerateColumns="True"
-                          IsReadOnly="True" CanUserAddRows="False"
-                          Background="#181825" Foreground="#cdd6f4"
-                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
-            </TabItem>
-        </TabControl>
+        <!-- フィルタ -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Label Grid.Column="0" Content="期間:"/>
+                <DatePicker Grid.Column="1" x:Name="FromDate" Width="140"/>
+                <Label Grid.Column="2" Content="〜" Margin="6,0"/>
+                <DatePicker Grid.Column="3" x:Name="ToDate" Width="140"/>
+                <Label Grid.Column="4" Content="メンバー:" Margin="20,0,4,0"/>
+                <ComboBox Grid.Column="5" x:Name="MemberFilter" DisplayMemberPath="display" SelectedValuePath="id" MinWidth="160"/>
+                <Label Grid.Column="6" Content="プロジェクト:" Margin="12,0,4,0"/>
+                <ComboBox Grid.Column="7" x:Name="ProjectFilter" DisplayMemberPath="name" SelectedValuePath="code" MinWidth="160"/>
+            </Grid>
+        </Border>
+
+        <!-- 本体: タブ -->
+        <Border Style="{StaticResource Card}">
+            <TabControl Background="Transparent" BorderThickness="0">
+                <TabItem Header="📋 明細">
+                    <DataGrid x:Name="DetailGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column"
+                              Background="{StaticResource Surface}"
+                              RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#f0f9ff"
+                              GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}"
+                              BorderThickness="1"
+                              RowHeight="32"
+                              ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="100"/>
+                            <DataGridTextColumn Header="メンバー" Binding="{Binding member_id}" Width="100"/>
+                            <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="110"/>
+                            <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="90"/>
+                            <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_code}" Width="100"/>
+                            <DataGridTextColumn Header="タスク" Binding="{Binding task_code}" Width="100"/>
+                            <DataGridTextColumn Header="カテゴリ" Binding="{Binding category}" Width="100"/>
+                            <DataGridTextColumn Header="工数" Binding="{Binding hours, StringFormat=N1}" Width="70"/>
+                            <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="👥 メンバー別">
+                    <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                              RowHeight="32" ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="📁 プロジェクト別">
+                    <DataGrid x:Name="ProjectSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                              RowHeight="32" ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="🏷 カテゴリ別">
+                    <DataGrid x:Name="CategorySummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                              RowHeight="32" ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </TabItem>
+            </TabControl>
+        </Border>
     </DockPanel>
 </Window>

@@ -168,47 +168,45 @@
     </Window.Resources>
 
     <DockPanel>
-        <!-- ===== ヘッダ ===== -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" Padding="18,14"
-                BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+        <!-- ===== ヘッダ (濃色) ===== -->
+        <Border DockPanel.Dock="Top" Background="#064e3b" Padding="18,14">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="AdminBtn" Content="🛠 管理者モード" Visibility="Collapsed"/>
-                    <Button x:Name="SettingsBtn" Content="⚙ 設定"/>
+                    <Button x:Name="AdminBtn" Content="🛠 管理者モード" Visibility="Collapsed" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
+                    <Button x:Name="SettingsBtn" Content="⚙ 設定" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <TextBlock Text="📅 表示" Foreground="{StaticResource TextMuted}" Margin="0,0,8,0"/>
+                    <TextBlock Text="📅 表示" Foreground="#a7f3d0" Margin="0,0,8,0"/>
                     <ComboBox x:Name="YearCombo" Width="84"/>
-                    <TextBlock Text="/" Margin="4,0" Foreground="{StaticResource TextMuted}"/>
+                    <TextBlock Text="/" Margin="4,0" Foreground="#a7f3d0"/>
                     <ComboBox x:Name="MonthCombo" Width="64"/>
-                    <Button x:Name="ReloadBtn" Content="再読込" Margin="8,0,0,0"/>
+                    <Button x:Name="ReloadBtn" Content="再読込" Margin="8,0,0,0" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="{StaticResource Soft}" CornerRadius="20" Padding="14,6">
+                    <Border Background="#ecfdf5" CornerRadius="20" Padding="14,6">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="👤" FontSize="16" Margin="0,0,8,0"/>
                             <TextBlock x:Name="CurrentMemberText" Text="" FontWeight="Bold" FontSize="14" Foreground="{StaticResource EmeraldD}"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock x:Name="StatusText" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Amber}"/>
+                    <TextBlock x:Name="StatusText" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#fde68a"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- ===== フッタ ===== -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Padding="18,14"
-                BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0">
+        <!-- ===== フッタ (濃色) ===== -->
+        <Border DockPanel.Dock="Bottom" Background="#064e3b" Padding="18,14">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Left" x:Name="ModeText" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock DockPanel.Dock="Left" x:Name="ModeText" Foreground="#a7f3d0" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Border Background="{StaticResource Soft}" CornerRadius="8" Padding="14,6" Margin="0,0,12,0">
+                    <Border Background="#0f766e" CornerRadius="8" Padding="14,6" Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="⏱ 月合計" Foreground="{StaticResource EmeraldD}" Margin="0,0,8,0" FontWeight="Bold"/>
-                            <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="{StaticResource EmeraldD}"/>
+                            <TextBlock Text="⏱ 月合計" Foreground="#a7f3d0" Margin="0,0,8,0" FontWeight="Bold"/>
+                            <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="White"/>
                         </StackPanel>
                     </Border>
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="140"/>
-                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く" Margin="6,3,3,3"/>
+                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く" Margin="6,3,3,3" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
                 </StackPanel>
             </DockPanel>
         </Border>
