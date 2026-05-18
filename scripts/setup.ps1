@@ -1,4 +1,4 @@
-# setup.ps1 — 作業者 PC への初回セットアップ
+﻿# setup.ps1 — 作業者 PC への初回セットアップ
 # TODO:
 #   1. git CLI が無ければ winget でインストール案内
 #   2. %LOCALAPPDATA%\worktime-tracker に git clone
