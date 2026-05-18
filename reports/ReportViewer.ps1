@@ -70,23 +70,46 @@ function Reload-Entries {
     }
 }
 
+function _Sc { param($v) if ($v -is [array]) { if ($v.Count -gt 0) { $v[0] } else { $null } } else { $v } }
+function _Str { param($v) [string](_Sc $v) }
+function _Num { param($v) $s = (_Sc $v); $d = 0.0; [void][double]::TryParse([string]$s, [ref]$d); $d }
+
 function Apply-Filters {
     $from = $u.FromDate.SelectedDate
     $to   = $u.ToDate.SelectedDate
     $mid  = $u.MemberFilter.SelectedValue
     $pjc  = $u.ProjectFilter.SelectedValue
 
-    $rows = $Script:AllEntries | Where-Object {
-        $d = [datetime]::Parse($_.date)
+    $rows = $Script:AllEntries | ForEach-Object {
+        $dStr = _Str $_.date
+        if ([string]::IsNullOrWhiteSpace($dStr)) { return }
+        $d = [datetime]::MinValue
+        if (-not [datetime]::TryParse($dStr, [ref]$d)) { return }
+        $memberId    = _Str $_.member_id
+        $projectCode = _Str $_.project_code
+
         $ok = $true
         if ($from -and $d -lt $from) { $ok = $false }
         if ($to   -and $d -gt $to)   { $ok = $false }
-        if ($mid  -and $_.member_id   -ne $mid)  { $ok = $false }
-        if ($pjc  -and $_.project_code -ne $pjc) { $ok = $false }
-        $ok
-    }
+        if ($mid  -and $memberId    -ne $mid)  { $ok = $false }
+        if ($pjc  -and $projectCode -ne $pjc) { $ok = $false }
+        if (-not $ok) { return }
 
-    $u.DetailGrid.ItemsSource = @($rows)
+        [pscustomobject]@{
+            date            = $dStr
+            member_id       = $memberId
+            project_code    = $projectCode
+            process_code    = _Str $_.process_code
+            task_group_code = _Str $_.task_group_code
+            task_code       = _Str $_.task_code
+            category        = _Str $_.category
+            hours           = _Num $_.hours
+            comment         = _Str $_.comment
+        }
+    }
+    $rows = @($rows)
+
+    $u.DetailGrid.ItemsSource = $rows
 
     $total = 0.0
     foreach ($r in $rows) { $total += [double]$r.hours }
