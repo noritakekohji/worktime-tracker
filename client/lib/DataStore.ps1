@@ -171,23 +171,25 @@ function Save-EntriesGrouped {
     }
     $viewKey = '{0}-{1:D2}' -f $ViewYear, $ViewMonth
 
-    # ハッシュテーブルを foreach する間にコレクションを変更しないよう、キーをスナップショット
     $keysSnap = @($groups.Keys | ForEach-Object { [string]$_ })
     foreach ($key in $keysSnap) {
         $parts = ([string]$key).Split('-')
         $y = [int]([string]$parts[0])
         $m = [int]([string]$parts[1])
-        $list = $groups[[string]$key]
-        $newForMonth = [object[]]@($list)
+        $newForMonth = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($e in $groups[[string]$key]) { $newForMonth.Add($e) }
 
         if ($key -eq $viewKey) {
             Save-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m `
-                              -Entries $newForMonth -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                              -Entries $newForMonth.ToArray() -AuthorName $AuthorName -AuthorEmail $AuthorEmail
         } else {
-            $existing = [object[]]@(Load-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m)
-            $merged = [object[]]($existing + $newForMonth)
+            $merged = New-Object 'System.Collections.Generic.List[object]'
+            foreach ($e in @(Load-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m)) {
+                $merged.Add($e)
+            }
+            foreach ($e in $newForMonth) { $merged.Add($e) }
             Save-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m `
-                              -Entries $merged -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                              -Entries $merged.ToArray() -AuthorName $AuthorName -AuthorEmail $AuthorEmail
         }
     }
 
