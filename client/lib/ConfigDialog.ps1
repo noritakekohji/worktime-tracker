@@ -55,8 +55,24 @@ function Show-ConfigDialog {
     })
 
     $u.SaveBtn.Add_Click({
+        $missing = New-Object System.Collections.Generic.List[string]
+        $mode = $u.ModeCombo.SelectedItem.Content
+        if (-not $u.MemberIdBox.Text.Trim()) { $missing.Add('あなたの Member ID') }
+        if ($mode -eq 'gitlab') {
+            if (-not $u.UrlBox.Text.Trim())       { $missing.Add('GitLab URL') }
+            if (-not $u.ProjectIdBox.Text.Trim()) { $missing.Add('Project ID / Path') }
+            if (-not $u.BranchBox.Text.Trim())    { $missing.Add('ブランチ') }
+            if (-not $u.TokenBox.Password -and -not (Test-GitLabTokenStored)) {
+                $missing.Add('Project Access Token')
+            }
+        }
+        if ($missing.Count -gt 0) {
+            $u.StatusText.Text = "未入力の項目があります: " + ($missing -join '、')
+            $u.StatusText.Foreground = [System.Windows.Media.Brushes]::Salmon
+            return
+        }
         try {
-            $Config.mode       = $u.ModeCombo.SelectedItem.Content
+            $Config.mode       = $mode
             $Config.gitlab_url = $u.UrlBox.Text.Trim()
             $Config.project_id = $u.ProjectIdBox.Text.Trim()
             $Config.branch     = $u.BranchBox.Text.Trim()

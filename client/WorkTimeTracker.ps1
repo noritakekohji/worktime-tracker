@@ -20,7 +20,91 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 
-# ---- 設定 + 接続 (失敗時は ConfigDialog を再オープン) ----
+# ---- 同梱マスタを GitLab にアップロード (リポジトリが空のとき用) ----
+function Push-BundledMasters {
+    param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)]$Config)
+    $bundle = Join-Path (Split-Path $PSScriptRoot -Parent) 'master'
+    foreach ($name in @('members.json','projects.json','categories.json')) {
+        $local = Join-Path $bundle $name
+        if (-not (Test-Path -LiteralPath $local)) {
+            throw "同梱の $name が見つかりません: $local"
+        }
+        $content = [System.IO.File]::ReadAllText($local, [System.Text.UTF8Encoding]::new($false))
+        Set-DataFile -Source $Source -RelPath "master/$name" -Content $content `
+                     -CommitMessage "bootstrap: initial $name" `
+                     -AuthorName $Config.member_id -AuthorEmail "$($Config.member_id)@worktime-tracker.local"
+    }
+}
+
+# ---- 接続 + マスタ読込 (詳細エラー付き) ----
+function Try-LoadAll {
+    param($Source)
+    $r = [pscustomobject]@{ Members=$null; Projects=$null; Categories=$null; MissingCount=0; Error=$null; ErrorAt=$null }
+    foreach ($pair in @(
+        @{ Key='Members';    File='master/members.json'    },
+        @{ Key='Projects';   File='master/projects.json'   },
+        @{ Key='Categories'; File='master/categories.json' }
+    )) {
+        try {
+            $raw = Get-DataFile -Source $Source -RelPath $pair.File
+            if (-not $raw) { $r.MissingCount++; continue }
+            $r.($pair.Key) = @($raw | ConvertFrom-Json)
+        } catch {
+            $r.Error = $_
+            $r.ErrorAt = $pair.File
+            return $r
+        }
+    }
+    return $r
+}
+
+function Show-ErrorDialog {
+    param([string]$Title, [string]$Message, [string]$Detail)
+    Add-Type -AssemblyName PresentationFramework
+    $w = New-Object System.Windows.Window
+    $w.Title = $Title
+    $w.Width = 640; $w.Height = 480
+    $w.WindowStartupLocation = 'CenterScreen'
+    $w.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#1e1e2e')
+    $dp = New-Object System.Windows.Controls.DockPanel
+    $dp.Margin = '12'
+    $tb1 = New-Object System.Windows.Controls.TextBlock
+    $tb1.Text = $Message
+    $tb1.Foreground = [System.Windows.Media.Brushes]::White
+    $tb1.FontWeight = 'Bold'
+    $tb1.Margin = '0,0,0,8'
+    $tb1.TextWrapping = 'Wrap'
+    [System.Windows.Controls.DockPanel]::SetDock($tb1, 'Top')
+    $dp.Children.Add($tb1) | Out-Null
+
+    $sp = New-Object System.Windows.Controls.StackPanel
+    $sp.Orientation = 'Horizontal'
+    $sp.HorizontalAlignment = 'Right'
+    $sp.Margin = '0,8,0,0'
+    [System.Windows.Controls.DockPanel]::SetDock($sp, 'Bottom')
+    $btn = New-Object System.Windows.Controls.Button
+    $btn.Content = 'OK'; $btn.Padding = '20,4'; $btn.MinWidth = 80
+    $btn.Add_Click({ $w.Close() })
+    $sp.Children.Add($btn) | Out-Null
+    $dp.Children.Add($sp) | Out-Null
+
+    $txt = New-Object System.Windows.Controls.TextBox
+    $txt.Text = $Detail
+    $txt.IsReadOnly = $true
+    $txt.AcceptsReturn = $true
+    $txt.TextWrapping = 'Wrap'
+    $txt.VerticalScrollBarVisibility = 'Auto'
+    $txt.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#181825')
+    $txt.Foreground = [System.Windows.Media.Brushes]::Salmon
+    $txt.FontFamily = 'Consolas'
+    $txt.Padding = '6'
+    $dp.Children.Add($txt) | Out-Null
+
+    $w.Content = $dp
+    [void]$w.ShowDialog()
+}
+
+# ---- 設定 + 接続 (失敗時は ConfigDialog 再オープン or マスタ bootstrap) ----
 function Initialize-AppContext {
     param([switch]$ForceDialog)
     $cfg = Load-Config
@@ -28,30 +112,56 @@ function Initialize-AppContext {
         $needDialog = $ForceDialog -or -not (Test-ConfigComplete -Config $cfg)
         if ($needDialog) {
             $ok = Show-ConfigDialog -Config $cfg
-            if (-not $ok) { return $null }   # ユーザがキャンセル
+            if (-not $ok) { return $null }
             $cfg = Load-Config
             $ForceDialog = $false
         }
-        # 接続 + マスタ読込を試行
         $token = $null
         if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
         $source = New-DataSource -Config $cfg -Token $token
-        try {
-            $members    = @(Get-MasterMembers    -Source $source)
-            $projects   = @(Get-MasterProjects   -Source $source)
-            $categories = @(Get-MasterCategories -Source $source)
-            if (-not $members)    { throw "members.json が空または存在しません" }
-            if (-not $projects)   { throw "projects.json が空または存在しません" }
-            if (-not $categories) { throw "categories.json が空または存在しません" }
-            return [pscustomobject]@{
-                Config = $cfg; Source = $source; Token = $token
-                Members = $members; Projects = $projects; Categories = $categories
-            }
-        } catch {
-            $msg = "接続またはマスタ読込に失敗しました:`n`n$_`n`n設定を確認しますか?`n  [はい]   設定ダイアログを開く`n  [いいえ] 終了する"
-            $r = [System.Windows.MessageBox]::Show($msg, 'WorkTime Tracker - 接続エラー', 'YesNo', 'Error')
-            if ($r -ne 'Yes') { return $null }
+
+        $r = Try-LoadAll -Source $source
+
+        if ($r.Error) {
+            # API エラー (認証/ネットワーク等)
+            $detail = "ファイル: $($r.ErrorAt)`n`n$($r.Error.Exception.Message)`n`n$($r.Error.ScriptStackTrace)"
+            Show-ErrorDialog -Title 'WorkTime Tracker - 接続エラー' `
+                             -Message "マスタ取得に失敗しました。設定を見直してください。" `
+                             -Detail $detail
+            $confirm = [System.Windows.MessageBox]::Show('設定ダイアログを開きますか? (いいえで終了)', '確認', 'YesNo', 'Question')
+            if ($confirm -ne 'Yes') { return $null }
             $ForceDialog = $true
+            continue
+        }
+
+        if ($r.MissingCount -gt 0) {
+            # マスタが GitLab リポジトリにまだ無い → bootstrap オファー
+            $msg = "GitLab リポジトリに master/ 配下のマスタファイルが $($r.MissingCount) 個ありません。`n`n" +
+                   "同梱のサンプルマスタを GitLab にアップロードして開始しますか?`n" +
+                   "  [はい] 同梱マスタを push して開始`n" +
+                   "  [いいえ] 設定を見直す"
+            $r2 = [System.Windows.MessageBox]::Show($msg, 'マスタ未登録', 'YesNo', 'Question')
+            if ($r2 -eq 'Yes') {
+                try {
+                    Push-BundledMasters -Source $source -Config $cfg
+                    [System.Windows.MessageBox]::Show('マスタを push しました。再読込します。', '完了', 'OK', 'Information') | Out-Null
+                    continue   # 再試行
+                } catch {
+                    Show-ErrorDialog -Title 'マスタ push 失敗' `
+                                     -Message '同梱マスタの push に失敗しました。' `
+                                     -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
+                    $ForceDialog = $true
+                    continue
+                }
+            } else {
+                $ForceDialog = $true
+                continue
+            }
+        }
+
+        return [pscustomobject]@{
+            Config = $cfg; Source = $source; Token = $token
+            Members = $r.Members; Projects = $r.Projects; Categories = $r.Categories
         }
     }
 }
