@@ -12,6 +12,41 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
+# ---- 致命エラーログ + 持続表示 ----
+$Script:LogDir = Join-Path $env:APPDATA 'worktime-tracker'
+if (-not (Test-Path -LiteralPath $Script:LogDir)) {
+    New-Item -ItemType Directory -Path $Script:LogDir -Force | Out-Null
+}
+$Script:LogPath = Join-Path $Script:LogDir 'last_error.log'
+
+function Write-FatalLog {
+    param([string]$Text)
+    try {
+        $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        Add-Content -LiteralPath $Script:LogPath -Value "[$stamp] $Text`r`n" -Encoding UTF8
+    } catch { }
+}
+
+function Show-FatalDialog {
+    param([string]$Title, [string]$Message)
+    try {
+        Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+        [System.Windows.MessageBox]::Show($Message, $Title, 'OK', 'Error') | Out-Null
+    } catch {
+        # WPF さえ使えない最悪ケース: コンソールに出してキー待ち
+        Write-Host "[$Title]" -ForegroundColor Red
+        Write-Host $Message -ForegroundColor Red
+        Read-Host '何かキーを押すと終了します'
+    }
+}
+
+trap {
+    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)`n`n--- 詳細はログ: $Script:LogPath"
+    Write-FatalLog "FATAL: $($_.Exception.Message)`r`n$($_.ScriptStackTrace)`r`n$($_.Exception | Format-List * -Force | Out-String)"
+    Show-FatalDialog -Title 'WorkTime Tracker - 致命的エラー' -Message $msg
+    exit 1
+}
+
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Config.ps1')
 . (Join-Path $libDir 'Credential.ps1')
@@ -19,6 +54,9 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
+
+Write-FatalLog "==== START $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===="
+Write-FatalLog "PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScriptRoot"
 
 # ---- 同梱マスタを GitLab にアップロード (リポジトリが空のとき用) ----
 function Push-BundledMasters {

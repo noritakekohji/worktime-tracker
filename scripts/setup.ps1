@@ -32,18 +32,19 @@ Copy-Item -Path (Join-Path $srcDir '*') -Destination $InstallDir -Recurse -Force
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shell = New-Object -ComObject WScript.Shell
 
+# launch.cmd 経由で起動 (エラー時にコンソールが残るため)
 $sc1 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime Tracker.lnk'))
-$sc1.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-$sc1.Arguments = "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$InstallDir\client\WorkTimeTracker.ps1`""
+$sc1.TargetPath = "$InstallDir\client\launch.cmd"
 $sc1.WorkingDirectory = "$InstallDir\client"
 $sc1.IconLocation = "$env:WINDIR\System32\imageres.dll,109"
+$sc1.WindowStyle = 7   # minimized launcher window
 $sc1.Save()
 
 $sc2 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime Report.lnk'))
-$sc2.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-$sc2.Arguments = "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$InstallDir\reports\ReportViewer.ps1`""
+$sc2.TargetPath = "$InstallDir\reports\launch.cmd"
 $sc2.WorkingDirectory = "$InstallDir\reports"
 $sc2.IconLocation = "$env:WINDIR\System32\imageres.dll,114"
+$sc2.WindowStyle = 7
 $sc2.Save()
 
 Write-Host "完了。デスクトップのショートカットから起動してください。" -ForegroundColor Green
