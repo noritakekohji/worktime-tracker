@@ -15,9 +15,20 @@ function Get-TokenPath {
     return Join-Path (Get-AppDataDir) 'token.dat'
 }
 
+function _SanitizeToken {
+    param([string]$s)
+    if ($null -eq $s) { return $null }
+    # 制御文字 (CR, LF, TAB, NUL, 他) と前後空白を除去。
+    # HTTP ヘッダ値に許可されない文字を弾く。
+    $clean = -join ($s.ToCharArray() | Where-Object { -not [char]::IsControl($_) })
+    return $clean.Trim()
+}
+
 function Save-GitLabToken {
     param([Parameter(Mandatory)][string]$Token)
-    $secure = ConvertTo-SecureString -String $Token -AsPlainText -Force
+    $clean = _SanitizeToken $Token
+    if (-not $clean) { throw 'トークンが空です' }
+    $secure = ConvertTo-SecureString -String $clean -AsPlainText -Force
     $encrypted = ConvertFrom-SecureString -SecureString $secure
     [System.IO.File]::WriteAllText((Get-TokenPath), $encrypted, [System.Text.ASCIIEncoding]::new())
 }
@@ -30,10 +41,11 @@ function Get-GitLabToken {
     $secure = ConvertTo-SecureString -String $encrypted
     $ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try {
-        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+        $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
     } finally {
         [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
     }
+    return (_SanitizeToken $plain)
 }
 
 function Test-GitLabTokenStored {

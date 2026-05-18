@@ -14,6 +14,11 @@
 [System.Net.ServicePointManager]::SecurityProtocol = `
     [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+function _StripCtrl { param([string]$s)
+    if ($null -eq $s) { return '' }
+    -join ($s.ToCharArray() | Where-Object { -not [char]::IsControl($_) })
+}
+
 function New-GitLabContext {
     param(
         [Parameter(Mandatory)][string]$BaseUrl,    # https://gitlab.example.com
@@ -21,11 +26,16 @@ function New-GitLabContext {
         [Parameter(Mandatory)][string]$Branch,
         [Parameter(Mandatory)][string]$Token
     )
+    $cleanToken = (_StripCtrl $Token).Trim()
+    if (-not $cleanToken) { throw 'PAT が空または制御文字のみです' }
+    $cleanUrl    = (_StripCtrl $BaseUrl).Trim().TrimEnd('/')
+    $cleanProj   = (_StripCtrl $ProjectId).Trim()
+    $cleanBranch = (_StripCtrl $Branch).Trim()
     return [pscustomobject]@{
-        BaseUrl   = $BaseUrl.TrimEnd('/')
-        ProjectId = [System.Uri]::EscapeDataString($ProjectId)
-        Branch    = $Branch
-        Headers   = @{ 'PRIVATE-TOKEN' = $Token }
+        BaseUrl   = $cleanUrl
+        ProjectId = [System.Uri]::EscapeDataString($cleanProj)
+        Branch    = $cleanBranch
+        Headers   = @{ 'PRIVATE-TOKEN' = $cleanToken }
     }
 }
 
