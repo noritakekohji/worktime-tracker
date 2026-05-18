@@ -41,6 +41,24 @@ function New-GitLabContext {
 
 function _EncodePath { param([string]$Path) [System.Uri]::EscapeDataString($Path) }
 
+function _ResponseToString {
+    # PowerShell 5.1 と 7.x で Invoke-WebRequest の .Content 型が違うのを吸収。
+    # PS 5.1: string (decoded)、PS 7+: byte[]
+    # 確実に UTF-8 として解釈するため RawContentStream があればそちらを優先。
+    param($Response)
+    $ms = $Response.RawContentStream
+    if ($ms -and $ms.Length -gt 0) {
+        $ms.Position = 0
+        $buf = New-Object byte[] ([int]$ms.Length)
+        [void]$ms.Read($buf, 0, $buf.Length)
+        return [System.Text.Encoding]::UTF8.GetString($buf)
+    }
+    $c = $Response.Content
+    if ($null -eq $c) { return '' }
+    if ($c -is [byte[]]) { return [System.Text.Encoding]::UTF8.GetString($c) }
+    return [string]$c
+}
+
 function Get-GitLabFileRaw {
     # 指定パスのファイル内容を文字列で返す。存在しなければ $null
     param(
@@ -49,8 +67,8 @@ function Get-GitLabFileRaw {
     )
     $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/files/$(_EncodePath $Path)/raw?ref=$($Ctx.Branch)"
     try {
-        $bytes = Invoke-WebRequest -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
-        return [System.Text.Encoding]::UTF8.GetString($bytes.Content)
+        $resp = Invoke-WebRequest -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
+        return _ResponseToString $resp
     } catch {
         if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 404) {
             return $null
@@ -127,7 +145,7 @@ function Get-GitLabTree {
             if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 404) { break }
             throw
         }
-        $items = $resp.Content | ConvertFrom-Json
+        $items = (_ResponseToString $resp) | ConvertFrom-Json
         foreach ($i in $items) { $results.Add($i) }
         $totalPages = [int]($resp.Headers['X-Total-Pages'] | Select-Object -First 1)
         $page++
