@@ -507,16 +507,39 @@ $ui.SaveBtn.Add_Click({
     $vm = [int]$ui.MonthCombo.SelectedItem
     Set-Status "保存中..." '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    # 空エントリ・空日付を捨てて配列化 (型 [object[]] で渡す)
+    $clean = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($e in $Script:Entries) {
+        if (-not $e) { continue }
+        $d = [string]$e.date
+        if ([string]::IsNullOrWhiteSpace($d)) { continue }
+        $clean.Add([pscustomobject]@{
+            date            = $d
+            project_code    = [string]$e.project_code
+            process_code    = [string]$e.process_code
+            task_group_code = [string]$e.task_group_code
+            task_code       = [string]$e.task_code
+            category        = [string]$e.category
+            hours           = [double]$e.hours
+            comment         = [string]$e.comment
+        })
+    }
+    $entriesArr = [object[]]$clean.ToArray()
+    Write-FatalLog ("Save: member={0} view={1}/{2} count={3}" -f $m.id, $vy, $vm, $entriesArr.Count)
+
     try {
         Save-EntriesGrouped -Source $Script:Source -MemberId $m.id `
-                            -AllEntries @($Script:Entries) `
+                            -AllEntries $entriesArr `
                             -ViewYear $vy -ViewMonth $vm `
                             -AuthorName $m.name -AuthorEmail "$($m.id)@worktime-tracker.local"
         Set-Status "保存完了 ($($m.id) $vy/$vm)" '#a6e3a1'
         [System.Windows.MessageBox]::Show("保存しました。", '保存完了', 'OK', 'Information') | Out-Null
     } catch {
-        Set-Status "保存失敗: $_" '#f38ba8'
-        [System.Windows.MessageBox]::Show("保存失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+        $detail = "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)`n`n$($_.Exception.InnerException | Out-String)"
+        Write-FatalLog "SAVE FAIL: $detail"
+        Set-Status "保存失敗 (詳細はダイアログ)" '#f38ba8'
+        Show-ErrorDialog -Title '保存失敗' -Message '保存に失敗しました。詳細:' -Detail $detail
     } finally {
         $Script:Window.Cursor = $null
     }
