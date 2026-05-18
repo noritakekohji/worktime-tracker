@@ -20,41 +20,63 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 
-# ---- 設定ロード / 初回設定 ----
-$Script:Config = Load-Config
-if ($ForceConfig -or -not (Test-ConfigComplete -Config $Script:Config)) {
-    $ok = Show-ConfigDialog -Config $Script:Config
-    if (-not $ok) {
-        Write-Host "設定がキャンセルされました。終了します。" -ForegroundColor Yellow
-        return
-    }
-    $Script:Config = Load-Config
-    if (-not (Test-ConfigComplete -Config $Script:Config)) {
-        [System.Windows.MessageBox]::Show('設定が不完全です。アプリを終了します。', 'WorkTime Tracker', 'OK', 'Warning') | Out-Null
-        return
+# ---- 設定 + 接続 (失敗時は ConfigDialog を再オープン) ----
+function Initialize-AppContext {
+    param([switch]$ForceDialog)
+    $cfg = Load-Config
+    while ($true) {
+        $needDialog = $ForceDialog -or -not (Test-ConfigComplete -Config $cfg)
+        if ($needDialog) {
+            $ok = Show-ConfigDialog -Config $cfg
+            if (-not $ok) { return $null }   # ユーザがキャンセル
+            $cfg = Load-Config
+            $ForceDialog = $false
+        }
+        # 接続 + マスタ読込を試行
+        $token = $null
+        if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
+        $source = New-DataSource -Config $cfg -Token $token
+        try {
+            $members    = @(Get-MasterMembers    -Source $source)
+            $projects   = @(Get-MasterProjects   -Source $source)
+            $categories = @(Get-MasterCategories -Source $source)
+            if (-not $members)    { throw "members.json が空または存在しません" }
+            if (-not $projects)   { throw "projects.json が空または存在しません" }
+            if (-not $categories) { throw "categories.json が空または存在しません" }
+            return [pscustomobject]@{
+                Config = $cfg; Source = $source; Token = $token
+                Members = $members; Projects = $projects; Categories = $categories
+            }
+        } catch {
+            $msg = "接続またはマスタ読込に失敗しました:`n`n$_`n`n設定を確認しますか?`n  [はい]   設定ダイアログを開く`n  [いいえ] 終了する"
+            $r = [System.Windows.MessageBox]::Show($msg, 'WorkTime Tracker - 接続エラー', 'YesNo', 'Error')
+            if ($r -ne 'Yes') { return $null }
+            $ForceDialog = $true
+        }
     }
 }
 
-# ---- DataSource 作成 ----
-$Script:Token = $null
-if ($Script:Config.mode -eq 'gitlab') { $Script:Token = Get-GitLabToken }
-$Script:Source = New-DataSource -Config $Script:Config -Token $Script:Token
+$ctx = Initialize-AppContext -ForceDialog:$ForceConfig
+if (-not $ctx) {
+    Write-Host "設定/接続が完了しなかったため終了します。" -ForegroundColor Yellow
+    return
+}
+$Script:Config     = $ctx.Config
+$Script:Source     = $ctx.Source
+$Script:Token      = $ctx.Token
+$Script:Members    = $ctx.Members
+$Script:Projects   = $ctx.Projects
+$Script:Categories = $ctx.Categories
 
-# ---- マスタ読込 (with retry on auth failure) ----
 function Reload-Masters {
     try {
         $Script:Members    = @(Get-MasterMembers    -Source $Script:Source)
         $Script:Projects   = @(Get-MasterProjects   -Source $Script:Source)
         $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
-        if (-not $Script:Members)    { throw "members.json が空またはパース失敗" }
-        if (-not $Script:Projects)   { throw "projects.json が空またはパース失敗" }
-        if (-not $Script:Categories) { throw "categories.json が空またはパース失敗" }
     } catch {
-        [System.Windows.MessageBox]::Show("マスタ読込に失敗しました:`n$_`n`n設定を開きます。", 'エラー', 'OK', 'Error') | Out-Null
-        throw
+        [System.Windows.MessageBox]::Show("マスタ再読込に失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
     }
 }
-Reload-Masters
 
 # ---- XAML 読込 ----
 $xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
@@ -343,13 +365,23 @@ $ui.SaveBtn.Add_Click({
 $ui.ReloadBtn.Add_Click({ Reload-Masters; Load-ViewMonth })
 
 $ui.SettingsBtn.Add_Click({
-    $ok = Show-ConfigDialog -Config $Script:Config
-    if ($ok) {
-        $Script:Config = Load-Config
-        $Script:Token = if ($Script:Config.mode -eq 'gitlab') { Get-GitLabToken } else { $null }
-        $Script:Source = New-DataSource -Config $Script:Config -Token $Script:Token
+    $newCtx = Initialize-AppContext -ForceDialog
+    if ($newCtx) {
+        $Script:Config     = $newCtx.Config
+        $Script:Source     = $newCtx.Source
+        $Script:Token      = $newCtx.Token
+        $Script:Members    = $newCtx.Members
+        $Script:Projects   = $newCtx.Projects
+        $Script:Categories = $newCtx.Categories
         $ui.ModeText.Text = "mode: $($Script:Config.mode) | $($Script:Config.gitlab_url) | branch: $($Script:Config.branch)"
-        Reload-Masters
+        # マスタ更新でコンボを再構築
+        $script:memberItems = $Script:Members | Where-Object { $_.active } | ForEach-Object {
+            [pscustomobject]@{ id = $_.id; name = $_.name; role = $_.role; display = "$($_.id) - $($_.name)" }
+        }
+        $ui.MemberCombo.ItemsSource = $script:memberItems
+        if ($Script:Config.member_id) { $ui.MemberCombo.SelectedValue = $Script:Config.member_id }
+        $ui.CategoryCombo.ItemsSource = $Script:Categories
+        $ui.ProjectCombo.ItemsSource = ($Script:Projects | Where-Object { $_.active })
         Load-ViewMonth
     }
 })
