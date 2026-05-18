@@ -208,7 +208,7 @@
                                 <DataGridTextColumn Header="ID"         Binding="{Binding id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
                                 <DataGridTextColumn Header="氏名"       Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
                                 <DataGridTextColumn Header="部署"       Binding="{Binding department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
-                                <DataGridComboBoxColumn x:Name="MemRoleCol" Header="役割" SelectedValueBinding="{Binding role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                                <DataGridTextColumn Header="役割 (member/admin)" Binding="{Binding role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
                                 <DataGridCheckBoxColumn Header="有効"   Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                             </DataGrid.Columns>
                         </DataGrid>

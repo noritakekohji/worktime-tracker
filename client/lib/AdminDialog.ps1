@@ -18,15 +18,13 @@ function Show-AdminDialog {
 
     $u = @{}
     foreach ($n in 'StatusText','ReloadBtn','CloseBtn','SaveBtn',
-                   'MembersGrid','MemAddBtn','MemDelBtn','MemRoleCol',
+                   'MembersGrid','MemAddBtn','MemDelBtn',
                    'ProjectsTree','PrjDetailTitle','PrjKindText','PrjCodeBox','PrjNameBox','PrjActiveBox','PrjHint',
                    'PrjAddRootBtn','PrjAddChildBtn','PrjDelBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
                    'JsonTargetCombo','JsonReloadBtn','JsonValidateBtn','JsonApplyBtn','JsonBox') {
         $u[$n] = $win.FindName($n)
     }
-
-    $u.MemRoleCol.ItemsSource = @('member','admin')
 
     $members    = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $projects   = New-Object 'System.Collections.Generic.List[object]'
