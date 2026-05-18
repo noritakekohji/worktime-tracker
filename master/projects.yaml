@@ -1,0 +1,56 @@
+# プロジェクト階層マスタ (サンプル)
+# 4段階: project > process > task_group > task
+- code: ABC001
+  name: ABC案件
+  active: true
+  processes:
+    - code: DESIGN
+      name: 設計
+      task_groups:
+        - code: DB
+          name: DB設計
+          tasks:
+            - code: ERD
+              name: ER図作成
+            - code: DDL
+              name: DDL作成
+        - code: API
+          name: API設計
+          tasks:
+            - code: SPEC
+              name: API仕様書
+            - code: SEQ
+              name: シーケンス図
+    - code: IMPL
+      name: 実装
+      task_groups:
+        - code: BE
+          name: バックエンド実装
+          tasks:
+            - code: AUTH
+              name: 認証機能
+            - code: CRUD
+              name: CRUD API
+        - code: FE
+          name: フロントエンド実装
+          tasks:
+            - code: LOGIN
+              name: ログイン画面
+    - code: TEST
+      name: テスト
+      task_groups: []
+
+- code: XYZ002
+  name: 社内ツール改修
+  active: true
+  processes:
+    - code: MAINT
+      name: 保守
+      task_groups:
+        - code: BUG
+          name: バグ修正
+          tasks:
+            - code: INV
+              name: 調査
+            - code: FIX
+              name: 修正

@@ -1,0 +1,19 @@
+# 作業者マスタ (サンプル)
+# role: member | admin
+- id: E0001
+  name: 管理者一郎
+  department: 管理部
+  role: admin
+  active: true
+
+- id: E1001
+  name: 山田太郎
+  department: 開発1課
+  role: member
+  active: true
+
+- id: E1002
+  name: 佐藤花子
+  department: 開発1課
+  role: member
+  active: true

@@ -1,0 +1,27 @@
+{
+  "member_id": "E1001",
+  "year": 2026,
+  "month": 5,
+  "entries": [
+    {
+      "date": "2026-05-18",
+      "project_code": "ABC001",
+      "process_code": "DESIGN",
+      "task_group_code": "DB",
+      "task_code": "ERD",
+      "category": "DESIGN",
+      "hours": 3.5,
+      "comment": "ER図ドラフト作成"
+    },
+    {
+      "date": "2026-05-18",
+      "project_code": "ABC001",
+      "process_code": "DESIGN",
+      "task_group_code": "API",
+      "task_code": "SPEC",
+      "category": "REVIEW",
+      "hours": 1.0,
+      "comment": "API仕様レビュー会"
+    }
+  ]
+}

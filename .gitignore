@@ -1,0 +1,24 @@
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Python (集計スクリプト用)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local config
+client/local.config.json
+*.local
