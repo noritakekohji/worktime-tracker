@@ -518,15 +518,105 @@ $u.ApplyBtn.Add_Click({ Apply-Filters })
 $u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })
 $u.ProjectFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })
 
+function Show-ColumnPicker {
+    param([string[]]$AllColumns, [string[]]$Selected)
+    $w = New-Object System.Windows.Window
+    $w.Title = '出力カラムを選択'
+    $w.Width = 360; $w.Height = 520
+    $w.WindowStartupLocation = 'CenterScreen'
+    $w.Background = [System.Windows.Media.Brushes]::White
+    $w.FontFamily = 'Meiryo UI'
+    $dp = New-Object System.Windows.Controls.DockPanel
+    $dp.Margin = '14'
+    $hdr = New-Object System.Windows.Controls.TextBlock
+    $hdr.Text = '出力に含めるカラムを選択 (順序はそのまま)'
+    $hdr.FontWeight = 'Bold'
+    $hdr.FontSize = 14
+    $hdr.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+    $hdr.Margin = '0,0,0,10'
+    [System.Windows.Controls.DockPanel]::SetDock($hdr,'Top')
+    [void]$dp.Children.Add($hdr)
+
+    $btns = New-Object System.Windows.Controls.StackPanel
+    $btns.Orientation = 'Horizontal'
+    $btns.HorizontalAlignment = 'Right'
+    $btns.Margin = '0,10,0,0'
+    [System.Windows.Controls.DockPanel]::SetDock($btns,'Bottom')
+    $cancelBtn = New-Object System.Windows.Controls.Button
+    $cancelBtn.Content = 'キャンセル'; $cancelBtn.Padding = '14,6'; $cancelBtn.Margin = '4,0'
+    $okBtn = New-Object System.Windows.Controls.Button
+    $okBtn.Content = '出力'; $okBtn.Padding = '14,6'; $okBtn.Margin = '4,0'
+    $okBtn.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0284c7')
+    $okBtn.Foreground = [System.Windows.Media.Brushes]::White
+    $okBtn.FontWeight = 'Bold'
+    $okBtn.MinWidth = 80
+    [void]$btns.Children.Add($cancelBtn)
+    [void]$btns.Children.Add($okBtn)
+    [void]$dp.Children.Add($btns)
+
+    $quick = New-Object System.Windows.Controls.StackPanel
+    $quick.Orientation = 'Horizontal'
+    $quick.Margin = '0,0,0,8'
+    [System.Windows.Controls.DockPanel]::SetDock($quick,'Top')
+    $selAll = New-Object System.Windows.Controls.Button
+    $selAll.Content = '全選択'; $selAll.Padding = '10,4'; $selAll.Margin = '0,0,4,0'
+    $selNone = New-Object System.Windows.Controls.Button
+    $selNone.Content = '全解除'; $selNone.Padding = '10,4'
+    [void]$quick.Children.Add($selAll)
+    [void]$quick.Children.Add($selNone)
+    [void]$dp.Children.Add($quick)
+
+    $sv = New-Object System.Windows.Controls.ScrollViewer
+    $sv.VerticalScrollBarVisibility = 'Auto'
+    $sp = New-Object System.Windows.Controls.StackPanel
+    $sv.Content = $sp
+    [void]$dp.Children.Add($sv)
+
+    $checks = @{}
+    foreach ($col in $AllColumns) {
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.Content = $col
+        $cb.Margin = '4'
+        $cb.IsChecked = ($Selected -contains $col)
+        $checks[$col] = $cb
+        [void]$sp.Children.Add($cb)
+    }
+    $selAll.Add_Click({ foreach ($k in $checks.Keys) { $checks[$k].IsChecked = $true } })
+    $selNone.Add_Click({ foreach ($k in $checks.Keys) { $checks[$k].IsChecked = $false } })
+
+    $script:Picked = $null
+    $okBtn.Add_Click({
+        $script:Picked = @($AllColumns | Where-Object { $checks[$_].IsChecked })
+        $w.Close()
+    })
+    $cancelBtn.Add_Click({ $script:Picked = $null; $w.Close() })
+
+    $w.Content = $dp
+    [void]$w.ShowDialog()
+    return $script:Picked
+}
+
+$Script:LastExportCols = $null
+
 $u.ExportBtn.Add_Click({
+    $rows = $u.DetailGrid.ItemsSource
+    if (-not $rows -or @($rows).Count -eq 0) {
+        [System.Windows.MessageBox]::Show('エクスポート対象のデータがありません。', 'CSV', 'OK', 'Information') | Out-Null
+        return
+    }
+    $allCols = @('date','member_id','project_code','process_code','task_group_code','task_code','category','hours','comment')
+    $preset  = if ($Script:LastExportCols) { $Script:LastExportCols } else { $allCols }
+    $picked  = Show-ColumnPicker -AllColumns $allCols -Selected $preset
+    if (-not $picked -or $picked.Count -eq 0) { return }
+    $Script:LastExportCols = $picked
+
     $dlg = New-Object System.Windows.Forms.SaveFileDialog
     $dlg.Filter = 'CSV (*.csv)|*.csv'
     $dlg.FileName = 'worktime_{0:yyyyMMdd_HHmmss}.csv' -f (Get-Date)
     if ($dlg.ShowDialog() -ne 'OK') { return }
-    $rows = $u.DetailGrid.ItemsSource
-    if (-not $rows) { return }
-    $rows | Export-Csv -LiteralPath $dlg.FileName -NoTypeInformation -Encoding UTF8
-    [System.Windows.MessageBox]::Show("エクスポート完了: $($dlg.FileName)", 'CSV', 'OK', 'Information') | Out-Null
+
+    $rows | Select-Object -Property $picked | Export-Csv -LiteralPath $dlg.FileName -NoTypeInformation -Encoding UTF8
+    [System.Windows.MessageBox]::Show("エクスポート完了 ($($picked.Count) 列):`n$($dlg.FileName)", 'CSV', 'OK', 'Information') | Out-Null
 })
 
 Reload-Entries

@@ -83,9 +83,10 @@ function Set-DataFile {
 
 # ---- マスタ ----
 
-function Get-MasterMembers    { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/members.json') }
-function Get-MasterProjects   { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/projects.json') }
-function Get-MasterCategories { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/categories.json') }
+function Get-MasterMembers      { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/members.json') }
+function Get-MasterProjects     { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/projects.json') }
+function Get-MasterCategories   { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/categories.json') }
+function Get-MasterTaskPatterns { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/task_patterns.json') }
 
 function Save-MasterMembers {
     param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
@@ -104,6 +105,12 @@ function Save-MasterCategories {
     $json = $Data | ConvertTo-Json -Depth 10
     Set-DataFile -Source $Source -RelPath 'master/categories.json' -Content $json `
                  -CommitMessage 'update master: categories' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+}
+function Save-MasterTaskPatterns {
+    param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
+    $json = $Data | ConvertTo-Json -Depth 10
+    Set-DataFile -Source $Source -RelPath 'master/task_patterns.json' -Content $json `
+                 -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
 }
 
 # ---- 実績データ ----

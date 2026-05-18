@@ -62,7 +62,7 @@ Write-FatalLog "PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScrip
 function Push-BundledMasters {
     param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)]$Config)
     $bundle = Join-Path (Split-Path $PSScriptRoot -Parent) 'master'
-    foreach ($name in @('members.json','projects.json','categories.json')) {
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
         $local = Join-Path $bundle $name
         if (-not (Test-Path -LiteralPath $local)) {
             throw "同梱の $name が見つかりません: $local"
@@ -79,11 +79,12 @@ function Try-LoadAll {
     param($Source)
     # 配列を PSCustomObject プロパティに格納するとスカラ化する PS 5.1 のクセを避けるため
     # ハッシュテーブルで保持する。
-    $result = @{ Members=$null; Projects=$null; Categories=$null; MissingCount=0; Error=$null; ErrorAt=$null }
+    $result = @{ Members=$null; Projects=$null; Categories=$null; TaskPatterns=$null; MissingCount=0; Error=$null; ErrorAt=$null }
     foreach ($pair in @(
-        @{ Key='Members';    File='master/members.json'    },
-        @{ Key='Projects';   File='master/projects.json'   },
-        @{ Key='Categories'; File='master/categories.json' }
+        @{ Key='Members';      File='master/members.json'       },
+        @{ Key='Projects';     File='master/projects.json'      },
+        @{ Key='Categories';   File='master/categories.json'    },
+        @{ Key='TaskPatterns'; File='master/task_patterns.json' }
     )) {
         try {
             $raw = Get-DataFile -Source $Source -RelPath $pair.File
@@ -206,12 +207,13 @@ function Initialize-AppContext {
 
         # ハッシュテーブルで返す (PSCustomObject NoteProperty 経由で配列がスカラ化する事例を回避)
         return @{
-            Config     = $cfg
-            Source     = $source
-            Token      = $token
-            Members    = $r['Members']
-            Projects   = $r['Projects']
-            Categories = $r['Categories']
+            Config       = $cfg
+            Source       = $source
+            Token        = $token
+            Members      = $r['Members']
+            Projects     = $r['Projects']
+            Categories   = $r['Categories']
+            TaskPatterns = $r['TaskPatterns']
         }
     }
 }
@@ -224,16 +226,19 @@ if (-not $ctx) {
 $Script:Config     = $ctx['Config']
 $Script:Source     = $ctx['Source']
 $Script:Token      = $ctx['Token']
-$Script:Members    = @($ctx['Members'])
-$Script:Projects   = @($ctx['Projects'])
-$Script:Categories = @($ctx['Categories'])
-Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2}" -f $Script:Members.Count, $Script:Projects.Count, $Script:Categories.Count)
+$Script:Members      = @($ctx['Members'])
+$Script:Projects     = @($ctx['Projects'])
+$Script:Categories   = @($ctx['Categories'])
+$Script:TaskPatterns = @($ctx['TaskPatterns'])
+Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2} TaskPatterns={3}" -f $Script:Members.Count, $Script:Projects.Count, $Script:Categories.Count, $Script:TaskPatterns.Count)
 
 function Reload-Masters {
     try {
-        $Script:Members    = @(Get-MasterMembers    -Source $Script:Source)
-        $Script:Projects   = @(Get-MasterProjects   -Source $Script:Source)
-        $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
+        $Script:Members      = @(Get-MasterMembers      -Source $Script:Source)
+        $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)
+        $Script:Categories   = @(Get-MasterCategories   -Source $Script:Source)
+        $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
+        $ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
     } catch {
         [System.Windows.MessageBox]::Show("マスタ再読込に失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
     }
@@ -317,12 +322,23 @@ function Reset-Cascade {
     }
 }
 
-$ui.ProjectCombo.ItemsSource = ($Script:Projects | Where-Object { $_.active })
+$ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
+
+function Get-TaskPatternFor {
+    param($Project)
+    if (-not $Project) { return $null }
+    $pid = [string]$Project.task_pattern_id
+    if (-not $pid) { return $null }
+    return ($Script:TaskPatterns | Where-Object { $_.id -eq $pid } | Select-Object -First 1)
+}
 
 $ui.ProjectCombo.Add_SelectionChanged({
     Reset-Cascade -From @('process','task_group','task')
     $p = $ui.ProjectCombo.SelectedItem
-    if ($p -and $p.processes) { $ui.ProcessCombo.ItemsSource = @($p.processes) }
+    $pattern = Get-TaskPatternFor -Project $p
+    if ($pattern -and $pattern.processes) {
+        $ui.ProcessCombo.ItemsSource = @($pattern.processes)
+    }
 })
 $ui.ProcessCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task_group','task')
@@ -568,12 +584,13 @@ $ui.ReloadBtn.Add_Click({ Reload-Masters; Load-ViewMonth })
 $ui.SettingsBtn.Add_Click({
     $newCtx = Initialize-AppContext -ForceDialog
     if ($newCtx) {
-        $Script:Config     = $newCtx['Config']
-        $Script:Source     = $newCtx['Source']
-        $Script:Token      = $newCtx['Token']
-        $Script:Members    = @($newCtx['Members'])
-        $Script:Projects   = @($newCtx['Projects'])
-        $Script:Categories = @($newCtx['Categories'])
+        $Script:Config       = $newCtx['Config']
+        $Script:Source       = $newCtx['Source']
+        $Script:Token        = $newCtx['Token']
+        $Script:Members      = @($newCtx['Members'])
+        $Script:Projects     = @($newCtx['Projects'])
+        $Script:Categories   = @($newCtx['Categories'])
+        $Script:TaskPatterns = @($newCtx['TaskPatterns'])
         $ui.ModeText.Text = "{0}  |  branch: {1}" -f $Script:Config.gitlab_url, $Script:Config.branch
 
         $Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
