@@ -161,7 +161,7 @@ function _AnalysisRow {
 }
 
 function _AnalysisCard {
-    param([string]$Title,[System.Collections.IEnumerable]$Children,[string]$Accent='#0284c7')
+    param([string]$Title, $Children, [string]$Accent='#0284c7')
     $b = New-Object System.Windows.Controls.Border
     $b.Background     = [System.Windows.Media.Brushes]::White
     $b.BorderBrush    = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#bae6fd')
@@ -177,7 +177,9 @@ function _AnalysisCard {
     $t.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Accent)
     $t.Margin = '0,0,0,8'
     $sp.Children.Add($t) | Out-Null
-    foreach ($c in $Children) { $sp.Children.Add($c) | Out-Null }
+    foreach ($c in @($Children)) {
+        if ($null -ne $c) { $sp.Children.Add($c) | Out-Null }
+    }
     $b.Child = $sp
     return $b
 }
