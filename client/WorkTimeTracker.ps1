@@ -355,18 +355,25 @@ function Load-ViewMonth {
     Set-Status "読込中: $mid $y/$m..." '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
+        # 値が配列化されている古いデータも安全に取り出せるようヘルパで包む
+        function _Scalar { param($v) if ($v -is [array]) { if ($v.Count -gt 0) { $v[0] } else { $null } } else { $v } }
+        function _Str    { param($v) [string](_Scalar $v) }
+        function _Num    { param($v)
+            $s = (_Scalar $v); if ($null -eq $s -or $s -eq '') { return 0.0 }
+            $d = 0.0; if ([double]::TryParse([string]$s, [ref]$d)) { return $d } else { return 0.0 }
+        }
         $Script:Entries.Clear()
         $loaded = @(Load-MonthEntries -Source $Script:Source -MemberId $mid -Year $y -Month $m)
         foreach ($e in $loaded) {
             $Script:Entries.Add([pscustomobject]@{
-                date            = [string]$e.date
-                project_code    = [string]$e.project_code
-                process_code    = [string]$e.process_code
-                task_group_code = [string]$e.task_group_code
-                task_code       = [string]$e.task_code
-                category        = [string]$e.category
-                hours           = [double]$e.hours
-                comment         = [string]$e.comment
+                date            = _Str $e.date
+                project_code    = _Str $e.project_code
+                process_code    = _Str $e.process_code
+                task_group_code = _Str $e.task_group_code
+                task_code       = _Str $e.task_code
+                category        = _Str $e.category
+                hours           = _Num $e.hours
+                comment         = _Str $e.comment
             })
         }
         Update-HoursTotal
@@ -508,24 +515,26 @@ $ui.SaveBtn.Add_Click({
     Set-Status "保存中..." '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
 
-    # 空エントリ・空日付を捨てて配列化 (型 [object[]] で渡す)
+    function _Sc { param($v) if ($v -is [array]) { if ($v.Count -gt 0) { $v[0] } else { $null } } else { $v } }
     $clean = New-Object 'System.Collections.Generic.List[object]'
     foreach ($e in $Script:Entries) {
         if (-not $e) { continue }
-        $d = [string]$e.date
+        $d = [string](_Sc $e.date)
         if ([string]::IsNullOrWhiteSpace($d)) { continue }
+        $h = 0.0
+        [void][double]::TryParse([string](_Sc $e.hours), [ref]$h)
         $clean.Add([pscustomobject]@{
             date            = $d
-            project_code    = [string]$e.project_code
-            process_code    = [string]$e.process_code
-            task_group_code = [string]$e.task_group_code
-            task_code       = [string]$e.task_code
-            category        = [string]$e.category
-            hours           = [double]$e.hours
-            comment         = [string]$e.comment
+            project_code    = [string](_Sc $e.project_code)
+            process_code    = [string](_Sc $e.process_code)
+            task_group_code = [string](_Sc $e.task_group_code)
+            task_code       = [string](_Sc $e.task_code)
+            category        = [string](_Sc $e.category)
+            hours           = $h
+            comment         = [string](_Sc $e.comment)
         })
     }
-    $entriesArr = [object[]]$clean.ToArray()
+    $entriesArr = $clean.ToArray()
     Write-FatalLog ("Save: member={0} view={1}/{2} count={3}" -f $m.id, $vy, $vm, $entriesArr.Count)
 
     try {
