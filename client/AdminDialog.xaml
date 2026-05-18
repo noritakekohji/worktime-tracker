@@ -1,0 +1,51 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="管理者モード - マスタ編集"
+    Height="640" Width="900"
+    WindowStartupLocation="CenterScreen"
+    Background="#1e1e2e">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Padding" Value="14,4"/>
+            <Setter Property="MinHeight" Value="28"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="8">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+            <TextBlock Text="編集対象:" Margin="4"/>
+            <ComboBox x:Name="TargetCombo" Width="200" Margin="4">
+                <ComboBoxItem Content="members" IsSelected="True"/>
+                <ComboBoxItem Content="projects"/>
+                <ComboBoxItem Content="categories"/>
+            </ComboBox>
+            <Button x:Name="ReloadBtn" Content="再読込"/>
+            <Button x:Name="ValidateBtn" Content="JSON 検証"/>
+            <TextBlock x:Name="StatusText" Margin="20,0,0,0"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelBtn" Content="閉じる"/>
+            <Button x:Name="SaveBtn" Content="保存して push" Background="#a6e3a1" Foreground="#11111b" FontWeight="Bold"/>
+        </StackPanel>
+
+        <TextBox x:Name="JsonBox"
+                 AcceptsReturn="True"
+                 AcceptsTab="True"
+                 TextWrapping="NoWrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 FontFamily="Consolas"
+                 FontSize="12"
+                 Background="#181825"
+                 Foreground="#cdd6f4"
+                 SelectionBrush="#585b70"
+                 Padding="6"/>
+    </DockPanel>
+</Window>

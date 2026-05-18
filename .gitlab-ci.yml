@@ -1,4 +1,4 @@
-# GitLab CI: data/ への push をトリガに集計し HTML を GitLab Pages へ公開
+# GitLab CI: data/ または master/ への push をトリガに集計し HTML を GitLab Pages へ公開
 stages:
   - aggregate
 
@@ -6,12 +6,16 @@ pages:
   stage: aggregate
   image: python:3.12-slim
   script:
-    - pip install --quiet pandas plotly pyyaml
+    - pip install --quiet pandas plotly
     - python ci/aggregate.py
-    - mv public public_out
-    - mv public_out public
   artifacts:
     paths:
       - public
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - data/**/*
+        - master/**/*
+        - ci/**/*
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual

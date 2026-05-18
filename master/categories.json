@@ -1,0 +1,9 @@
+[
+  { "code": "DESIGN",  "name": "設計" },
+  { "code": "IMPL",    "name": "実装" },
+  { "code": "TEST",    "name": "テスト" },
+  { "code": "REVIEW",  "name": "レビュー" },
+  { "code": "MEETING", "name": "会議" },
+  { "code": "DOC",     "name": "ドキュメント作成" },
+  { "code": "OTHER",   "name": "その他" }
+]

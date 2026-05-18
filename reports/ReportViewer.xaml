@@ -1,0 +1,97 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="WorkTime Report Viewer"
+    Height="720" Width="1200"
+    WindowStartupLocation="CenterScreen"
+    Background="#1e1e2e">
+    <Window.Resources>
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#cdd6f4"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="MinHeight" Value="26"/>
+        </Style>
+        <Style TargetType="DatePicker">
+            <Setter Property="Margin" Value="4"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="MinHeight" Value="28"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#11111b" Padding="10">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="期間:"/>
+                <DatePicker x:Name="FromDate"/>
+                <Label Content="〜"/>
+                <DatePicker x:Name="ToDate"/>
+                <Label Content="メンバー:" Margin="20,0,0,0"/>
+                <ComboBox x:Name="MemberFilter" DisplayMemberPath="display" SelectedValuePath="id"/>
+                <Label Content="プロジェクト:"/>
+                <ComboBox x:Name="ProjectFilter" DisplayMemberPath="name" SelectedValuePath="code"/>
+                <Button x:Name="ApplyBtn" Content="適用"/>
+                <Button x:Name="ReloadBtn" Content="再読込"/>
+                <Button x:Name="ExportBtn" Content="CSV エクスポート"/>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="#11111b" Padding="10">
+            <TextBlock x:Name="SummaryText" Text=""/>
+        </Border>
+
+        <TabControl Background="#1e1e2e">
+            <TabItem Header="明細">
+                <DataGrid x:Name="DetailGrid"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Background="#181825" Foreground="#cdd6f4"
+                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"
+                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#313244">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="90"/>
+                        <DataGridTextColumn Header="メンバー" Binding="{Binding member_id}" Width="80"/>
+                        <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="100"/>
+                        <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="80"/>
+                        <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_code}" Width="90"/>
+                        <DataGridTextColumn Header="タスク" Binding="{Binding task_code}" Width="90"/>
+                        <DataGridTextColumn Header="カテゴリ" Binding="{Binding category}" Width="80"/>
+                        <DataGridTextColumn Header="工数" Binding="{Binding hours}" Width="60"/>
+                        <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="メンバー別集計">
+                <DataGrid x:Name="MemberSummaryGrid"
+                          AutoGenerateColumns="True"
+                          IsReadOnly="True" CanUserAddRows="False"
+                          Background="#181825" Foreground="#cdd6f4"
+                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
+            </TabItem>
+            <TabItem Header="プロジェクト別集計">
+                <DataGrid x:Name="ProjectSummaryGrid"
+                          AutoGenerateColumns="True"
+                          IsReadOnly="True" CanUserAddRows="False"
+                          Background="#181825" Foreground="#cdd6f4"
+                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
+            </TabItem>
+            <TabItem Header="カテゴリ別集計">
+                <DataGrid x:Name="CategorySummaryGrid"
+                          AutoGenerateColumns="True"
+                          IsReadOnly="True" CanUserAddRows="False"
+                          Background="#181825" Foreground="#cdd6f4"
+                          RowBackground="#1e1e2e" AlternatingRowBackground="#181825"/>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

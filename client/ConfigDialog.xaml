@@ -1,0 +1,91 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="初回設定 - WorkTime Tracker"
+    Height="520" Width="560"
+    WindowStartupLocation="CenterScreen"
+    ResizeMode="NoResize"
+    Background="#1e1e2e">
+    <Window.Resources>
+        <Style TargetType="Label">
+            <Setter Property="Foreground" Value="#cdd6f4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="MinHeight" Value="26"/>
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="MinHeight" Value="26"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="MinHeight" Value="26"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Padding" Value="14,4"/>
+            <Setter Property="MinHeight" Value="28"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#a6adc8"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="14">
+        <TextBlock DockPanel.Dock="Top" Text="GitLab 接続情報を入力してください" FontSize="14" FontWeight="Bold" Foreground="#a6e3a1" Margin="0,0,0,10"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="TestBtn"   Content="接続テスト" />
+            <Button x:Name="CancelBtn" Content="キャンセル" />
+            <Button x:Name="SaveBtn"   Content="保存して開始" Background="#a6e3a1" Foreground="#11111b" FontWeight="Bold"/>
+        </StackPanel>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Label Grid.Row="0" Grid.Column="0" Content="モード:"/>
+            <ComboBox Grid.Row="0" Grid.Column="1" x:Name="ModeCombo">
+                <ComboBoxItem Content="gitlab" IsSelected="True"/>
+                <ComboBoxItem Content="local"/>
+            </ComboBox>
+
+            <Label Grid.Row="1" Grid.Column="0" Content="GitLab URL:"/>
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="UrlBox"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="例: https://gitlab.example.com" FontSize="11"/>
+
+            <Label Grid.Row="3" Grid.Column="0" Content="Project ID / Path:"/>
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="ProjectIdBox"/>
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="数値 ID (例: 12345) または &quot;group/subgroup/project&quot;" FontSize="11"/>
+
+            <Label Grid.Row="5" Grid.Column="0" Content="ブランチ:"/>
+            <TextBox Grid.Row="5" Grid.Column="1" x:Name="BranchBox" Text="main"/>
+
+            <Label Grid.Row="6" Grid.Column="0" Content="Project Access Token:"/>
+            <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="TokenBox"/>
+            <TextBlock Grid.Row="7" Grid.Column="1" Text="GitLab プロジェクトで発行された Project Access Token (DPAPI で暗号化保管)" FontSize="11"/>
+
+            <Label Grid.Row="8" Grid.Column="0" Content="あなたの Member ID:"/>
+            <TextBox Grid.Row="8" Grid.Column="1" x:Name="MemberIdBox"/>
+            <TextBlock Grid.Row="9" Grid.Column="1" x:Name="StatusText" FontSize="12" Margin="0,8,0,0"/>
+        </Grid>
+    </DockPanel>
+</Window>

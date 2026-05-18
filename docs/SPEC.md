@@ -2,181 +2,217 @@
 
 ## 1. 目的
 
-チーム (10〜50名規模, 社内+リモート混在) のメンバーが、日々の作業実績を簡易に報告し、管理者が
-集計・可視化できる仕組みを提供する。サーバ運用なし、Git リポジトリをバックエンドとして利用する。
+チーム (10〜50名規模, 社内+リモート混在) のメンバーが日々の作業実績を簡易に報告し、
+管理者が集計・可視化できる仕組みを提供する。
+
+**重要な制約**: 社内 PC への追加ソフトウェアのインストールは不可。
+Windows + PowerShell 5.1 のみで動作する。git CLI も不要。
 
 ## 2. 全体アーキテクチャ
 
 ```
-┌──────────────────┐   git pull/commit/push (自動)   ┌──────────────────┐
-│ クライアント     │ ◄──────────────────────────────► │ GitLab repo      │
-│ (PowerShell+WPF) │                                  │ (worktime-data)  │
-└──────────────────┘                                  └────────┬─────────┘
-        ▲                                                      │ push trigger
-        │ git pull で最新マスタ取得                            ▼
-        │                                            ┌──────────────────┐
-        │                                            │  GitLab CI       │
-        │                                            │  集計→HTML生成   │
-        │                                            └────────┬─────────┘
-        │                                                     ▼
-        │                                            ┌──────────────────┐
-        └─── ローカル集計GUI(同梱) ──────────────►   │ GitLab Pages     │
-                                                     └──────────────────┘
+┌──────────────────┐  HTTPS / GitLab REST API   ┌──────────────────┐
+│ クライアント     │ ◄────────────────────────► │ GitLab repo      │
+│ (PowerShell+WPF) │  PRIVATE-TOKEN: <PAT>      │ (worktime-data)  │
+└──────────────────┘                            └────────┬─────────┘
+                                                         │ push trigger
+                                                         ▼
+                                                ┌──────────────────┐
+                                                │  GitLab CI       │
+                                                │  pandas+plotly   │
+                                                │  → HTML 生成     │
+                                                └────────┬─────────┘
+                                                         ▼
+┌──────────────────┐  HTTPS / GitLab REST API   ┌──────────────────┐
+│ ReportViewer     │ ◄────────────────────────► │ GitLab Pages     │
+│ (ローカル GUI)   │                            │ (常時ダッシュ)   │
+└──────────────────┘                            └──────────────────┘
 ```
 
 - **開発リポジトリ**: GitHub `noritakekohji/worktime-tracker` (本リポジトリ)
-- **運用リポジトリ**: GitLab に同名でミラー (コード) + 別途データリポジトリ
+- **運用リポジトリ**: GitLab に同名でミラー (コード) + データリポジトリ
 
-## 3. 認証方式
+## 3. 認証
 
-GitLab **Project Access Token** を使用する (個人 GitLab アカウント不要)。
+GitLab **Project Access Token** (group/personal account 不要) を使用。
 
-- 管理者が GitLab プロジェクトで Project Access Token (role=Developer, scope=`api`, `write_repository`) を発行
-- 各クライアント PC の Windows 資格情報マネージャに token を保管
-- git の commit author は bot ユーザになるが、**JSON データ内の `member_id` で実作業者を識別**するため集計には支障なし
-- token 流出時は GitLab 側で revoke → 新 token を全クライアントに再配布
+- 管理者が GitLab プロジェクトで PAT 発行
+  - role: Developer 以上, scope: `api`, `write_repository`
+- 同一 PAT を全クライアントで共有
+- 各クライアント PC で **DPAPI 暗号化** して `%APPDATA%\worktime-tracker\token.dat` に保管
+- git の commit author は PAT ボットだが、**JSON 内 `member_id` で実作業者を識別**するため集計に支障なし
+- 流出時は GitLab 側で revoke → 新 PAT を全クライアントに再配布
 
 ## 4. データモデル
 
-### 4.1 マスタ (`master/`)
+### 4.1 マスタ (`master/*.json`)
 
-#### members.yaml — 作業者マスタ
-```yaml
-- id: E1234
-  name: 山田太郎
-  department: 開発1課
-  role: member            # member | admin
-  active: true
+#### members.json
+```json
+[
+  {"id": "E1001", "name": "山田太郎", "department": "開発1課", "role": "member", "active": true}
+]
 ```
+role は `member` または `admin`。`admin` のクライアントでは管理者モードが表示される。
 
-#### projects.yaml — プロジェクト階層 (4段)
-```yaml
-- code: ABC001
-  name: ABC案件
-  active: true
-  processes:
-    - code: DESIGN
-      name: 設計
-      task_groups:
-        - code: DB
-          name: DB設計
-          tasks:
-            - code: ERD
-              name: ER図作成
-            - code: DDL
-              name: DDL作成
-        - code: API
-          name: API設計
-          tasks:
-            - code: SPEC
-              name: API仕様書
-    - code: IMPL
-      name: 実装
-      task_groups: []
+#### projects.json — 4段階層
+```json
+[
+  {
+    "code": "ABC001", "name": "ABC案件", "active": true,
+    "processes": [
+      {
+        "code": "DESIGN", "name": "設計",
+        "task_groups": [
+          {
+            "code": "DB", "name": "DB設計",
+            "tasks": [{"code": "ERD", "name": "ER図作成"}]
+          }
+        ]
+      }
+    ]
+  }
+]
 ```
-
 階層: **project_code > process_code > task_group_code > task_code**
 
-#### categories.yaml — 作業カテゴリ
-```yaml
-- code: DESIGN
-  name: 設計
-- code: IMPL
-  name: 実装
-- code: MEETING
-  name: 会議
-- code: REVIEW
-  name: レビュー
+#### categories.json
+```json
+[{"code": "DESIGN", "name": "設計"}, {"code": "IMPL", "name": "実装"}]
 ```
 
 ### 4.2 実績データ (`data/YYYY/MM/<member_id>.json`)
 
 ```json
 {
-  "member_id": "E1234",
-  "year": 2026,
-  "month": 5,
+  "member_id": "E1001", "year": 2026, "month": 5,
   "entries": [
     {
       "date": "2026-05-18",
-      "project_code": "ABC001",
-      "process_code": "DESIGN",
-      "task_group_code": "DB",
-      "task_code": "ERD",
-      "category": "DESIGN",
-      "hours": 3.5,
-      "comment": "認証エンドポイント設計"
+      "project_code": "ABC001", "process_code": "DESIGN",
+      "task_group_code": "DB", "task_code": "ERD",
+      "category": "DESIGN", "hours": 3.5,
+      "comment": "ER図ドラフト"
     }
   ]
 }
 ```
 
-**1人1月1ファイル**の方針によりコンフリクトはほぼ発生しない。マスタ更新時のみ管理者と作業者が
-同時編集する可能性があるため、保存時は `git pull --rebase` を必ず実行する。
+**1 人 1 月 1 ファイル**でコンフリクト回避。
 
-## 5. クライアント (PowerShell + WPF)
+## 5. クライアント
 
-### 5.1 主要画面
-
-| 画面 | 概要 |
-|---|---|
-| ログイン | 初回のみ: member_id 選択 + GitLab Project Access Token 入力 |
-| 日次入力 | カレンダーで日付選択 → 行追加で複数エントリ入力 |
-| プロジェクト選択 | 4段カスケード ドロップダウン (project→process→task_group→task) |
-| 月次サマリ | 当月の合計工数, プロジェクト別グラフ |
-| 管理者モード | role=admin のみ表示。マスタ YAML を GUI 編集 |
-
-### 5.2 起動・保存フロー
+### 5.1 構成
 
 ```
-[起動]
-  ↓ git pull (master/ と data/YYYY/MM/<me>.json を最新化)
-[編集]
-  ↓
-[保存ボタン]
-  ↓ git pull --rebase
-  ↓ data/YYYY/MM/<me>.json 上書き
-  ↓ git add → commit (message: "update: E1234 2026-05")
-  ↓ git push
-  ↓ 失敗時はトースト通知 + ローカル退避
+client/
+├── WorkTimeTracker.ps1       エントリポイント
+├── MainWindow.xaml           メイン画面
+├── ConfigDialog.xaml         初回設定ダイアログ
+├── AdminDialog.xaml          管理者モード (マスタ JSON 編集)
+├── launch.cmd                ダブルクリック起動
+└── lib/
+    ├── Config.ps1            %APPDATA% の config.json 読書
+    ├── Credential.ps1        DPAPI による token 暗号化保管
+    ├── GitLab.ps1            GitLab REST API ラッパ
+    ├── DataStore.ps1         マスタ・月次データの CRUD (gitlab/local 両対応)
+    ├── ConfigDialog.ps1      ConfigDialog のイベントハンドラ
+    └── AdminDialog.ps1       AdminDialog のイベントハンドラ
 ```
 
-### 5.3 依存
+### 5.2 設定ファイル
 
-- Windows 10/11
-- PowerShell 5.1 以上
-- git CLI (バンドル不可なら setup.ps1 で winget インストール案内)
+`%APPDATA%\worktime-tracker\config.json`:
+```json
+{
+  "mode": "gitlab",
+  "gitlab_url": "https://gitlab.example.com",
+  "project_id": "12345",
+  "branch": "main",
+  "member_id": "E1001"
+}
+```
+`mode=local` は開発用 (ローカル FS をリポジトリとして扱う)。
+
+### 5.3 GitLab REST API 利用エンドポイント
+
+| 用途 | メソッド | エンドポイント |
+|---|---|---|
+| ファイル取得 (raw) | GET | `/api/v4/projects/:id/repository/files/:path/raw?ref=:branch` |
+| ファイルメタ | GET | `/api/v4/projects/:id/repository/files/:path?ref=:branch` |
+| ファイル作成 | POST | `/api/v4/projects/:id/repository/files/:path` |
+| ファイル更新 | PUT | `/api/v4/projects/:id/repository/files/:path` (last_commit_id で楽観排他) |
+| ツリー取得 | GET | `/api/v4/projects/:id/repository/tree?path=:path&recursive=true` |
+| プロジェクトメタ | GET | `/api/v4/projects/:id` (接続テスト用) |
+
+認証: `PRIVATE-TOKEN: <PAT>` ヘッダ。TLS 1.2 を明示的に有効化 (PS 5.1 デフォルト無効対策)。
+
+### 5.4 主要操作フロー
+
+#### 起動
+1. `Load-Config` で `%APPDATA%\...config.json` 読込
+2. 未設定なら `ConfigDialog` を表示 (PAT を DPAPI で暗号化保管)
+3. `Get-MasterMembers/Projects/Categories` を GitLab API 経由で取得
+
+#### エントリ追加
+- 日付選択 (バックデート可)
+- 4段カスケード ドロップダウン (project → process → task_group → task)
+- 表示中月と異なる日付なら確認ダイアログ → 別月ファイルに振分
+
+#### 保存
+- `Save-EntriesGrouped` がエントリを年月でグルーピング
+- 表示月: 全置換 (PUT)
+- 他月 (バックデート分): 既存とマージして PUT
+- GitLab API 内部で last_commit_id を渡し楽観排他
+
+#### 管理者モード
+- role=admin のクライアントで「管理者モード」ボタン表示
+- マスタ JSON を直接編集 → JSON 検証 → 保存 (PUT)
 
 ## 6. 集計・可視化
 
-### 6.1 GitLab CI (常時公開ダッシュボード)
+### 6.1 GitLab CI (常時ダッシュボード)
 
-- `.gitlab-ci.yml` で `data/**` への push をトリガに集計 job 起動
-- Python (pandas + plotly) で集計 → static HTML 生成
+`.gitlab-ci.yml`:
+- trigger: `data/**` または `master/**` への push
+- pandas + plotly で集計 → `public/index.html` 生成
 - GitLab Pages で公開
 
-集計軸:
-- メンバー別 月次総工数
-- プロジェクト別 工数推移
-- カテゴリ別 工数構成
-- 工程別 進捗 (計画工数との比較は将来課題)
+生成グラフ:
+- 月次 × メンバー (積み上げ棒)
+- プロジェクト別 合計 (横棒)
+- カテゴリ別 比率 (円)
+- プロジェクト × 工程 集計表
 
-### 6.2 ローカル集計 GUI (`reports/ReportViewer.ps1`)
+### 6.2 ローカル ReportViewer
 
-- 期間・メンバー・プロジェクトでフィルタ
-- 表形式表示 + Excel/CSV エクスポート
+- 期間 / メンバー / プロジェクトでフィルタ
+- 明細 + メンバー別 / プロジェクト別 / カテゴリ別の 3 軸集計
+- CSV エクスポート
 
-## 7. 配布
+## 7. 配布・運用
 
-- リリース zip に `client/`, `scripts/setup.ps1` を同梱
-- `setup.ps1` 実行で:
-  1. `%LOCALAPPDATA%\worktime-tracker` に git clone
-  2. デスクトップにショートカット作成
-  3. 資格情報マネージャに token を登録
+### 7.1 配布
 
-## 8. 未確定事項 / 将来課題
+1. リポジトリ全体を zip 化
+2. 配布
+3. 受け取った人が任意フォルダに展開し `scripts\setup.ps1` 実行
+   - `%LOCALAPPDATA%\worktime-tracker` にコピー
+   - デスクトップにショートカット 2 つ (Tracker / Report)
 
-- 計画工数 vs 実績工数の比較
-- 承認フロー (上長承認)
-- 工数の他システム (勤怠等) との連携
-- 集計レポートのアクセス制御 (GitLab Pages は public/private 設定で制御可)
+### 7.2 マスタ更新運用
+
+- 管理者が AdminDialog で編集 → 保存 (PUT)
+- 各クライアントは起動時 / 「再読込」ボタンで最新を取得
+
+### 7.3 エンコーディング規約
+
+`.ps1` ファイルは **UTF-8 with BOM** で保存。PS 5.1 は BOM 無し UTF-8 を CP932 として
+解釈するため、日本語を含むスクリプトは BOM 必須。
+
+## 8. 未実装 / 将来課題
+
+- 計画工数 vs 実績工数の比較 (`master/plans.json` 追加)
+- 上長承認フロー (Merge Request での承認運用も可)
+- 個人別月次レポート PDF 出力
+- データ移行ツール (旧 Excel → JSON)
