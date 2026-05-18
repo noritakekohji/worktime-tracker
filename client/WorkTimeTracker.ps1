@@ -77,7 +77,9 @@ function Push-BundledMasters {
 # ---- 接続 + マスタ読込 (詳細エラー付き) ----
 function Try-LoadAll {
     param($Source)
-    $r = [pscustomobject]@{ Members=$null; Projects=$null; Categories=$null; MissingCount=0; Error=$null; ErrorAt=$null }
+    # 配列を PSCustomObject プロパティに格納するとスカラ化する PS 5.1 のクセを避けるため
+    # ハッシュテーブルで保持する。
+    $result = @{ Members=$null; Projects=$null; Categories=$null; MissingCount=0; Error=$null; ErrorAt=$null }
     foreach ($pair in @(
         @{ Key='Members';    File='master/members.json'    },
         @{ Key='Projects';   File='master/projects.json'   },
@@ -85,15 +87,22 @@ function Try-LoadAll {
     )) {
         try {
             $raw = Get-DataFile -Source $Source -RelPath $pair.File
-            if (-not $raw) { $r.MissingCount++; continue }
-            $r.($pair.Key) = @($raw | ConvertFrom-Json)
+            if (-not $raw) { $result.MissingCount++; continue }
+            # ConvertFrom-Json の戻りをパイプラインに通すとスカラ化することがあるため
+            # InputObject 指定 + ,(comma) でラップして配列保持。
+            $parsed = ConvertFrom-Json -InputObject ([string]$raw)
+            if ($parsed -is [System.Collections.IEnumerable] -and -not ($parsed -is [string])) {
+                $result[$pair.Key] = @($parsed)
+            } else {
+                $result[$pair.Key] = ,$parsed
+            }
         } catch {
-            $r.Error = $_
-            $r.ErrorAt = $pair.File
-            return $r
+            $result.Error = $_
+            $result.ErrorAt = $pair.File
+            return $result
         }
     }
-    return $r
+    return $result
 }
 
 function Show-ErrorDialog {
@@ -160,9 +169,8 @@ function Initialize-AppContext {
 
         $r = Try-LoadAll -Source $source
 
-        if ($r.Error) {
-            # API エラー (認証/ネットワーク等)
-            $detail = "ファイル: $($r.ErrorAt)`n`n$($r.Error.Exception.Message)`n`n$($r.Error.ScriptStackTrace)"
+        if ($r['Error']) {
+            $detail = "ファイル: $($r['ErrorAt'])`n`n$($r['Error'].Exception.Message)`n`n$($r['Error'].ScriptStackTrace)"
             Show-ErrorDialog -Title 'WorkTime Tracker - 接続エラー' `
                              -Message "マスタ取得に失敗しました。設定を見直してください。" `
                              -Detail $detail
@@ -172,9 +180,8 @@ function Initialize-AppContext {
             continue
         }
 
-        if ($r.MissingCount -gt 0) {
-            # マスタが GitLab リポジトリにまだ無い → bootstrap オファー
-            $msg = "GitLab リポジトリに master/ 配下のマスタファイルが $($r.MissingCount) 個ありません。`n`n" +
+        if ($r['MissingCount'] -gt 0) {
+            $msg = "GitLab リポジトリに master/ 配下のマスタファイルが $($r['MissingCount']) 個ありません。`n`n" +
                    "同梱のサンプルマスタを GitLab にアップロードして開始しますか?`n" +
                    "  [はい] 同梱マスタを push して開始`n" +
                    "  [いいえ] 設定を見直す"
@@ -197,9 +204,14 @@ function Initialize-AppContext {
             }
         }
 
-        return [pscustomobject]@{
-            Config = $cfg; Source = $source; Token = $token
-            Members = $r.Members; Projects = $r.Projects; Categories = $r.Categories
+        # ハッシュテーブルで返す (PSCustomObject NoteProperty 経由で配列がスカラ化する事例を回避)
+        return @{
+            Config     = $cfg
+            Source     = $source
+            Token      = $token
+            Members    = $r['Members']
+            Projects   = $r['Projects']
+            Categories = $r['Categories']
         }
     }
 }
@@ -209,12 +221,13 @@ if (-not $ctx) {
     Write-Host "設定/接続が完了しなかったため終了します。" -ForegroundColor Yellow
     return
 }
-$Script:Config     = $ctx.Config
-$Script:Source     = $ctx.Source
-$Script:Token      = $ctx.Token
-$Script:Members    = $ctx.Members
-$Script:Projects   = $ctx.Projects
-$Script:Categories = $ctx.Categories
+$Script:Config     = $ctx['Config']
+$Script:Source     = $ctx['Source']
+$Script:Token      = $ctx['Token']
+$Script:Members    = @($ctx['Members'])
+$Script:Projects   = @($ctx['Projects'])
+$Script:Categories = @($ctx['Categories'])
+Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2}" -f $Script:Members.Count, $Script:Projects.Count, $Script:Categories.Count)
 
 function Reload-Masters {
     try {
@@ -262,9 +275,15 @@ function Set-Status {
 }
 
 # ---- 作業者コンボ ----
-$memberItems = $Script:Members | Where-Object { $_.active } | ForEach-Object {
+# 配列強制 (@()): PSCustomObject プロパティ経由で渡ると配列がスカラ化することがあるため
+$Script:Members    = @($Script:Members)
+$Script:Projects   = @($Script:Projects)
+$Script:Categories = @($Script:Categories)
+Write-FatalLog ("Members count={0} | shape={1}" -f $Script:Members.Count, ($Script:Members[0] | Out-String))
+
+$memberItems = @($Script:Members | Where-Object { $_.active } | ForEach-Object {
     [pscustomobject]@{ id = $_.id; name = $_.name; role = $_.role; display = "$($_.id) - $($_.name)" }
-}
+})
 $ui.MemberCombo.ItemsSource = $memberItems
 if ($Script:Config.member_id) {
     $ui.MemberCombo.SelectedValue = $Script:Config.member_id
@@ -515,12 +534,12 @@ $ui.ReloadBtn.Add_Click({ Reload-Masters; Load-ViewMonth })
 $ui.SettingsBtn.Add_Click({
     $newCtx = Initialize-AppContext -ForceDialog
     if ($newCtx) {
-        $Script:Config     = $newCtx.Config
-        $Script:Source     = $newCtx.Source
-        $Script:Token      = $newCtx.Token
-        $Script:Members    = $newCtx.Members
-        $Script:Projects   = $newCtx.Projects
-        $Script:Categories = $newCtx.Categories
+        $Script:Config     = $newCtx['Config']
+        $Script:Source     = $newCtx['Source']
+        $Script:Token      = $newCtx['Token']
+        $Script:Members    = @($newCtx['Members'])
+        $Script:Projects   = @($newCtx['Projects'])
+        $Script:Categories = @($newCtx['Categories'])
         $ui.ModeText.Text = "mode: $($Script:Config.mode) | $($Script:Config.gitlab_url) | branch: $($Script:Config.branch)"
         # マスタ更新でコンボを再構築
         $script:memberItems = $Script:Members | Where-Object { $_.active } | ForEach-Object {
