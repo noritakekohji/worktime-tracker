@@ -246,26 +246,27 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $names = @(
-    'MemberCombo','YearCombo','MonthCombo','ReloadBtn','StatusText',
-    'EntryDate','ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
+    'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','StatusText',
+    'EntryDate','TodayBtn','YesterdayBtn',
+    'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
-    'EntriesGrid','EditRowBtn','DeleteRowBtn','SaveBtn','HoursTotalText',
-    'AdminBtn','SettingsBtn','FormHeader','ModeText'
+    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText',
+    'AdminBtn','SettingsBtn','FormHeader','ListTitle','ModeText'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
 
-$ui.ModeText.Text = "mode: $($Script:Config.mode) | $($Script:Config.gitlab_url) | branch: $($Script:Config.branch)"
+$ui.ModeText.Text = "{0}  |  branch: {1}" -f $Script:Config.gitlab_url, $Script:Config.branch
 
 # ---- 状態 ----
 $Script:Entries = New-Object System.Collections.ObjectModel.ObservableCollection[object]
 $ui.EntriesGrid.ItemsSource = $Script:Entries
-$Script:EditingItem = $null   # 編集モード時に格納
+$Script:EditingItem = $null
 
 function Update-HoursTotal {
     $sum = 0.0
     foreach ($e in $Script:Entries) { $sum += [double]$e.hours }
-    $ui.HoursTotalText.Text = '月合計: {0:N1} h' -f $sum
+    $ui.HoursTotalText.Text = '{0:N1} h' -f $sum
 }
 
 function Set-Status {
@@ -274,37 +275,25 @@ function Set-Status {
     $ui.StatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
 }
 
-# ---- 作業者コンボ ----
-# 配列強制 (@()): PSCustomObject プロパティ経由で渡ると配列がスカラ化することがあるため
+# ---- 配列強制 ----
 $Script:Members    = @($Script:Members)
 $Script:Projects   = @($Script:Projects)
 $Script:Categories = @($Script:Categories)
-Write-FatalLog ("Members count={0} | shape={1}" -f $Script:Members.Count, ($Script:Members[0] | Out-String))
 
-$memberItems = @($Script:Members | Where-Object { $_.active } | ForEach-Object {
-    [pscustomobject]@{ id = $_.id; name = $_.name; role = $_.role; display = "$($_.id) - $($_.name)" }
-})
-$ui.MemberCombo.ItemsSource = $memberItems
-if ($Script:Config.member_id) {
-    $ui.MemberCombo.SelectedValue = $Script:Config.member_id
-} elseif ($memberItems.Count -gt 0) {
-    $ui.MemberCombo.SelectedIndex = 0
+# ---- 現在の作業者 (設定値から解決) ----
+$Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
+if (-not $Script:CurrentMember) {
+    [System.Windows.MessageBox]::Show(
+        ("設定された Member ID '{0}' がマスタに見つかりません。`n設定ダイアログから ID を見直してください。" -f $Script:Config.member_id),
+        '作業者未登録', 'OK', 'Warning') | Out-Null
+    $Script:CurrentMember = [pscustomobject]@{ id = $Script:Config.member_id; name = '(未登録)'; role = 'member' }
+}
+$ui.CurrentMemberText.Text = ("{0}  {1}" -f $Script:CurrentMember.id, $Script:CurrentMember.name)
+if ($Script:CurrentMember.role -eq 'admin') {
+    $ui.AdminBtn.Visibility = 'Visible'
 }
 
-function Get-SelectedMember {
-    $id = $ui.MemberCombo.SelectedValue
-    return ($memberItems | Where-Object { $_.id -eq $id } | Select-Object -First 1)
-}
-
-function Update-AdminBtnVisibility {
-    $m = Get-SelectedMember
-    if ($m -and $m.role -eq 'admin') {
-        $ui.AdminBtn.Visibility = 'Visible'
-    } else {
-        $ui.AdminBtn.Visibility = 'Collapsed'
-    }
-}
-Update-AdminBtnVisibility
+function Get-SelectedMember { return $Script:CurrentMember }
 
 # ---- 年/月コンボ ----
 $now = Get-Date
@@ -348,10 +337,11 @@ $ui.TaskGroupCombo.Add_SelectionChanged({
 
 # ---- 表示月ロード ----
 function Load-ViewMonth {
-    $mid = $ui.MemberCombo.SelectedValue
+    $mid = $Script:CurrentMember.id
     if (-not $mid) { return }
     $y = [int]$ui.YearCombo.SelectedItem
     $m = [int]$ui.MonthCombo.SelectedItem
+    $ui.ListTitle.Text = ("📋 {0:D4}/{1:D2} の実績" -f $y, $m)
     Set-Status "読込中: $mid $y/$m..." '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
@@ -385,11 +375,20 @@ function Load-ViewMonth {
     }
 }
 
-$ui.MemberCombo.Add_SelectionChanged({ Update-AdminBtnVisibility; Load-ViewMonth })
 $ui.YearCombo.Add_SelectionChanged({ Load-ViewMonth })
 $ui.MonthCombo.Add_SelectionChanged({ Load-ViewMonth })
 
 $ui.EntryDate.SelectedDate = [datetime]::Today
+$ui.TodayBtn.Add_Click({ $ui.EntryDate.SelectedDate = [datetime]::Today })
+$ui.YesterdayBtn.Add_Click({ $ui.EntryDate.SelectedDate = ([datetime]::Today).AddDays(-1) })
+
+# クイック工数ボタン
+foreach ($n in 'H025','H05','H1','H2','H4','H8') {
+    $b = $Script:Window.FindName($n)
+    if ($b) {
+        $b.Add_Click({ param($s,$e) $ui.HoursBox.Text = [string]$s.Tag; $ui.HoursBox.Focus() | Out-Null }.GetNewClosure())
+    }
+}
 
 # ---- フォーム → エントリ ----
 function Get-EntryFromForm {
@@ -506,6 +505,15 @@ $ui.DeleteRowBtn.Add_Click({
     if ($sel -eq $Script:EditingItem) { Clear-Form }
 })
 
+# ---- 複製 (選択行の内容をフォームへ。Add すれば新規行として追加) ----
+$ui.DuplicateBtn.Add_Click({
+    $sel = $ui.EntriesGrid.SelectedItem
+    if ($null -eq $sel) { return }
+    Clear-Form
+    Set-FormFromEntry -Entry $sel
+    Set-Status "選択行をフォームに複製しました。値を編集して『追加』してください。" '#89b4fa'
+})
+
 # ---- 保存 ----
 $ui.SaveBtn.Add_Click({
     $m = Get-SelectedMember
@@ -566,15 +574,17 @@ $ui.SettingsBtn.Add_Click({
         $Script:Members    = @($newCtx['Members'])
         $Script:Projects   = @($newCtx['Projects'])
         $Script:Categories = @($newCtx['Categories'])
-        $ui.ModeText.Text = "mode: $($Script:Config.mode) | $($Script:Config.gitlab_url) | branch: $($Script:Config.branch)"
-        # マスタ更新でコンボを再構築
-        $script:memberItems = $Script:Members | Where-Object { $_.active } | ForEach-Object {
-            [pscustomobject]@{ id = $_.id; name = $_.name; role = $_.role; display = "$($_.id) - $($_.name)" }
+        $ui.ModeText.Text = "{0}  |  branch: {1}" -f $Script:Config.gitlab_url, $Script:Config.branch
+
+        $Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
+        if (-not $Script:CurrentMember) {
+            $Script:CurrentMember = [pscustomobject]@{ id = $Script:Config.member_id; name = '(未登録)'; role = 'member' }
         }
-        $ui.MemberCombo.ItemsSource = $script:memberItems
-        if ($Script:Config.member_id) { $ui.MemberCombo.SelectedValue = $Script:Config.member_id }
+        $ui.CurrentMemberText.Text = ("{0}  {1}" -f $Script:CurrentMember.id, $Script:CurrentMember.name)
+        if ($Script:CurrentMember.role -eq 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
+
         $ui.CategoryCombo.ItemsSource = $Script:Categories
-        $ui.ProjectCombo.ItemsSource = ($Script:Projects | Where-Object { $_.active })
+        $ui.ProjectCombo.ItemsSource  = @($Script:Projects | Where-Object { $_.active })
         Load-ViewMonth
     }
 })
