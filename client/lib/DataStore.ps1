@@ -129,10 +129,11 @@ function Save-MonthEntries {
         [Parameter(Mandatory)][string]$MemberId,
         [Parameter(Mandatory)][int]$Year,
         [Parameter(Mandatory)][int]$Month,
-        [Parameter(Mandatory)][object[]]$Entries,
+        [Parameter(Mandatory)]$Entries,
         [string]$AuthorName,
         [string]$AuthorEmail
     )
+    $Entries = @($Entries)
     $rel = Get-MonthRelPath -MemberId $MemberId -Year $Year -Month $Month
     $doc = [ordered]@{
         member_id = $MemberId
@@ -150,12 +151,13 @@ function Save-EntriesGrouped {
     param(
         [Parameter(Mandatory)]$Source,
         [Parameter(Mandatory)][string]$MemberId,
-        [Parameter(Mandatory)][object[]]$AllEntries,
+        [Parameter(Mandatory)]$AllEntries,
         [Parameter(Mandatory)][int]$ViewYear,
         [Parameter(Mandatory)][int]$ViewMonth,
         [string]$AuthorName,
         [string]$AuthorEmail
     )
+    $AllEntries = @($AllEntries)
     $groups = @{}
     foreach ($e in $AllEntries) {
         if (-not $e -or [string]::IsNullOrWhiteSpace([string]$e.date)) { continue }
@@ -169,18 +171,21 @@ function Save-EntriesGrouped {
     }
     $viewKey = '{0}-{1:D2}' -f $ViewYear, $ViewMonth
 
-    foreach ($key in $groups.Keys) {
-        $parts = $key.Split('-')
-        $y = [int]$parts[0]
-        $m = [int]$parts[1]
-        $newForMonth = @($groups[$key])
+    # ハッシュテーブルを foreach する間にコレクションを変更しないよう、キーをスナップショット
+    $keysSnap = @($groups.Keys | ForEach-Object { [string]$_ })
+    foreach ($key in $keysSnap) {
+        $parts = ([string]$key).Split('-')
+        $y = [int]([string]$parts[0])
+        $m = [int]([string]$parts[1])
+        $list = $groups[[string]$key]
+        $newForMonth = [object[]]@($list)
 
         if ($key -eq $viewKey) {
             Save-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m `
                               -Entries $newForMonth -AuthorName $AuthorName -AuthorEmail $AuthorEmail
         } else {
-            $existing = @(Load-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m)
-            $merged = $existing + $newForMonth
+            $existing = [object[]]@(Load-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m)
+            $merged = [object[]]($existing + $newForMonth)
             Save-MonthEntries -Source $Source -MemberId $MemberId -Year $y -Month $m `
                               -Entries $merged -AuthorName $AuthorName -AuthorEmail $AuthorEmail
         }
