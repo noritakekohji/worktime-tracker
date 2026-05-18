@@ -412,22 +412,16 @@ function Get-EntryFromForm {
 }
 
 # ---- フォーム → エントリ反映 (編集) ----
+# WPF の SelectionChanged は同期的に発火するので、SelectedValue を順に設定するだけで
+# カスケード ItemsSource が逐次セットされる。Dispatcher.BeginInvoke は不要。
 function Set-FormFromEntry {
     param($Entry)
-    $ui.EntryDate.SelectedDate = [datetime]::Parse($Entry.date)
-    # カスケード: 一旦 nil
-    $ui.ProjectCombo.SelectedValue = $Entry.project_code
-    # SelectionChanged で processes が入った後に process を選ぶ必要があるので Dispatcher 経由
-    $Script:Window.Dispatcher.BeginInvoke([action]{
-        $ui.ProcessCombo.SelectedValue = $Entry.process_code
-        $Script:Window.Dispatcher.BeginInvoke([action]{
-            $ui.TaskGroupCombo.SelectedValue = $Entry.task_group_code
-            $Script:Window.Dispatcher.BeginInvoke([action]{
-                $ui.TaskCombo.SelectedValue = $Entry.task_code
-            }, 'Background')
-        }, 'Background')
-    }, 'Background')
-    $ui.CategoryCombo.SelectedValue = $Entry.category
+    try { $ui.EntryDate.SelectedDate = [datetime]::Parse($Entry.date) } catch {}
+    $ui.ProjectCombo.SelectedValue   = $Entry.project_code
+    $ui.ProcessCombo.SelectedValue   = $Entry.process_code
+    $ui.TaskGroupCombo.SelectedValue = $Entry.task_group_code
+    $ui.TaskCombo.SelectedValue      = $Entry.task_code
+    $ui.CategoryCombo.SelectedValue  = $Entry.category
     $ui.HoursBox.Text = [string]$Entry.hours
     $ui.CommentBox.Text = $Entry.comment
 }
