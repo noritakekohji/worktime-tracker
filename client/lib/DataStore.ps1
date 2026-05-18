@@ -158,7 +158,11 @@ function Save-EntriesGrouped {
     )
     $groups = @{}
     foreach ($e in $AllEntries) {
-        $d = [datetime]::Parse($e.date)
+        if (-not $e -or [string]::IsNullOrWhiteSpace([string]$e.date)) { continue }
+        $d = [datetime]::MinValue
+        if (-not [datetime]::TryParse([string]$e.date, [ref]$d)) {
+            throw "保存中: 日付の形式が不正です (date='$($e.date)')"
+        }
         $key = '{0}-{1:D2}' -f $d.Year, $d.Month
         if (-not $groups.ContainsKey($key)) { $groups[$key] = New-Object System.Collections.Generic.List[object] }
         $groups[$key].Add($e)
