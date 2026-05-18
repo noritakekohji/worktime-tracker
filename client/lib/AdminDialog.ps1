@@ -62,7 +62,9 @@ function Show-AdminDialog {
                 $members.Add([pscustomobject]@{
                     id         = [string]$m.id
                     name       = [string]$m.name
+                    company    = [string]$m.company
                     department = [string]$m.department
+                    rank       = [string]$m.rank
                     role       = if ($m.role) { [string]$m.role } else { 'member' }
                     active     = if ($null -ne $m.active) { [bool]$m.active } else { $true }
                 })
@@ -133,9 +135,11 @@ function Show-AdminDialog {
     }
 
     $Script:CurrentNode = $null
+    $Script:SuppressEdit = $false   # 詳細パネルを書換中は TextChanged を無効化
     $u.ProjectsTree.Add_SelectedItemChanged({
         $sel = $u.ProjectsTree.SelectedItem
         if (-not $sel -or -not $sel.Tag) { _ClearPrjDetail; return }
+        $Script:SuppressEdit = $true
         $Script:CurrentNode = $sel
         $info = $sel.Tag
         $kindLabel = switch ($info.kind) {
@@ -165,9 +169,11 @@ function Show-AdminDialog {
             'task_group' { '直下に「タスク」を追加できます。' }
             'task'       { 'これは最下層です。子を追加できません。' }
         }
+        $Script:SuppressEdit = $false
     })
 
     function _ApplyEditToCurrent {
+        if ($Script:SuppressEdit) { return }
         if (-not $Script:CurrentNode) { return }
         $info = $Script:CurrentNode.Tag
         $info.data.code = $u.PrjCodeBox.Text.Trim()
@@ -226,7 +232,7 @@ function Show-AdminDialog {
     })
 
     $u.MemAddBtn.Add_Click({
-        $members.Add([pscustomobject]@{ id=''; name=''; department=''; role='member'; active=$true })
+        $members.Add([pscustomobject]@{ id=''; name=''; company=''; department=''; rank=''; role='member'; active=$true })
     })
     $u.MemDelBtn.Add_Click({
         $sel = $u.MembersGrid.SelectedItem
@@ -267,7 +273,8 @@ function Show-AdminDialog {
                     $members.Clear()
                     foreach ($m in @($parsed)) {
                         $members.Add([pscustomobject]@{
-                            id=[string]$m.id; name=[string]$m.name; department=[string]$m.department
+                            id=[string]$m.id; name=[string]$m.name; company=[string]$m.company
+                            department=[string]$m.department; rank=[string]$m.rank
                             role=if($m.role){[string]$m.role}else{'member'}
                             active=if($null -ne $m.active){[bool]$m.active}else{$true}
                         })
@@ -295,7 +302,7 @@ function Show-AdminDialog {
             $win.Cursor = [System.Windows.Input.Cursors]::Wait
 
             $membersOut = @($members | ForEach-Object {
-                [ordered]@{ id=$_.id; name=$_.name; department=$_.department; role=$_.role; active=[bool]$_.active }
+                [ordered]@{ id=$_.id; name=$_.name; company=$_.company; department=$_.department; rank=$_.rank; role=$_.role; active=[bool]$_.active }
             })
             Save-MasterMembers -Source $Source -Data $membersOut -AuthorName $MemberName -AuthorEmail "$MemberId@worktime-tracker.local"
 

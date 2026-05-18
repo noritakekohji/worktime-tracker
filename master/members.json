@@ -2,21 +2,27 @@
   {
     "id": "E0001",
     "name": "管理者一郎",
+    "company": "本社",
     "department": "管理部",
+    "rank": "管理職",
     "role": "admin",
     "active": true
   },
   {
     "id": "E1001",
     "name": "山田太郎",
+    "company": "本社",
     "department": "開発1課",
+    "rank": "主任",
     "role": "member",
     "active": true
   },
   {
     "id": "E1002",
     "name": "佐藤花子",
+    "company": "本社",
     "department": "開発1課",
+    "rank": "一般",
     "role": "member",
     "active": true
   }
