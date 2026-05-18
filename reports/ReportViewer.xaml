@@ -273,6 +273,49 @@
                         <StackPanel x:Name="AnalysisPanel" Margin="10"/>
                     </ScrollViewer>
                 </TabItem>
+                <TabItem Header="📉 グラフ">
+                    <DockPanel Margin="10">
+                        <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal">
+                                <Label Content="集計軸:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="ChartAxisCombo" MinWidth="160" Margin="6,0">
+                                    <ComboBoxItem Content="プロジェクト" IsSelected="True"/>
+                                    <ComboBoxItem Content="工程"/>
+                                    <ComboBoxItem Content="タスクグループ"/>
+                                    <ComboBoxItem Content="タスク"/>
+                                    <ComboBoxItem Content="カテゴリ"/>
+                                    <ComboBoxItem Content="メンバー"/>
+                                    <ComboBoxItem Content="日付"/>
+                                    <ComboBoxItem Content="曜日"/>
+                                </ComboBox>
+                                <Label Content="形式:" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                                <ComboBox x:Name="ChartTypeCombo" MinWidth="120" Margin="6,0">
+                                    <ComboBoxItem Content="横棒" IsSelected="True"/>
+                                    <ComboBoxItem Content="縦棒"/>
+                                </ComboBox>
+                                <Label Content="並び:" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                                <ComboBox x:Name="ChartSortCombo" MinWidth="120" Margin="6,0">
+                                    <ComboBoxItem Content="工数 降順" IsSelected="True"/>
+                                    <ComboBoxItem Content="工数 昇順"/>
+                                    <ComboBoxItem Content="名前順"/>
+                                </ComboBox>
+                                <Label Content="上位:" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                                <ComboBox x:Name="ChartTopCombo" MinWidth="80" Margin="6,0">
+                                    <ComboBoxItem Content="10" IsSelected="True"/>
+                                    <ComboBoxItem Content="20"/>
+                                    <ComboBoxItem Content="50"/>
+                                    <ComboBoxItem Content="全件"/>
+                                </ComboBox>
+                                <Button x:Name="ChartRedrawBtn" Content="🔄 再描画" Margin="14,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{StaticResource Surface}" CornerRadius="8" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                <Canvas x:Name="ChartCanvas" Background="{StaticResource Surface}" Width="800" Height="500"/>
+                            </ScrollViewer>
+                        </Border>
+                    </DockPanel>
+                </TabItem>
             </TabControl>
         </Border>
     </DockPanel>

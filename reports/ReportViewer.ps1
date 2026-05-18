@@ -34,7 +34,8 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
 foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn',
-              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel') {
+              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
+              'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -140,6 +141,8 @@ function Apply-Filters {
     $u.CategorySummaryGrid.ItemsSource = @($byCat)
 
     Build-Analysis -Rows $rows
+    $Script:ChartRows = $rows
+    Build-Chart
 }
 
 function _AnalysisRow {
@@ -282,6 +285,233 @@ function Build-Analysis {
     }
     $panel.Children.Add( (_AnalysisCard '⚙ 工程別工数' $procRows) ) | Out-Null
 }
+
+function _GroupKey {
+    param($Row, [string]$Axis)
+    $dt = [datetime]::MinValue
+    switch ($Axis) {
+        'プロジェクト'    { return [string]$Row.project_code }
+        '工程'            { return [string]$Row.process_code }
+        'タスクグループ'  { return [string]$Row.task_group_code }
+        'タスク'          { return [string]$Row.task_code }
+        'カテゴリ'        { return [string]$Row.category }
+        'メンバー'        { return [string]$Row.member_id }
+        '日付'            {
+            if ([datetime]::TryParse([string]$Row.date, [ref]$dt)) { return $dt.ToString('yyyy-MM-dd') }
+            return ''
+        }
+        '曜日'            {
+            $dow = @('日','月','火','水','木','金','土')
+            if ([datetime]::TryParse([string]$Row.date, [ref]$dt)) { return $dow[[int]$dt.DayOfWeek] }
+            return ''
+        }
+    }
+    return ''
+}
+
+function Build-Chart {
+    $canvas = $u.ChartCanvas
+    if (-not $canvas) { return }
+    $canvas.Children.Clear()
+
+    $rows = @($Script:ChartRows)
+    if ($rows.Count -eq 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = '(対象データなし)'
+        $tb.Foreground = [System.Windows.Media.Brushes]::SlateGray
+        $tb.FontSize = 14
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 20)
+        [System.Windows.Controls.Canvas]::SetTop($tb, 20)
+        [void]$canvas.Children.Add($tb)
+        return
+    }
+
+    $axis = $u.ChartAxisCombo.SelectedItem.Content
+    $type = $u.ChartTypeCombo.SelectedItem.Content
+    $sort = $u.ChartSortCombo.SelectedItem.Content
+    $topC = $u.ChartTopCombo.SelectedItem.Content
+
+    $groups = @{}
+    foreach ($r in $rows) {
+        $k = _GroupKey -Row $r -Axis $axis
+        if ([string]::IsNullOrEmpty($k)) { continue }
+        if (-not $groups.ContainsKey($k)) { $groups[$k] = 0.0 }
+        $groups[$k] += [double]$r.hours
+    }
+    if ($groups.Count -eq 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = "(集計軸『$axis』の値がありません)"
+        $tb.Foreground = [System.Windows.Media.Brushes]::SlateGray
+        $tb.FontSize = 14
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 20)
+        [System.Windows.Controls.Canvas]::SetTop($tb, 20)
+        [void]$canvas.Children.Add($tb)
+        return
+    }
+
+    $items = $groups.GetEnumerator() | ForEach-Object {
+        [pscustomobject]@{ key = [string]$_.Key; value = [double]$_.Value }
+    }
+    switch ($sort) {
+        '工数 降順' { $items = $items | Sort-Object value -Descending }
+        '工数 昇順' { $items = $items | Sort-Object value }
+        '名前順'    { $items = $items | Sort-Object key }
+    }
+    $items = @($items)
+    if ($topC -ne '全件') {
+        $n = [int]$topC
+        if ($items.Count -gt $n) { $items = $items[0..($n-1)] }
+    }
+
+    # 描画パラメータ
+    $maxVal  = ($items | Measure-Object -Property value -Maximum).Maximum
+    if ($maxVal -le 0) { $maxVal = 1 }
+    $totalVal = ($items | Measure-Object -Property value -Sum).Sum
+
+    $title = "{0} ({1}) — {2} 件 / 合計 {3:N1} h" -f $axis, $type, $items.Count, $totalVal
+
+    if ($type -eq '横棒') {
+        # 横棒: 各行 = ラベル(120px) + バー + 値
+        $rowH = 26; $gap = 6; $labelW = 140; $valueW = 90
+        $chartH = 50 + $items.Count * ($rowH + $gap)
+        $chartW = 900
+        $canvas.Height = $chartH
+        $canvas.Width  = $chartW
+        $barAreaW = $chartW - $labelW - $valueW - 60
+
+        # タイトル
+        $tt = New-Object System.Windows.Controls.TextBlock
+        $tt.Text = $title; $tt.FontSize = 14; $tt.FontWeight = 'Bold'
+        $tt.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+        [System.Windows.Controls.Canvas]::SetLeft($tt, 20)
+        [System.Windows.Controls.Canvas]::SetTop($tt,  10)
+        [void]$canvas.Children.Add($tt)
+
+        $y = 40
+        $i = 0
+        foreach ($it in $items) {
+            $lbl = New-Object System.Windows.Controls.TextBlock
+            $lbl.Text = $it.key
+            $lbl.Width = $labelW
+            $lbl.TextTrimming = 'CharacterEllipsis'
+            $lbl.Foreground = [System.Windows.Media.Brushes]::Black
+            $lbl.FontSize = 12
+            $lbl.VerticalAlignment = 'Center'
+            [System.Windows.Controls.Canvas]::SetLeft($lbl, 20)
+            [System.Windows.Controls.Canvas]::SetTop($lbl,  $y + 4)
+            [void]$canvas.Children.Add($lbl)
+
+            $bar = New-Object System.Windows.Shapes.Rectangle
+            $w = [Math]::Max(2, ($it.value / $maxVal) * $barAreaW)
+            $bar.Width  = $w
+            $bar.Height = $rowH - 6
+            $hue = ($i * 35) % 360
+            $color = _Hsl2Rgb $hue 0.55 0.55
+            $bar.Fill = (New-Object System.Windows.Media.SolidColorBrush $color)
+            $bar.RadiusX = 4; $bar.RadiusY = 4
+            [System.Windows.Controls.Canvas]::SetLeft($bar, $labelW + 30)
+            [System.Windows.Controls.Canvas]::SetTop($bar,  $y + 3)
+            [void]$canvas.Children.Add($bar)
+
+            $val = New-Object System.Windows.Controls.TextBlock
+            $pct = if ($totalVal -gt 0) { ($it.value / $totalVal) * 100 } else { 0 }
+            $val.Text = "{0:N1} h ({1:N1}%)" -f $it.value, $pct
+            $val.Foreground = [System.Windows.Media.Brushes]::Black
+            $val.FontSize = 12
+            [System.Windows.Controls.Canvas]::SetLeft($val, $labelW + 30 + $w + 8)
+            [System.Windows.Controls.Canvas]::SetTop($val,  $y + 6)
+            [void]$canvas.Children.Add($val)
+
+            $y += $rowH + $gap
+            $i++
+        }
+    } else {
+        # 縦棒
+        $barW = 50; $gap = 16
+        $chartW = 60 + $items.Count * ($barW + $gap) + 40
+        $chartH = 520
+        $canvas.Width = $chartW
+        $canvas.Height = $chartH
+        $baseY = $chartH - 90
+        $maxBarH = $chartH - 130
+
+        $tt = New-Object System.Windows.Controls.TextBlock
+        $tt.Text = $title; $tt.FontSize = 14; $tt.FontWeight = 'Bold'
+        $tt.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+        [System.Windows.Controls.Canvas]::SetLeft($tt, 20)
+        [System.Windows.Controls.Canvas]::SetTop($tt,  10)
+        [void]$canvas.Children.Add($tt)
+
+        # 軸線
+        $axisLine = New-Object System.Windows.Shapes.Line
+        $axisLine.X1 = 40; $axisLine.Y1 = $baseY
+        $axisLine.X2 = $chartW - 20; $axisLine.Y2 = $baseY
+        $axisLine.Stroke = [System.Windows.Media.Brushes]::LightGray
+        $axisLine.StrokeThickness = 1
+        [void]$canvas.Children.Add($axisLine)
+
+        $x = 60; $i = 0
+        foreach ($it in $items) {
+            $h = ($it.value / $maxVal) * $maxBarH
+            if ($h -lt 2) { $h = 2 }
+            $bar = New-Object System.Windows.Shapes.Rectangle
+            $bar.Width = $barW; $bar.Height = $h
+            $hue = ($i * 35) % 360
+            $color = _Hsl2Rgb $hue 0.55 0.55
+            $bar.Fill = (New-Object System.Windows.Media.SolidColorBrush $color)
+            $bar.RadiusX = 4; $bar.RadiusY = 4
+            [System.Windows.Controls.Canvas]::SetLeft($bar, $x)
+            [System.Windows.Controls.Canvas]::SetTop($bar, $baseY - $h)
+            [void]$canvas.Children.Add($bar)
+
+            $val = New-Object System.Windows.Controls.TextBlock
+            $val.Text = "{0:N1}" -f $it.value
+            $val.FontSize = 11
+            $val.Foreground = [System.Windows.Media.Brushes]::Black
+            [System.Windows.Controls.Canvas]::SetLeft($val, $x)
+            [System.Windows.Controls.Canvas]::SetTop($val,  $baseY - $h - 18)
+            [void]$canvas.Children.Add($val)
+
+            $lbl = New-Object System.Windows.Controls.TextBlock
+            $lbl.Text = $it.key
+            $lbl.Width = $barW + 8
+            $lbl.TextTrimming = 'CharacterEllipsis'
+            $lbl.FontSize = 11
+            $lbl.Foreground = [System.Windows.Media.Brushes]::Black
+            $lbl.TextAlignment = 'Center'
+            [System.Windows.Controls.Canvas]::SetLeft($lbl, $x - 4)
+            [System.Windows.Controls.Canvas]::SetTop($lbl,  $baseY + 6)
+            [void]$canvas.Children.Add($lbl)
+
+            $x += $barW + $gap
+            $i++
+        }
+    }
+}
+
+function _Hsl2Rgb {
+    param([double]$H,[double]$S,[double]$L)
+    $c = (1 - [Math]::Abs(2*$L - 1)) * $S
+    $x = $c * (1 - [Math]::Abs( (($H/60) % 2) - 1 ))
+    $m = $L - $c/2
+    $r = 0.0; $g = 0.0; $b = 0.0
+    if     ($H -lt  60) { $r = $c; $g = $x; $b = 0  }
+    elseif ($H -lt 120) { $r = $x; $g = $c; $b = 0  }
+    elseif ($H -lt 180) { $r = 0;  $g = $c; $b = $x }
+    elseif ($H -lt 240) { $r = 0;  $g = $x; $b = $c }
+    elseif ($H -lt 300) { $r = $x; $g = 0;  $b = $c }
+    else                { $r = $c; $g = 0;  $b = $x }
+    return [System.Windows.Media.Color]::FromRgb(
+        [byte]([Math]::Round(($r+$m)*255)),
+        [byte]([Math]::Round(($g+$m)*255)),
+        [byte]([Math]::Round(($b+$m)*255)))
+}
+
+$u.ChartRedrawBtn.Add_Click({ Build-Chart })
+$u.ChartAxisCombo.Add_SelectionChanged({ Build-Chart })
+$u.ChartTypeCombo.Add_SelectionChanged({ Build-Chart })
+$u.ChartSortCombo.Add_SelectionChanged({ Build-Chart })
+$u.ChartTopCombo.Add_SelectionChanged({ Build-Chart })
 
 $u.ReloadBtn.Add_Click({ Reload-Entries })
 $u.ApplyBtn.Add_Click({ Apply-Filters })
