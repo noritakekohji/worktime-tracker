@@ -442,23 +442,67 @@ function Find-ProjectByCode {
     return ($Script:Projects | Where-Object { $_.unit_code -eq $Code } | Select-Object -First 1)
 }
 
+# コードから表示名を逆引きするヘルパ (DataGrid 表示用)
+function Resolve-EntryNames {
+    param([string]$ProjCode, [string]$ProcCode, [string]$TgCode, [string]$TaskCode, [string]$CatCode)
+    $projName = $ProjCode; $procName = ''; $tgName = ''; $taskName = ''
+    $proj = $Script:Projects | Where-Object { $_.unit_code -eq $ProjCode } | Select-Object -First 1
+    if ($proj) {
+        if ($proj.project_name) { $projName = [string]$proj.project_name }
+        $ptn = Get-TaskPatternFor -Project $proj
+        if ($ptn -and $ptn.processes) {
+            $proc = @($ptn.processes) | Where-Object { $_.code -eq $ProcCode } | Select-Object -First 1
+            if ($proc) {
+                $procName = [string]$proc.name
+                if ($proc.task_groups) {
+                    $tg = @($proc.task_groups) | Where-Object { $_.code -eq $TgCode } | Select-Object -First 1
+                    if ($tg) {
+                        $tgName = [string]$tg.name
+                        if ($tg.tasks) {
+                            $tk = @($tg.tasks) | Where-Object { $_.code -eq $TaskCode } | Select-Object -First 1
+                            if ($tk) { $taskName = [string]$tk.name }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    $catName = $CatCode
+    $cat = $Script:Categories | Where-Object { $_.code -eq $CatCode } | Select-Object -First 1
+    if ($cat) { $catName = [string]$cat.name }
+    return [pscustomobject]@{
+        project_name    = $projName
+        process_name    = $procName
+        task_group_name = $tgName
+        task_name       = $taskName
+        category_name   = $catName
+    }
+}
+
 $ui.ProjectCombo.Add_SelectionChanged({
     Reset-Cascade -From @('process','task_group','task')
     $p = $ui.ProjectCombo.SelectedItem
     $pattern = Get-TaskPatternFor -Project $p
     if ($pattern -and $pattern.processes) {
         $ui.ProcessCombo.ItemsSource = @($pattern.processes)
+        if ($ui.ProcessCombo.Items.Count -gt 0) { $ui.ProcessCombo.SelectedIndex = 0 }
     }
 })
 $ui.ProcessCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task_group','task')
     $p = $ui.ProcessCombo.SelectedItem
-    if ($p -and $p.task_groups) { $ui.TaskGroupCombo.ItemsSource = @($p.task_groups) }
+    if ($p -and $p.task_groups) {
+        $ui.TaskGroupCombo.ItemsSource = @($p.task_groups)
+        if ($ui.TaskGroupCombo.Items.Count -gt 0) { $ui.TaskGroupCombo.SelectedIndex = 0 }
+    }
 })
 $ui.TaskGroupCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task')
     $g = $ui.TaskGroupCombo.SelectedItem
-    if ($g -and $g.tasks) { $ui.TaskCombo.ItemsSource = @($g.tasks) }
+    if ($g -and $g.tasks) {
+        $ui.TaskCombo.ItemsSource = @($g.tasks)
+        if ($ui.TaskCombo.Items.Count -gt 0) { $ui.TaskCombo.SelectedIndex = 0 }
+    }
 })
 
 # ---- 表示月ロード ----
@@ -484,16 +528,27 @@ function Load-ViewMonth {
         $Script:Entries.Clear()
         $loaded = @(Load-MonthEntries -Source $Script:Source -MemberId $mid -Year $y -Month $m)
         foreach ($e in $loaded) {
+            $pc  = _Str $e.project_code
+            $prc = _Str $e.process_code
+            $tgc = _Str $e.task_group_code
+            $tkc = _Str $e.task_code
+            $ctc = _Str $e.category
+            $names = Resolve-EntryNames -ProjCode $pc -ProcCode $prc -TgCode $tgc -TaskCode $tkc -CatCode $ctc
             $Script:Entries.Add([pscustomobject]@{
                 date            = _Str $e.date
-                project_code    = _Str $e.project_code
-                process_code    = _Str $e.process_code
-                task_group_code = _Str $e.task_group_code
-                task_code       = _Str $e.task_code
-                category        = _Str $e.category
+                project_code    = $pc
+                project_name    = $names.project_name
+                process_code    = $prc
+                process_name    = $names.process_name
+                task_group_code = $tgc
+                task_group_name = $names.task_group_name
+                task_code       = $tkc
+                task_name       = $names.task_name
+                category        = $ctc
+                category_name   = $names.category_name
                 hours           = _Num $e.hours
                 comment         = _Str $e.comment
-                dirty           = ''       # 読み込み直後はクリーン (空文字)
+                dirty           = ''
                 dirty_mark      = ''
             })
         }
@@ -532,7 +587,9 @@ function Get-EntryFromForm {
     $task = $ui.TaskCombo.SelectedItem
     $cat  = $ui.CategoryCombo.SelectedItem
     if (-not $proj) { throw 'プロジェクトを選択してください' }
-    if (-not $proc) { throw '工程を選択してください' }
+    if (-not $proc -and $ui.ProcessCombo.Items.Count -gt 0) { throw '工程を選択してください' }
+    if (-not $tg   -and $ui.TaskGroupCombo.Items.Count -gt 0) { throw 'タスクグループを選択してください' }
+    if (-not $task -and $ui.TaskCombo.Items.Count -gt 0) { throw 'タスクを選択してください' }
     $hours = 0.0
     if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
         throw '工数は正の数値で入力してください'
@@ -555,12 +612,17 @@ function Get-EntryFromForm {
     return [pscustomobject]@{
         date            = $d.ToString('yyyy-MM-dd')
         project_code    = [string]$proj.unit_code
-        process_code    = [string]$proc.code
+        project_name    = [string]$proj.project_name
+        process_code    = if ($proc) { [string]$proc.code } else { '' }
+        process_name    = if ($proc) { [string]$proc.name } else { '' }
         task_group_code = if ($tg)   { [string]$tg.code }   else { '' }
+        task_group_name = if ($tg)   { [string]$tg.name }   else { '' }
         task_code       = if ($task) { [string]$task.code } else { '' }
+        task_name       = if ($task) { [string]$task.name } else { '' }
         category        = if ($cat)  { [string]$cat.code }  else { '' }
+        category_name   = if ($cat)  { [string]$cat.name }  else { '' }
         hours           = $hours
-        dirty           = 'yes'  # 新規/編集行はダーティ (文字列フラグ)
+        dirty           = 'yes'
         dirty_mark      = '●'
         comment         = [string]$ui.CommentBox.Text
     }

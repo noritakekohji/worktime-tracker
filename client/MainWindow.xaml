@@ -301,12 +301,12 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
                             <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="100"/>
-                            <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="110"/>
-                            <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="80"/>
-                            <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_code}" Width="100"/>
-                            <DataGridTextColumn Header="タスク" Binding="{Binding task_code}" Width="100"/>
-                            <DataGridTextColumn Header="カテゴリ" Binding="{Binding category}" Width="100"/>
-                            <DataGridTextColumn Header="工数" Binding="{Binding hours, StringFormat=N1}" Width="70"/>
+                            <DataGridTextColumn Header="案件名称" Binding="{Binding project_name}" Width="160"/>
+                            <DataGridTextColumn Header="工程" Binding="{Binding process_name}" Width="90"/>
+                            <DataGridTextColumn Header="タスクグループ" Binding="{Binding task_group_name}" Width="110"/>
+                            <DataGridTextColumn Header="タスク" Binding="{Binding task_name}" Width="110"/>
+                            <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_name}" Width="90"/>
+                            <DataGridTextColumn Header="工数" Binding="{Binding hours, StringFormat=N1}" Width="60"/>
                             <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
