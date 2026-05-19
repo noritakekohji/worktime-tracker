@@ -378,8 +378,11 @@ $ui.TaskGroupCombo.Add_SelectionChanged({
 
 # ---- 表示月ロード ----
 function Load-ViewMonth {
-    $mid = $Script:CurrentMember.id
-    if (-not $mid) { return }
+    # PSCustomObject から取り出した値が配列化していても安全に文字列化
+    $raw = $Script:CurrentMember.id
+    if ($raw -is [array]) { $raw = $raw[0] }
+    $mid = [string]$raw
+    if ([string]::IsNullOrWhiteSpace($mid)) { return }
     $y = [int]$ui.YearCombo.SelectedItem
     $m = [int]$ui.MonthCombo.SelectedItem
     $ui.ListTitle.Text = ("📋 {0:D4}/{1:D2} の実績" -f $y, $m)
@@ -584,14 +587,19 @@ $ui.SaveBtn.Add_Click({
         })
     }
     $entriesArr = $clean.ToArray()
-    Write-FatalLog ("Save: member={0} view={1}/{2} count={3}" -f $m.id, $vy, $vm, $entriesArr.Count)
+    # 配列化されたプロパティから安全にスカラ取出し
+    $midRaw = $m.id;   if ($midRaw   -is [array]) { $midRaw   = $midRaw[0] }
+    $nameRaw = $m.name; if ($nameRaw -is [array]) { $nameRaw = $nameRaw[0] }
+    $midStr  = [string]$midRaw
+    $nameStr = [string]$nameRaw
+    Write-FatalLog ("Save: member={0} view={1}/{2} count={3}" -f $midStr, $vy, $vm, $entriesArr.Count)
 
     try {
-        Save-EntriesGrouped -Source $Script:Source -MemberId $m.id `
+        Save-EntriesGrouped -Source $Script:Source -MemberId $midStr `
                             -AllEntries $entriesArr `
                             -ViewYear $vy -ViewMonth $vm `
-                            -AuthorName $m.name -AuthorEmail "$($m.id)@worktime-tracker.local"
-        Set-Status "保存完了 ($($m.id) $vy/$vm)" '#a6e3a1'
+                            -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local"
+        Set-Status "保存完了 ($midStr $vy/$vm)" '#a6e3a1'
         [System.Windows.MessageBox]::Show("保存しました。", '保存完了', 'OK', 'Information') | Out-Null
     } catch {
         $detail = "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)`n`n$($_.Exception.InnerException | Out-String)"

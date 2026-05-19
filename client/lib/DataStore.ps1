@@ -18,13 +18,18 @@ function Get-RepoRoot {
     return $null
 }
 
+function _AsScalarStr { param($v)
+    if ($null -eq $v) { return '' }
+    if ($v -is [array]) { if ($v.Count -gt 0) { return [string]$v[0] } else { return '' } }
+    return [string]$v
+}
+
 function Get-MonthRelPath {
-    param(
-        [Parameter(Mandatory)][string]$MemberId,
-        [Parameter(Mandatory)][int]$Year,
-        [Parameter(Mandatory)][int]$Month
-    )
-    return ('data/{0:D4}/{1:D2}/{2}.json' -f $Year, $Month, $MemberId)
+    param($MemberId, $Year, $Month)
+    $mid = _AsScalarStr $MemberId
+    $y   = [int](_AsScalarStr $Year)
+    $m   = [int](_AsScalarStr $Month)
+    return ('data/{0:D4}/{1:D2}/{2}.json' -f $y, $m, $mid)
 }
 
 function _ReadJsonString {
@@ -109,41 +114,39 @@ function Get-MasterProjects     { param($Source) _ReadJsonString (Get-DataFile -
 function Get-MasterCategories   { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/categories.json') }
 function Get-MasterTaskPatterns { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/task_patterns.json') }
 
-function Save-MasterMembers {
-    param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
-    $json = $Data | ConvertTo-Json -Depth 10
-    Set-DataFile -Source $Source -RelPath 'master/members.json' -Content $json `
-                 -CommitMessage 'update master: members' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+function _SaveMasterJson {
+    param($Source, $Data, [string]$RelPath, [string]$CommitMessage, $AuthorName, $AuthorEmail)
+    # 配列の単一要素化を防ぐため Write-Output で配列のまま渡す
+    $arr = @($Data)
+    # ConvertTo-Json はパイプライン経由で配列を渡すと PS 5.1 で 1 要素時に
+    # オブジェクトとして出力するため -InputObject を使い、配列でラップする
+    $json = ConvertTo-Json -InputObject $arr -Depth 10
+    Set-DataFile -Source $Source -RelPath $RelPath -Content ([string]$json) `
+                 -CommitMessage $CommitMessage `
+                 -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
-function Save-MasterProjects {
-    param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
-    $json = $Data | ConvertTo-Json -Depth 10
-    Set-DataFile -Source $Source -RelPath 'master/projects.json' -Content $json `
-                 -CommitMessage 'update master: projects' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+
+function Save-MasterMembers      { param($Source, $Data, $AuthorName, $AuthorEmail)
+    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/members.json'       -CommitMessage 'update master: members'       -AuthorName $AuthorName -AuthorEmail $AuthorEmail
 }
-function Save-MasterCategories {
-    param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
-    $json = $Data | ConvertTo-Json -Depth 10
-    Set-DataFile -Source $Source -RelPath 'master/categories.json' -Content $json `
-                 -CommitMessage 'update master: categories' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+function Save-MasterProjects     { param($Source, $Data, $AuthorName, $AuthorEmail)
+    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/projects.json'      -CommitMessage 'update master: projects'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail
 }
-function Save-MasterTaskPatterns {
-    param($Source, $Data, [string]$AuthorName, [string]$AuthorEmail)
-    $json = $Data | ConvertTo-Json -Depth 10
-    Set-DataFile -Source $Source -RelPath 'master/task_patterns.json' -Content $json `
-                 -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEmail)
+    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/categories.json'    -CommitMessage 'update master: categories'    -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+}
+function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail)
+    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
 }
 
 # ---- 実績データ ----
 
 function Load-MonthEntries {
-    param(
-        [Parameter(Mandatory)]$Source,
-        [Parameter(Mandatory)][string]$MemberId,
-        [Parameter(Mandatory)][int]$Year,
-        [Parameter(Mandatory)][int]$Month
-    )
-    $rel = Get-MonthRelPath -MemberId $MemberId -Year $Year -Month $Month
+    param($Source, $MemberId, $Year, $Month)
+    if (-not $Source) { throw 'Load-MonthEntries: Source 未指定' }
+    $mid = _AsScalarStr $MemberId
+    if ([string]::IsNullOrWhiteSpace($mid)) { throw 'Load-MonthEntries: MemberId 未指定' }
+    $rel = Get-MonthRelPath -MemberId $mid -Year $Year -Month $Month
     $raw = Get-DataFile -Source $Source -RelPath $rel
     if (-not $raw) { return ,@() }
     $doc = $raw | ConvertFrom-Json
@@ -152,39 +155,35 @@ function Load-MonthEntries {
 }
 
 function Save-MonthEntries {
-    param(
-        [Parameter(Mandatory)]$Source,
-        [Parameter(Mandatory)][string]$MemberId,
-        [Parameter(Mandatory)][int]$Year,
-        [Parameter(Mandatory)][int]$Month,
-        [Parameter(Mandatory)]$Entries,
-        [string]$AuthorName,
-        [string]$AuthorEmail
-    )
+    param($Source, $MemberId, $Year, $Month, $Entries, $AuthorName, $AuthorEmail)
+    if (-not $Source) { throw 'Save-MonthEntries: Source 未指定' }
+    $mid = _AsScalarStr $MemberId
+    if ([string]::IsNullOrWhiteSpace($mid)) { throw 'Save-MonthEntries: MemberId 未指定' }
+    $y   = [int](_AsScalarStr $Year)
+    $m   = [int](_AsScalarStr $Month)
     $Entries = @($Entries)
-    $rel = Get-MonthRelPath -MemberId $MemberId -Year $Year -Month $Month
+    $rel = Get-MonthRelPath -MemberId $mid -Year $y -Month $m
     $doc = [ordered]@{
-        member_id = $MemberId
-        year      = $Year
-        month     = $Month
+        member_id = $mid
+        year      = $y
+        month     = $m
         entries   = @($Entries)
     }
     $json = $doc | ConvertTo-Json -Depth 10
-    $msg = 'update: {0} {1:D4}-{2:D2}' -f $MemberId, $Year, $Month
+    $msg = 'update: {0} {1:D4}-{2:D2}' -f $mid, $y, $m
     Set-DataFile -Source $Source -RelPath $rel -Content $json -CommitMessage $msg `
-                 -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                 -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 
 function Save-EntriesGrouped {
-    param(
-        [Parameter(Mandatory)]$Source,
-        [Parameter(Mandatory)][string]$MemberId,
-        [Parameter(Mandatory)]$AllEntries,
-        [Parameter(Mandatory)][int]$ViewYear,
-        [Parameter(Mandatory)][int]$ViewMonth,
-        [string]$AuthorName,
-        [string]$AuthorEmail
-    )
+    param($Source, $MemberId, $AllEntries, $ViewYear, $ViewMonth, $AuthorName, $AuthorEmail)
+    if (-not $Source) { throw 'Save-EntriesGrouped: Source 未指定' }
+    $MemberId  = _AsScalarStr $MemberId
+    if ([string]::IsNullOrWhiteSpace($MemberId)) { throw 'Save-EntriesGrouped: MemberId 未指定' }
+    $ViewYear  = [int](_AsScalarStr $ViewYear)
+    $ViewMonth = [int](_AsScalarStr $ViewMonth)
+    $AuthorName  = [string]$AuthorName
+    $AuthorEmail = [string]$AuthorEmail
     $AllEntries = @($AllEntries)
     $groups = @{}
     foreach ($e in $AllEntries) {
