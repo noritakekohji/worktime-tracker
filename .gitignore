@@ -22,3 +22,6 @@ venv/
 # Local config
 client/local.config.json
 *.local
+
+# Excel lock files
+~$*

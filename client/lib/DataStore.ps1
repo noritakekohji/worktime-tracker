@@ -127,10 +127,18 @@ function Get-MasterTaskPatterns { param($Source) _ReadJsonArray -Source $Source 
 
 function _SaveMasterJson {
     param($Source, $Data, [string]$RelPath, [string]$CommitMessage, $AuthorName, $AuthorEmail)
-    $arr = @($Data)
+    # OrderedDictionary 配列 → PSCustomObject 配列に変換してから ConvertTo-Json
+    # (PS 5.1 の ConvertTo-Json は OrderedDictionary 配列で型違いを起こす事例があるため)
+    $arr = @($Data | ForEach-Object {
+        if ($_ -is [System.Collections.IDictionary]) {
+            $o = [pscustomobject]@{}
+            foreach ($k in $_.Keys) { $o | Add-Member -NotePropertyName ([string]$k) -NotePropertyValue $_[$k] }
+            $o
+        } else { $_ }
+    })
     $json = ConvertTo-Json -InputObject $arr -Depth 10
-    Set-DataFile -Source $Source -RelPath $RelPath -Content ([string]$json) `
-                 -CommitMessage $CommitMessage `
+    if ([string]::IsNullOrEmpty($json)) { $json = '[]' }
+    Set-DataFile -Source $Source -RelPath ([string]$RelPath) -Content ([string]$json) `
                  -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 

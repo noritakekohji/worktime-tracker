@@ -546,38 +546,58 @@ function Show-AdminDialog {
             _Status '保存中...' '#db2777'
             $win.Cursor = [System.Windows.Input.Cursors]::Wait
 
-            $author = @{ AuthorName = $MemberName; AuthorEmail = "$MemberId@worktime-tracker.local" }
+            $authorName  = [string]$MemberName
+            $authorEmail = "$([string]$MemberId)@worktime-tracker.local"
+            $where = 'init'
 
+            $where = 'members serialize'
             $membersOut = @($members | ForEach-Object {
-                [ordered]@{ id=$_.id; name=$_.name; company=$_.company; department=$_.department; rank=$_.rank; role=$_.role; active=[bool]$_.active }
+                [ordered]@{
+                    id         = [string]$_.id
+                    name       = [string]$_.name
+                    company    = [string]$_.company
+                    department = [string]$_.department
+                    rank       = [string]$_.rank
+                    role       = if ($_.role) { [string]$_.role } else { 'member' }
+                    active     = [bool]$_.active
+                }
             })
-            Save-MasterMembers -Source $Source -Data $membersOut @author
+            $where = 'Save-MasterMembers'
+            Save-MasterMembers -Source $Source -Data $membersOut -AuthorName $authorName -AuthorEmail $authorEmail
 
+            $where = 'projects serialize'
             $projectsOut = @($projects | ForEach-Object {
                 [ordered]@{
-                    unit_code       = $_.unit_code
-                    project_name    = $_.project_name
-                    unit_name       = $_.unit_name
-                    target_system   = $_.target_system
-                    work_type       = $_.work_type
-                    period_from     = $_.period_from
-                    period_to       = $_.period_to
-                    task_pattern_id = $_.task_pattern_id
+                    unit_code       = [string]$_.unit_code
+                    project_name    = [string]$_.project_name
+                    unit_name       = [string]$_.unit_name
+                    target_system   = [string]$_.target_system
+                    work_type       = [string]$_.work_type
+                    period_from     = [string]$_.period_from
+                    period_to       = [string]$_.period_to
+                    task_pattern_id = [string]$_.task_pattern_id
                     active          = [bool]$_.active
                 }
             })
-            Save-MasterProjects -Source $Source -Data $projectsOut @author
+            $where = 'Save-MasterProjects'
+            Save-MasterProjects -Source $Source -Data $projectsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
-            Save-MasterTaskPatterns -Source $Source -Data @($patterns) @author
+            $where = 'Save-MasterTaskPatterns'
+            Save-MasterTaskPatterns -Source $Source -Data @($patterns) -AuthorName $authorName -AuthorEmail $authorEmail
 
-            $catsOut = @($categories | ForEach-Object { [ordered]@{ code=$_.code; name=$_.name } })
-            Save-MasterCategories -Source $Source -Data $catsOut @author
+            $where = 'categories serialize'
+            $catsOut = @($categories | ForEach-Object {
+                [ordered]@{ code = [string]$_.code; name = [string]$_.name }
+            })
+            $where = 'Save-MasterCategories'
+            Save-MasterCategories -Source $Source -Data $catsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
             _Status '保存完了。クライアントの再読込で反映されます。' '#059669'
             [System.Windows.MessageBox]::Show('保存しました。', '完了', 'OK', 'Information') | Out-Null
         } catch {
-            _Status "保存失敗: $_" '#dc2626'
-            [System.Windows.MessageBox]::Show("保存失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+            $detail = "場所: $where`n`n$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
+            _Status "保存失敗 (詳細はダイアログ)" '#dc2626'
+            [System.Windows.MessageBox]::Show($detail, 'マスタ保存失敗', 'OK', 'Error') | Out-Null
         } finally {
             $win.Cursor = $null
         }
