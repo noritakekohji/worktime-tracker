@@ -493,7 +493,8 @@ function Load-ViewMonth {
                 category        = _Str $e.category
                 hours           = _Num $e.hours
                 comment         = _Str $e.comment
-                dirty           = $false   # 読み込み直後はクリーン
+                dirty           = ''       # 読み込み直後はクリーン (空文字)
+                dirty_mark      = ''
             })
         }
         Update-HoursTotal
@@ -559,7 +560,8 @@ function Get-EntryFromForm {
         task_code       = if ($task) { [string]$task.code } else { '' }
         category        = if ($cat)  { [string]$cat.code }  else { '' }
         hours           = $hours
-        dirty           = $true   # 新規/編集行はダーティ
+        dirty           = 'yes'  # 新規/編集行はダーティ (文字列フラグ)
+        dirty_mark      = '● 未保存'
         comment         = [string]$ui.CommentBox.Text
     }
 }

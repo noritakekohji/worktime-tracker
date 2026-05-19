@@ -282,16 +282,27 @@
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
-                            <!-- 未保存行 (dirty=True) は薄黄色背景 -->
+                            <!-- 未保存行 (dirty='yes') は薄黄色背景 + 左に橙ボーダー -->
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding dirty}" Value="True">
-                                        <Setter Property="Background" Value="#fef9c3"/>
+                                    <DataTrigger Binding="{Binding dirty}" Value="yes">
+                                        <Setter Property="Background" Value="#fff4c2"/>
+                                        <Setter Property="BorderBrush" Value="#f59e0b"/>
+                                        <Setter Property="BorderThickness" Value="4,0,0,0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.Resources>
                         <DataGrid.Columns>
+                            <DataGridTextColumn Header="未保存" Binding="{Binding dirty_mark}" Width="55" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#d97706"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Setter Property="HorizontalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="100"/>
                             <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="110"/>
                             <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="80"/>
