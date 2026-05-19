@@ -583,7 +583,8 @@ function Show-AdminDialog {
             Save-MasterProjects -Source $Source -Data $projectsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
             $where = 'Save-MasterTaskPatterns'
-            Save-MasterTaskPatterns -Source $Source -Data @($patterns) -AuthorName $authorName -AuthorEmail $authorEmail
+            # @() を使うと PS 5.1 で List[object] of Hashtable が ArgumentException を出すため未ラップで渡す
+            Save-MasterTaskPatterns -Source $Source -Data $patterns -AuthorName $authorName -AuthorEmail $authorEmail
 
             $where = 'categories serialize'
             $catsOut = @($categories | ForEach-Object {

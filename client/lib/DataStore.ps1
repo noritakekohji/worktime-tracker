@@ -125,18 +125,61 @@ function Get-MasterProjects     { param($Source) _ReadJsonArray -Source $Source 
 function Get-MasterCategories   { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/categories.json' }
 function Get-MasterTaskPatterns { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/task_patterns.json' }
 
+function _ToPSObjectDeep {
+    # 再帰的に Hashtable / OrderedDictionary / PSCustomObject / 配列 を
+    # PSCustomObject + Object[] に正規化する。
+    # PS 5.1 の ConvertTo-Json は Hashtable 入れ子で 'Cannot find an overload...' を起こすため必須。
+    param($v)
+    if ($null -eq $v) { return $null }
+    if ($v -is [string]) { return $v }
+    if ($v -is [bool] -or $v -is [int] -or $v -is [long] -or $v -is [double] -or $v -is [decimal]) { return $v }
+    if ($v -is [datetime]) { return $v }
+    if ($v -is [System.Collections.IDictionary]) {
+        $o = New-Object psobject
+        foreach ($k in @($v.Keys)) {
+            $o | Add-Member -NotePropertyName ([string]$k) -NotePropertyValue (_ToPSObjectDeep $v[$k])
+        }
+        return $o
+    }
+    if ($v -is [System.Collections.IEnumerable]) {
+        $list = New-Object System.Collections.Generic.List[object]
+        foreach ($e in $v) { $list.Add( (_ToPSObjectDeep $e) ) }
+        return $list.ToArray()
+    }
+    if ($v -is [System.Management.Automation.PSObject]) {
+        $o = New-Object psobject
+        foreach ($p in $v.PSObject.Properties) {
+            $o | Add-Member -NotePropertyName ([string]$p.Name) -NotePropertyValue (_ToPSObjectDeep $p.Value)
+        }
+        return $o
+    }
+    return $v
+}
+
+function _ToObjectArray {
+    # PS 5.1: @() が List[object] of Hashtable で ArgumentException を出すケースがあるため
+    # 安全に Object[] に変換するヘルパ。
+    param($v)
+    if ($null -eq $v) { return @() }
+    if ($v -is [object[]]) { return $v }
+    if ($v -is [System.Collections.Generic.IList[object]]) {
+        try { return $v.ToArray() } catch {}
+    }
+    $list = New-Object System.Collections.Generic.List[object]
+    foreach ($e in $v) { $list.Add($e) }
+    return $list.ToArray()
+}
+
 function _SaveMasterJson {
+    # マスタ JSON 配列を保存。入力は Hashtable / Ordered / PSCustomObject 混在 OK。
     param($Source, $Data, [string]$RelPath, [string]$CommitMessage, $AuthorName, $AuthorEmail)
-    # OrderedDictionary 配列 → PSCustomObject 配列に変換してから ConvertTo-Json
-    # (PS 5.1 の ConvertTo-Json は OrderedDictionary 配列で型違いを起こす事例があるため)
-    $arr = @($Data | ForEach-Object {
-        if ($_ -is [System.Collections.IDictionary]) {
-            $o = [pscustomobject]@{}
-            foreach ($k in $_.Keys) { $o | Add-Member -NotePropertyName ([string]$k) -NotePropertyValue $_[$k] }
-            $o
-        } else { $_ }
-    })
-    $json = ConvertTo-Json -InputObject $arr -Depth 10
+
+    $items = _ToObjectArray $Data
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($e in $items) {
+        $rows.Add( (_ToPSObjectDeep $e) )
+    }
+    $json = ConvertTo-Json -InputObject $rows.ToArray() -Depth 32
     if ([string]::IsNullOrEmpty($json)) { $json = '[]' }
     Set-DataFile -Source $Source -RelPath ([string]$RelPath) -Content ([string]$json) `
                  -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
