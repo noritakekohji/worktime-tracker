@@ -103,7 +103,7 @@ function Show-AdminDialog {
             }
             _Status ("メンバー={0} / プロジェクト={1} / パターン={2} / カテゴリ={3}" -f $members.Count, $projects.Count, $patterns.Count, $categories.Count) '#059669'
             # 他者データ編集タブのメンバーリストも更新
-            if ($script:OtherRefreshMembers) { & $script:OtherRefreshMembers }
+            if ($global:WT_OtherRefreshMembers) { & $global:WT_OtherRefreshMembers }
         } catch {
             _Status "読込失敗: $_" '#dc2626'
         }
@@ -154,11 +154,11 @@ function Show-AdminDialog {
     })
 
     # ---- 他者データ編集 ----
-    $script:OtherEntries = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
-    $u.OtherEntriesGrid.ItemsSource = $script:OtherEntries
+    $global:WT_OtherEntries = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+    $u.OtherEntriesGrid.ItemsSource = $global:WT_OtherEntries
 
     # メンバーコンボの ItemsSource は members コレクションに連動 (id + name 表示)
-    $script:OtherRefreshMembers = {
+    $global:WT_OtherRefreshMembers = {
         $items = @($members | Where-Object { $_.active } | ForEach-Object {
             [pscustomobject]@{ id = [string]$_.id; display = "$($_.id) — $($_.name)" }
         })
@@ -174,22 +174,22 @@ function Show-AdminDialog {
     $u.OtherMonthCombo.SelectedItem = $now.Month
 
     # WPF イベントハンドラから内部 function が見えないため script: スコープの scriptblock に
-    $script:DoOStatus = {
+    $global:WT_DoOStatus = {
         param([string]$Text,[string]$Color='#6b7280')
         $u.OtherStatusText.Text = $Text
         $u.OtherStatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
     }.GetNewClosure()
 
-    $script:OtherReload = {
+    $global:WT_OtherReload = {
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { & $script:DoOStatus 'メンバーを選択してください' '#f59e0b'; return }
+        if (-not $mid) { & $global:WT_DoOStatus 'メンバーを選択してください' '#f59e0b'; return }
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         try {
-            $script:OtherEntries.Clear()
+            $global:WT_OtherEntries.Clear()
             $loaded = @(Load-MonthEntries -Source $Source -MemberId $mid -Year $y -Month $m)
             foreach ($e in $loaded) {
-                $script:OtherEntries.Add([pscustomobject]@{
+                $global:WT_OtherEntries.Add([pscustomobject]@{
                     date            = [string]$e.date
                     project_code    = [string]$e.project_code
                     process_code    = [string]$e.process_code
@@ -200,16 +200,16 @@ function Show-AdminDialog {
                     comment         = [string]$e.comment
                 })
             }
-            & $script:DoOStatus ("{0} の {1}/{2} を読込 ({3} 件)" -f $mid, $y, $m, $loaded.Count) '#059669'
+            & $global:WT_DoOStatus ("{0} の {1}/{2} を読込 ({3} 件)" -f $mid, $y, $m, $loaded.Count) '#059669'
         } catch {
-            & $script:DoOStatus "読込失敗: $_" '#dc2626'
+            & $global:WT_DoOStatus "読込失敗: $_" '#dc2626'
         }
     }.GetNewClosure()
 
-    $u.OtherReloadBtn.Add_Click({ & $script:OtherReload })
-    $u.OtherMemberCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
-    $u.OtherYearCombo.Add_SelectionChanged({  if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
-    $u.OtherMonthCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
+    $u.OtherReloadBtn.Add_Click({ & $global:WT_OtherReload })
+    $u.OtherMemberCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $global:WT_OtherReload } })
+    $u.OtherYearCombo.Add_SelectionChanged({  if ($u.OtherMemberCombo.SelectedValue) { & $global:WT_OtherReload } })
+    $u.OtherMonthCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $global:WT_OtherReload } })
 
     $u.OtherAddBtn.Add_Click({
         $mid = $u.OtherMemberCombo.SelectedValue
@@ -217,7 +217,7 @@ function Show-AdminDialog {
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         $defaultDate = ('{0:D4}-{1:D2}-01' -f $y, $m)
-        $script:OtherEntries.Add([pscustomobject]@{
+        $global:WT_OtherEntries.Add([pscustomobject]@{
             date='' + $defaultDate; project_code=''; process_code=''; task_group_code=''; task_code=''
             category=''; hours=0.0; comment=''
         })
@@ -226,17 +226,17 @@ function Show-AdminDialog {
     $u.OtherDelBtn.Add_Click({
         $sel = $u.OtherEntriesGrid.SelectedItem
         if ($null -eq $sel) { return }
-        [void]$script:OtherEntries.Remove($sel)
+        [void]$global:WT_OtherEntries.Remove($sel)
     })
 
     # ローカル保存 (共通ロジック)。成功で true、失敗で false
-    $script:OtherLocalSave = {
+    $global:WT_OtherLocalSave = {
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { & $script:DoOStatus 'メンバー未選択' '#f59e0b'; return $false }
+        if (-not $mid) { & $global:WT_DoOStatus 'メンバー未選択' '#f59e0b'; return $false }
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         try {
-            $entriesArr = @($script:OtherEntries | ForEach-Object {
+            $entriesArr = @($global:WT_OtherEntries | ForEach-Object {
                 if ([string]::IsNullOrWhiteSpace([string]$_.date)) { return }
                 [pscustomobject]@{
                     date            = [string]$_.date
@@ -253,31 +253,31 @@ function Show-AdminDialog {
                                 -AllEntries $entriesArr -ViewYear $y -ViewMonth $m `
                                 -AuthorName "$MemberName (管理者編集)" `
                                 -AuthorEmail "$MemberId@worktime-tracker.local"
-            & $script:DoOStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
+            & $global:WT_DoOStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
             return $true
         } catch {
-            & $script:DoOStatus "保存失敗: $_" '#dc2626'
+            & $global:WT_DoOStatus "保存失敗: $_" '#dc2626'
             return $false
         }
     }.GetNewClosure()
 
-    $u.OtherSaveBtn.Add_Click({ [void](& $script:OtherLocalSave) })
+    $u.OtherSaveBtn.Add_Click({ [void](& $global:WT_OtherLocalSave) })
 
     $u.OtherPushBtn.Add_Click({
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { & $script:DoOStatus 'メンバー未選択' '#f59e0b'; return }
-        if (-not $Source.RemoteCtx) { & $script:DoOStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
+        if (-not $mid) { & $global:WT_DoOStatus 'メンバー未選択' '#f59e0b'; return }
+        if (-not $Source.RemoteCtx) { & $global:WT_DoOStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
         # Step 1: ローカル保存
-        $ok = & $script:OtherLocalSave
+        $ok = & $global:WT_OtherLocalSave
         if (-not $ok) { return }
         # Step 2: リモート push
         try {
-            & $script:DoOStatus '送信: リモートへ push 中...' '#db2777'
+            & $global:WT_DoOStatus '送信: リモートへ push 中...' '#db2777'
             $r = Sync-Push-MyData -Source $Source -MemberId $mid `
                                   -AuthorName "$MemberName (管理者)" `
                                   -AuthorEmail "$MemberId@worktime-tracker.local"
             $summary = "保存 → 送信 完了`n  push: {0}`n  競合: {1}`n  同一: {2}`n  エラー: {3}" -f $r.Pushed, $r.SkippedNewer, $r.SkippedSame, $r.Errors.Count
-            & $script:DoOStatus ("送信完了 push={0}" -f $r.Pushed) '#059669'
+            & $global:WT_DoOStatus ("送信完了 push={0}" -f $r.Pushed) '#059669'
             if ($r.Conflicts.Count -gt 0 -or $r.Errors.Count -gt 0) {
                 $detail = $summary + "`n`n"
                 if ($r.Conflicts.Count -gt 0) {
@@ -291,7 +291,7 @@ function Show-AdminDialog {
                 [System.Windows.MessageBox]::Show($summary, '送信完了', 'OK', 'Information') | Out-Null
             }
         } catch {
-            & $script:DoOStatus "送信失敗: $_" '#dc2626'
+            & $global:WT_DoOStatus "送信失敗: $_" '#dc2626'
         }
     })
 
@@ -484,7 +484,7 @@ function Show-AdminDialog {
 
     # ---- JSON 直接編集 ----
     # WPF イベントハンドラから内部 function が見えないことがあるので script: 変数として保持
-    $script:DoJsonLoad = {
+    $global:WT_DoJsonLoad = {
         $t = $u.JsonTargetCombo.SelectedItem.Content
         $data = switch ($t) {
             'members'       { @($members)    }
@@ -494,8 +494,8 @@ function Show-AdminDialog {
         }
         $u.JsonBox.Text = ($data | ConvertTo-Json -Depth 10)
     }.GetNewClosure()
-    $u.JsonTargetCombo.Add_SelectionChanged({ & $script:DoJsonLoad })
-    $u.JsonReloadBtn.Add_Click({ & $script:DoJsonLoad })
+    $u.JsonTargetCombo.Add_SelectionChanged({ & $global:WT_DoJsonLoad })
+    $u.JsonReloadBtn.Add_Click({ & $global:WT_DoJsonLoad })
     $u.JsonValidateBtn.Add_Click({
         try { [void]($u.JsonBox.Text | ConvertFrom-Json); _Status 'JSON OK' '#059669' }
         catch { _Status "JSON 構文エラー: $_" '#dc2626' }
@@ -630,10 +630,10 @@ function Show-AdminDialog {
         }
     })
 
-    $u.ReloadBtn.Add_Click({ Load-All; & $script:DoJsonLoad })
+    $u.ReloadBtn.Add_Click({ Load-All; & $global:WT_DoJsonLoad })
     $u.CloseBtn.Add_Click({ $win.Close() })
 
     Load-All
-    & $script:DoJsonLoad
+    & $global:WT_DoJsonLoad
     [void]$win.ShowDialog()
 }
