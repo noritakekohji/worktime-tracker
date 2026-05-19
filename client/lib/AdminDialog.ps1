@@ -24,6 +24,9 @@ function Show-AdminDialog {
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
                    'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeDelBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
+                   'OtherMemberCombo','OtherYearCombo','OtherMonthCombo','OtherReloadBtn',
+                   'OtherStatusText','OtherEntriesGrid','OtherAddBtn','OtherDelBtn',
+                   'OtherSaveBtn','OtherPushBtn',
                    'JsonTargetCombo','JsonReloadBtn','JsonValidateBtn','JsonApplyBtn','JsonBox') {
         $u[$n] = $win.FindName($n)
     }
@@ -99,6 +102,8 @@ function Show-AdminDialog {
                 $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
             }
             _Status ("メンバー={0} / プロジェクト={1} / パターン={2} / カテゴリ={3}" -f $members.Count, $projects.Count, $patterns.Count, $categories.Count) '#059669'
+            # 他者データ編集タブのメンバーリストも更新
+            if ($script:OtherRefreshMembers) { & $script:OtherRefreshMembers }
         } catch {
             _Status "読込失敗: $_" '#dc2626'
         }
@@ -146,6 +151,138 @@ function Show-AdminDialog {
         $sel = $u.CategoriesGrid.SelectedItem
         if ($null -eq $sel) { return }
         [void]$categories.Remove($sel)
+    })
+
+    # ---- 他者データ編集 ----
+    $script:OtherEntries = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+    $u.OtherEntriesGrid.ItemsSource = $script:OtherEntries
+
+    # メンバーコンボの ItemsSource は members コレクションに連動 (id + name 表示)
+    $script:OtherRefreshMembers = {
+        $items = @($members | Where-Object { $_.active } | ForEach-Object {
+            [pscustomobject]@{ id = [string]$_.id; display = "$($_.id) — $($_.name)" }
+        })
+        $u.OtherMemberCombo.ItemsSource = $items
+        if ($items.Count -gt 0) { $u.OtherMemberCombo.SelectedIndex = 0 }
+    }.GetNewClosure()
+
+    # 年月コンボ
+    $now = Get-Date
+    $u.OtherYearCombo.ItemsSource  = ($now.Year - 2)..($now.Year + 1)
+    $u.OtherYearCombo.SelectedItem = $now.Year
+    $u.OtherMonthCombo.ItemsSource = 1..12
+    $u.OtherMonthCombo.SelectedItem = $now.Month
+
+    function _OStatus { param([string]$Text,[string]$Color='#6b7280')
+        $u.OtherStatusText.Text = $Text
+        $u.OtherStatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+    }
+
+    $script:OtherReload = {
+        $mid = $u.OtherMemberCombo.SelectedValue
+        if (-not $mid) { _OStatus 'メンバーを選択してください' '#f59e0b'; return }
+        $y = [int]$u.OtherYearCombo.SelectedItem
+        $m = [int]$u.OtherMonthCombo.SelectedItem
+        try {
+            $script:OtherEntries.Clear()
+            $loaded = @(Load-MonthEntries -Source $Source -MemberId $mid -Year $y -Month $m)
+            foreach ($e in $loaded) {
+                $script:OtherEntries.Add([pscustomobject]@{
+                    date            = [string]$e.date
+                    project_code    = [string]$e.project_code
+                    process_code    = [string]$e.process_code
+                    task_group_code = [string]$e.task_group_code
+                    task_code       = [string]$e.task_code
+                    category        = [string]$e.category
+                    hours           = [double]([string]$e.hours -replace '^\s*$','0')
+                    comment         = [string]$e.comment
+                })
+            }
+            _OStatus ("{0} の {1}/{2} を読込 ({3} 件)" -f $mid, $y, $m, $loaded.Count) '#059669'
+        } catch {
+            _OStatus "読込失敗: $_" '#dc2626'
+        }
+    }.GetNewClosure()
+
+    $u.OtherReloadBtn.Add_Click({ & $script:OtherReload })
+    $u.OtherMemberCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
+    $u.OtherYearCombo.Add_SelectionChanged({  if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
+    $u.OtherMonthCombo.Add_SelectionChanged({ if ($u.OtherMemberCombo.SelectedValue) { & $script:OtherReload } })
+
+    $u.OtherAddBtn.Add_Click({
+        $mid = $u.OtherMemberCombo.SelectedValue
+        if (-not $mid) { return }
+        $y = [int]$u.OtherYearCombo.SelectedItem
+        $m = [int]$u.OtherMonthCombo.SelectedItem
+        $defaultDate = ('{0:D4}-{1:D2}-01' -f $y, $m)
+        $script:OtherEntries.Add([pscustomobject]@{
+            date='' + $defaultDate; project_code=''; process_code=''; task_group_code=''; task_code=''
+            category=''; hours=0.0; comment=''
+        })
+    })
+
+    $u.OtherDelBtn.Add_Click({
+        $sel = $u.OtherEntriesGrid.SelectedItem
+        if ($null -eq $sel) { return }
+        [void]$script:OtherEntries.Remove($sel)
+    })
+
+    $u.OtherSaveBtn.Add_Click({
+        $mid = $u.OtherMemberCombo.SelectedValue
+        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return }
+        $y = [int]$u.OtherYearCombo.SelectedItem
+        $m = [int]$u.OtherMonthCombo.SelectedItem
+        try {
+            # 配列化して date 月別グルーピングは ViewYear/ViewMonth で全置換 → 単純化
+            $entriesArr = @($script:OtherEntries | ForEach-Object {
+                if ([string]::IsNullOrWhiteSpace([string]$_.date)) { return }
+                [pscustomobject]@{
+                    date            = [string]$_.date
+                    project_code    = [string]$_.project_code
+                    process_code    = [string]$_.process_code
+                    task_group_code = [string]$_.task_group_code
+                    task_code       = [string]$_.task_code
+                    category        = [string]$_.category
+                    hours           = [double]$_.hours
+                    comment         = [string]$_.comment
+                }
+            })
+            Save-EntriesGrouped -Source $Source -MemberId $mid `
+                                -AllEntries $entriesArr -ViewYear $y -ViewMonth $m `
+                                -AuthorName "$MemberName (管理者編集)" `
+                                -AuthorEmail "$MemberId@worktime-tracker.local"
+            _OStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
+        } catch {
+            _OStatus "保存失敗: $_" '#dc2626'
+        }
+    })
+
+    $u.OtherPushBtn.Add_Click({
+        $mid = $u.OtherMemberCombo.SelectedValue
+        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return }
+        if (-not $Source.RemoteCtx) { _OStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
+        try {
+            _OStatus '送信中...' '#db2777'
+            $r = Sync-Push-MyData -Source $Source -MemberId $mid `
+                                  -AuthorName "$MemberName (管理者)" `
+                                  -AuthorEmail "$MemberId@worktime-tracker.local"
+            $summary = "送信: push={0} / 競合={1} / 同一={2} / エラー={3}" -f $r.Pushed, $r.SkippedNewer, $r.SkippedSame, $r.Errors.Count
+            _OStatus $summary '#059669'
+            if ($r.Conflicts.Count -gt 0 -or $r.Errors.Count -gt 0) {
+                $detail = $summary + "`n`n"
+                if ($r.Conflicts.Count -gt 0) {
+                    $detail += "[競合 (リモート優先でスキップ)]`n" + (($r.Conflicts | ForEach-Object { "  - {0}  (local:{1} / remote:{2})" -f $_.path,$_.local_updated,$_.remote_updated }) -join "`n") + "`n`n"
+                }
+                if ($r.Errors.Count -gt 0) {
+                    $detail += "[エラー]`n" + (($r.Errors | Select-Object -First 10) -join "`n")
+                }
+                [System.Windows.MessageBox]::Show($detail, '送信結果', 'OK', 'Information') | Out-Null
+            } else {
+                [System.Windows.MessageBox]::Show($summary, '送信完了', 'OK', 'Information') | Out-Null
+            }
+        } catch {
+            _OStatus "送信失敗: $_" '#dc2626'
+        }
     })
 
     # ---- タスクパターン ----

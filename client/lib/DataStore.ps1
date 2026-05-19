@@ -142,16 +142,18 @@ function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEma
 # ---- 実績データ (ローカル) ----
 
 function Load-MonthEntries {
+    # ホスティング/エンコード問わずローカルから N 個の entry を出力 (auto-unroll)。
+    # 呼び出し側は @(Load-MonthEntries ...) で N 要素配列に集約する。
     param($Source, $MemberId, $Year, $Month)
     if (-not $Source) { throw 'Load-MonthEntries: Source 未指定' }
     $mid = _AsScalarStr $MemberId
     if ([string]::IsNullOrWhiteSpace($mid)) { throw 'Load-MonthEntries: MemberId 未指定' }
     $rel = Get-MonthRelPath -MemberId $mid -Year $Year -Month $Month
     $raw = Get-DataFile -Source $Source -RelPath $rel
-    if (-not $raw) { return ,@() }
-    $doc = $raw | ConvertFrom-Json
-    if ($null -eq $doc.entries) { return ,@() }
-    return ,@($doc.entries)
+    if (-not $raw) { return }
+    $doc = ConvertFrom-Json -InputObject ([string]$raw)
+    if ($null -eq $doc -or $null -eq $doc.entries) { return }
+    foreach ($e in @($doc.entries)) { Write-Output $e }
 }
 
 function Save-MonthEntries {
@@ -230,27 +232,25 @@ function Save-EntriesGrouped {
 
 function Load-AllEntries-Local {
     param([Parameter(Mandatory)]$Source)
-    $results = New-Object System.Collections.Generic.List[object]
     $dataRoot = Join-Path $Source.LocalRoot 'data'
-    if (-not (Test-Path $dataRoot)) { return ,@() }
+    if (-not (Test-Path $dataRoot)) { return }
     Get-ChildItem -Path $dataRoot -Recurse -Filter '*.json' | ForEach-Object {
         try {
-            $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+            $raw = [System.IO.File]::ReadAllText($_.FullName, [System.Text.UTF8Encoding]::new($false))
+            $doc = ConvertFrom-Json -InputObject $raw
             foreach ($e in @($doc.entries)) {
                 $row = [ordered]@{ member_id = $doc.member_id }
                 foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                $results.Add([pscustomobject]$row)
+                Write-Output ([pscustomobject]$row)
             }
         } catch { Write-Warning "skip $($_.FullName): $_" }
     }
-    return ,$results.ToArray()
 }
 
 function Load-AllEntries-Remote {
     # リモートから全件取得 (他人のデータも含めて Report 用)
     param([Parameter(Mandatory)]$Source)
     if (-not $Source.RemoteCtx) { throw 'Load-AllEntries-Remote: リモート未設定' }
-    $results = New-Object System.Collections.Generic.List[object]
     if ($Source.Mode -eq 'gitlab') {
         $tree   = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
         $getter = { param($p) Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $p }
@@ -263,23 +263,22 @@ function Load-AllEntries-Remote {
         if (-not $item.path.EndsWith('.json')) { continue }
         try {
             $raw = & $getter $item.path
-            $doc = $raw | ConvertFrom-Json
+            $doc = ConvertFrom-Json -InputObject ([string]$raw)
             foreach ($e in @($doc.entries)) {
                 $row = [ordered]@{ member_id = $doc.member_id }
                 foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                $results.Add([pscustomobject]$row)
+                Write-Output ([pscustomobject]$row)
             }
         } catch { Write-Warning "skip $($item.path): $_" }
     }
-    return ,$results.ToArray()
 }
 
 function Load-AllEntries {
     # 互換: local モードならローカル、リモートモードならリモート優先 (Report で使用)
     param([Parameter(Mandatory)]$Source)
-    if ($Source.Mode -eq 'local') { return Load-AllEntries-Local -Source $Source }
-    if ($Source.RemoteCtx)        { return Load-AllEntries-Remote -Source $Source }
-    return Load-AllEntries-Local -Source $Source
+    if ($Source.Mode -eq 'local') { Load-AllEntries-Local -Source $Source; return }
+    if ($Source.RemoteCtx)        { Load-AllEntries-Remote -Source $Source; return }
+    Load-AllEntries-Local -Source $Source
 }
 
 # ---- 同期: マスタ pull (リモート → local_store) ----

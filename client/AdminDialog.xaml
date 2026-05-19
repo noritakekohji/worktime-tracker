@@ -325,6 +325,64 @@
                     </DockPanel>
                 </TabItem>
 
+                <!-- ===== 他者データ編集 ===== -->
+                <TabItem Header="📝 他者データ編集">
+                    <DockPanel Margin="6">
+                        <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal">
+                                <Label Content="対象メンバー:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="OtherMemberCombo" MinWidth="240" Margin="6,0" DisplayMemberPath="display" SelectedValuePath="id"/>
+                                <Label Content="年:" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                <ComboBox x:Name="OtherYearCombo" MinWidth="90" Margin="6,0"/>
+                                <Label Content="月:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="OtherMonthCombo" MinWidth="60" Margin="6,0"/>
+                                <Button x:Name="OtherReloadBtn" Content="🔄 読込" Margin="12,0,0,0"/>
+                                <TextBlock x:Name="OtherStatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="OtherAddBtn"     Content="＋ 行追加"/>
+                            <Button x:Name="OtherDelBtn"     Content="🗑 選択行削除" Style="{StaticResource Danger}"/>
+                            <Button x:Name="OtherSaveBtn"    Content="💾 ローカル保存" Style="{StaticResource Primary}" MinWidth="160"/>
+                            <Button x:Name="OtherPushBtn"    Content="📤 リモートへ送信" Style="{StaticResource Primary}" MinWidth="180"/>
+                        </StackPanel>
+
+                        <DataGrid x:Name="OtherEntriesGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  Background="{StaticResource Surface}"
+                                  RowBackground="{StaticResource Surface}"
+                                  AlternatingRowBackground="#fff1f7"
+                                  GridLinesVisibility="None"
+                                  BorderBrush="{StaticResource Border}"
+                                  BorderThickness="1"
+                                  RowHeight="32" ColumnHeaderHeight="36" FontSize="13"
+                                  Margin="0,0,0,8">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Padding" Value="10,4"/>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="日付 (YYYY-MM-DD)" Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
+                                <DataGridTextColumn Header="プロジェクト"     Binding="{Binding project_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                                <DataGridTextColumn Header="工程"             Binding="{Binding process_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                                <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ"        Binding="{Binding task_group_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                <DataGridTextColumn Header="タスク"           Binding="{Binding task_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                <DataGridTextColumn Header="カテゴリ"         Binding="{Binding category, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                <DataGridTextColumn Header="工数"             Binding="{Binding hours, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="70"/>
+                                <DataGridTextColumn Header="コメント"         Binding="{Binding comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
                 <!-- ===== JSON ===== -->
                 <TabItem Header="🛠 JSON 直接編集">
                     <DockPanel Margin="6">
