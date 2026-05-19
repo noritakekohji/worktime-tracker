@@ -78,23 +78,27 @@ function Set-DataFile {
         [string]$AuthorName,
         [string]$AuthorEmail
     )
-    switch ($Source.Mode) {
-        'gitlab' {
-            $null = Set-GitLabFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
-                                   -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-        }
-        'github' {
-            $null = Set-GitHubFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
-                                   -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-        }
-        default {
-            $p = Join-Path $Source.Root $RelPath
-            $dir = Split-Path -Parent $p
-            if (-not (Test-Path -LiteralPath $dir)) {
-                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    try {
+        switch ($Source.Mode) {
+            'gitlab' {
+                $null = Set-GitLabFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
+                                       -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
             }
-            Set-Content -LiteralPath $p -Value $Content -Encoding UTF8
+            'github' {
+                $null = Set-GitHubFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
+                                       -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+            }
+            default {
+                $p = Join-Path $Source.Root $RelPath
+                $dir = Split-Path -Parent $p
+                if (-not (Test-Path -LiteralPath $dir)) {
+                    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                }
+                Set-Content -LiteralPath $p -Value $Content -Encoding UTF8
+            }
         }
+    } catch {
+        throw ("Set-DataFile failed: mode={0} path={1} :: {2}" -f $Source.Mode, $RelPath, $_.Exception.Message)
     }
 }
 

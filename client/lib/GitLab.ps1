@@ -123,9 +123,11 @@ function Set-GitLabFile {
         $method = 'POST'
     }
     $json = $body | ConvertTo-Json -Depth 5
+    # PS 5.1 で byte[] body + Invoke-RestMethod の組合せが弾かれる事例があるので
+    # 文字列で渡し、ContentType に charset=utf-8 を明示する
     return Invoke-RestMethod -Uri $url -Method $method -Headers $Ctx.Headers `
         -ContentType 'application/json; charset=utf-8' `
-        -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) `
+        -Body $json `
         -UseBasicParsing
 }
 

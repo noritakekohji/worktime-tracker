@@ -119,7 +119,7 @@ function Set-GitHubFile {
     $json = $body | ConvertTo-Json -Depth 5
     return Invoke-RestMethod -Uri $url -Method PUT -Headers $Ctx.Headers `
         -ContentType 'application/json; charset=utf-8' `
-        -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) `
+        -Body $json `
         -UseBasicParsing
 }
 
