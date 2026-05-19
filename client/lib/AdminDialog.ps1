@@ -173,14 +173,16 @@ function Show-AdminDialog {
     $u.OtherMonthCombo.ItemsSource = 1..12
     $u.OtherMonthCombo.SelectedItem = $now.Month
 
-    function _OStatus { param([string]$Text,[string]$Color='#6b7280')
+    # WPF イベントハンドラから内部 function が見えないため script: スコープの scriptblock に
+    $script:DoOStatus = {
+        param([string]$Text,[string]$Color='#6b7280')
         $u.OtherStatusText.Text = $Text
         $u.OtherStatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
-    }
+    }.GetNewClosure()
 
     $script:OtherReload = {
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { _OStatus 'メンバーを選択してください' '#f59e0b'; return }
+        if (-not $mid) { & $script:DoOStatus 'メンバーを選択してください' '#f59e0b'; return }
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         try {
@@ -198,9 +200,9 @@ function Show-AdminDialog {
                     comment         = [string]$e.comment
                 })
             }
-            _OStatus ("{0} の {1}/{2} を読込 ({3} 件)" -f $mid, $y, $m, $loaded.Count) '#059669'
+            & $script:DoOStatus ("{0} の {1}/{2} を読込 ({3} 件)" -f $mid, $y, $m, $loaded.Count) '#059669'
         } catch {
-            _OStatus "読込失敗: $_" '#dc2626'
+            & $script:DoOStatus "読込失敗: $_" '#dc2626'
         }
     }.GetNewClosure()
 
@@ -230,7 +232,7 @@ function Show-AdminDialog {
     # ローカル保存 (共通ロジック)。成功で true、失敗で false
     $script:OtherLocalSave = {
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return $false }
+        if (-not $mid) { & $script:DoOStatus 'メンバー未選択' '#f59e0b'; return $false }
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         try {
@@ -251,10 +253,10 @@ function Show-AdminDialog {
                                 -AllEntries $entriesArr -ViewYear $y -ViewMonth $m `
                                 -AuthorName "$MemberName (管理者編集)" `
                                 -AuthorEmail "$MemberId@worktime-tracker.local"
-            _OStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
+            & $script:DoOStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
             return $true
         } catch {
-            _OStatus "保存失敗: $_" '#dc2626'
+            & $script:DoOStatus "保存失敗: $_" '#dc2626'
             return $false
         }
     }.GetNewClosure()
@@ -263,19 +265,19 @@ function Show-AdminDialog {
 
     $u.OtherPushBtn.Add_Click({
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return }
-        if (-not $Source.RemoteCtx) { _OStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
+        if (-not $mid) { & $script:DoOStatus 'メンバー未選択' '#f59e0b'; return }
+        if (-not $Source.RemoteCtx) { & $script:DoOStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
         # Step 1: ローカル保存
         $ok = & $script:OtherLocalSave
         if (-not $ok) { return }
         # Step 2: リモート push
         try {
-            _OStatus '送信: リモートへ push 中...' '#db2777'
+            & $script:DoOStatus '送信: リモートへ push 中...' '#db2777'
             $r = Sync-Push-MyData -Source $Source -MemberId $mid `
                                   -AuthorName "$MemberName (管理者)" `
                                   -AuthorEmail "$MemberId@worktime-tracker.local"
             $summary = "保存 → 送信 完了`n  push: {0}`n  競合: {1}`n  同一: {2}`n  エラー: {3}" -f $r.Pushed, $r.SkippedNewer, $r.SkippedSame, $r.Errors.Count
-            _OStatus ("送信完了 push={0}" -f $r.Pushed) '#059669'
+            & $script:DoOStatus ("送信完了 push={0}" -f $r.Pushed) '#059669'
             if ($r.Conflicts.Count -gt 0 -or $r.Errors.Count -gt 0) {
                 $detail = $summary + "`n`n"
                 if ($r.Conflicts.Count -gt 0) {
@@ -289,7 +291,7 @@ function Show-AdminDialog {
                 [System.Windows.MessageBox]::Show($summary, '送信完了', 'OK', 'Information') | Out-Null
             }
         } catch {
-            _OStatus "送信失敗: $_" '#dc2626'
+            & $script:DoOStatus "送信失敗: $_" '#dc2626'
         }
     })
 
