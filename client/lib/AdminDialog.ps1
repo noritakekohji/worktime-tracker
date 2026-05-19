@@ -22,7 +22,7 @@ function Show-AdminDialog {
                    'ProjectsGrid','PrjAddBtn','PrjDelBtn',
                    'PatternsList','PatAddBtn','PatDelBtn',
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
-                   'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeDelBtn',
+                   'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
                    'OtherMemberCombo','OtherYearCombo','OtherMonthCombo','OtherReloadBtn',
                    'OtherStatusText','OtherEntriesGrid','OtherAddBtn','OtherDelBtn',
@@ -344,39 +344,41 @@ function Show-AdminDialog {
         $u.PatCodeBox.IsEnabled = $false
         $u.PatNameBox.IsEnabled = $false
         $u.PatNodeAddBtn.IsEnabled = $false
+        $u.PatNodeAddSibBtn.IsEnabled = $false
         $u.PatNodeDelBtn.IsEnabled = $false
         $u.PatHint.Text = ''
     }
 
-    $Script:CurrentPattern = $null
-    $Script:CurrentPatNode = $null
-    $Script:SuppressPatEdit = $false
+    $global:WT_CurrentPattern   = $null
+    $global:WT_CurrentPatNode   = $null
+    $global:WT_SuppressPatEdit  = $false
 
     $u.PatternsList.Add_SelectionChanged({
         $sel = $u.PatternsList.SelectedItem
-        if (-not $sel) { $Script:CurrentPattern = $null; $u.PatternTree.Items.Clear(); return }
-        $Script:CurrentPattern = $sel.data
+        if (-not $sel) { $global:WT_CurrentPattern = $null; $u.PatternTree.Items.Clear(); return }
+        $global:WT_CurrentPattern = $sel.data
         # パターン自体を編集できるように右ペインに反映
-        $Script:SuppressPatEdit = $true
-        $Script:CurrentPatNode = $null
+        $global:WT_SuppressPatEdit = $true
+        $global:WT_CurrentPatNode = $null
         $u.PatDetailTitle.Text = '編集中: パターン'
         $u.PatKindText.Text = 'パターン'
-        $u.PatCodeBox.Text = [string]$Script:CurrentPattern.id
-        $u.PatNameBox.Text = [string]$Script:CurrentPattern.name
+        $u.PatCodeBox.Text = [string]$global:WT_CurrentPattern.id
+        $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
         $u.PatCodeBox.IsEnabled = $true
         $u.PatNameBox.IsEnabled = $true
-        $u.PatNodeAddBtn.IsEnabled = $true   # 工程を追加できる
-        $u.PatNodeDelBtn.IsEnabled = $false  # パターン自体は左で削除
+        $u.PatNodeAddBtn.IsEnabled = $true       # 工程を追加できる
+        $u.PatNodeAddSibBtn.IsEnabled = $false   # パターンに兄弟なし
+        $u.PatNodeDelBtn.IsEnabled = $false      # パターン自体は左で削除
         $u.PatHint.Text = '直下に「工程」を追加できます。'
-        $Script:SuppressPatEdit = $false
-        Render-PatternTree -Pattern $Script:CurrentPattern
+        $global:WT_SuppressPatEdit = $false
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
     })
 
     $u.PatternTree.Add_SelectedItemChanged({
         $sel = $u.PatternTree.SelectedItem
         if (-not $sel -or -not $sel.Tag) { return }
-        $Script:SuppressPatEdit = $true
-        $Script:CurrentPatNode = $sel
+        $global:WT_SuppressPatEdit = $true
+        $global:WT_CurrentPatNode = $sel
         $info = $sel.Tag
         $kindLabel = switch ($info.kind) {
             'process'    { '工程' }
@@ -391,41 +393,43 @@ function Show-AdminDialog {
         $u.PatNameBox.IsEnabled = $true
         $u.PatNodeDelBtn.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = ($info.kind -ne 'task')
+        $u.PatNodeAddSibBtn.IsEnabled = $true
         $u.PatHint.Text = switch ($info.kind) {
-            'process'    { '直下に「タスク分類1」を追加できます。' }
-            'task_group' { '直下に「タスク分類2」を追加できます。' }
-            'task'       { 'これは最下層です。子を追加できません。' }
+            'process'    { '直下に「タスク分類1」を追加 / 兄弟として別の「工程」を追加できます。' }
+            'task_group' { '直下に「タスク分類2」を追加 / 兄弟として別の「タスク分類1」を追加できます。' }
+            'task'       { '最下層。兄弟として別の「タスク分類2」を追加できます。' }
         }
-        $Script:SuppressPatEdit = $false
+        $global:WT_SuppressPatEdit = $false
     })
 
-    function _ApplyPatEdit {
-        if ($Script:SuppressPatEdit) { return }
+    # TextChanged 用ハンドラ (リスト/ツリーは再描画しない — 入力中フォーカスを保つ)
+    $global:WT_ApplyPatEdit = {
+        if ($global:WT_SuppressPatEdit) { return }
         $code = $u.PatCodeBox.Text.Trim()
         $name = $u.PatNameBox.Text.Trim()
-        if ($Script:CurrentPatNode -and $Script:CurrentPatNode.Tag) {
-            $info = $Script:CurrentPatNode.Tag
+        if ($global:WT_CurrentPatNode -and $global:WT_CurrentPatNode.Tag) {
+            $info = $global:WT_CurrentPatNode.Tag
             $info.data.code = $code
             $info.data.name = $name
             $icon = switch ($info.kind) { 'process'{'⚙'}; 'task_group'{'🗂'}; 'task'{'•'} }
-            $Script:CurrentPatNode.Header = ('{0} [{1}] {2}' -f $icon, $code, $name)
-        } elseif ($Script:CurrentPattern) {
-            $Script:CurrentPattern.id   = $code
-            $Script:CurrentPattern.name = $name
+            $global:WT_CurrentPatNode.Header = ('{0} [{1}] {2}' -f $icon, $code, $name)
+        } elseif ($global:WT_CurrentPattern) {
+            $global:WT_CurrentPattern.id   = $code
+            $global:WT_CurrentPattern.name = $name
+            # 注意: 入力中は PatternsList を再描画しない (フォーカスが外れて 1 文字確定になる)
+            # 表示更新はパターン切替時の Render-PatternsList で行う
             $u.PatHeader.Text = ("階層: {0}  ({1})" -f $code, $name)
-            # 左ペインの表示も更新
-            Render-PatternsList
-            # 再選択して詳細パネルを維持
-            foreach ($it in $u.PatternsList.Items) { if ($it.data -eq $Script:CurrentPattern) { $u.PatternsList.SelectedItem = $it; break } }
         }
-    }
-    $u.PatCodeBox.Add_TextChanged({ _ApplyPatEdit })
-    $u.PatNameBox.Add_TextChanged({ _ApplyPatEdit })
+    }.GetNewClosure()
+    $u.PatCodeBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
+    $u.PatNameBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
 
     $u.PatAddBtn.Add_Click({
         $new = @{ id = 'NEW_PAT'; name = '新規パターン'; processes = @() }
         $patterns.Add($new)
         Render-PatternsList
+        # 追加したパターンを選択
+        foreach ($it in $u.PatternsList.Items) { if ($it.data -eq $new) { $u.PatternsList.SelectedItem = $it; break } }
     })
     $u.PatDelBtn.Add_Click({
         $sel = $u.PatternsList.SelectedItem
@@ -433,18 +437,19 @@ function Show-AdminDialog {
         $r = [System.Windows.MessageBox]::Show(("パターン『{0}』を削除しますか?" -f $sel.data.id), '確認', 'OKCancel', 'Question')
         if ($r -ne 'OK') { return }
         [void]$patterns.Remove($sel.data)
-        $Script:CurrentPattern = $null
+        $global:WT_CurrentPattern = $null
         Render-PatternsList
     })
 
+    # ＋ 子を追加
     $u.PatNodeAddBtn.Add_Click({
-        if (-not $Script:CurrentPattern) { return }
-        if (-not $Script:CurrentPatNode) {
+        if (-not $global:WT_CurrentPattern) { return }
+        if (-not $global:WT_CurrentPatNode) {
             # パターン直下に工程追加
-            if (-not $Script:CurrentPattern.processes) { $Script:CurrentPattern.processes = @() }
-            $Script:CurrentPattern.processes = @($Script:CurrentPattern.processes) + @(@{ code='NEW'; name='新規工程'; task_groups=@() })
+            if (-not $global:WT_CurrentPattern.processes) { $global:WT_CurrentPattern.processes = @() }
+            $global:WT_CurrentPattern.processes = @($global:WT_CurrentPattern.processes) + @(@{ code='NEW'; name='新規工程'; task_groups=@() })
         } else {
-            $info = $Script:CurrentPatNode.Tag
+            $info = $global:WT_CurrentPatNode.Tag
             switch ($info.kind) {
                 'process' {
                     if (-not $info.data.task_groups) { $info.data.task_groups = @() }
@@ -456,27 +461,51 @@ function Show-AdminDialog {
                 }
             }
         }
-        Render-PatternTree -Pattern $Script:CurrentPattern
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
+    })
+
+    # ＋ 兄弟を追加 (並行階層)
+    $u.PatNodeAddSibBtn.Add_Click({
+        if (-not $global:WT_CurrentPattern -or -not $global:WT_CurrentPatNode) { return }
+        $info = $global:WT_CurrentPatNode.Tag
+        switch ($info.kind) {
+            'process' {
+                # 兄弟工程 = パターン.processes に新規追加
+                if (-not $global:WT_CurrentPattern.processes) { $global:WT_CurrentPattern.processes = @() }
+                $global:WT_CurrentPattern.processes = @($global:WT_CurrentPattern.processes) + @(@{ code='NEW'; name='新規工程'; task_groups=@() })
+            }
+            'task_group' {
+                # 兄弟タスクグループ = 親プロセスの task_groups に追加
+                if (-not $info.parent.task_groups) { $info.parent.task_groups = @() }
+                $info.parent.task_groups = @($info.parent.task_groups) + @(@{ code='NEW'; name='新規グループ'; tasks=@() })
+            }
+            'task' {
+                # 兄弟タスク = 親グループの tasks に追加
+                if (-not $info.parent.tasks) { $info.parent.tasks = @() }
+                $info.parent.tasks = @($info.parent.tasks) + @(@{ code='NEW'; name='新規タスク' })
+            }
+        }
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
     })
 
     $u.PatNodeDelBtn.Add_Click({
-        if (-not $Script:CurrentPatNode) { return }
-        $info = $Script:CurrentPatNode.Tag
+        if (-not $global:WT_CurrentPatNode) { return }
+        $info = $global:WT_CurrentPatNode.Tag
         $r = [System.Windows.MessageBox]::Show(("[{0}] {1} を削除しますか?" -f $info.data.code, $info.data.name), '確認', 'OKCancel', 'Question')
         if ($r -ne 'OK') { return }
         switch ($info.kind) {
-            'process'    { $Script:CurrentPattern.processes = @($Script:CurrentPattern.processes | Where-Object { $_ -ne $info.data }) }
+            'process'    { $global:WT_CurrentPattern.processes = @($global:WT_CurrentPattern.processes | Where-Object { $_ -ne $info.data }) }
             'task_group' { $info.parent.task_groups = @($info.parent.task_groups | Where-Object { $_ -ne $info.data }) }
             'task'       { $info.parent.tasks      = @($info.parent.tasks      | Where-Object { $_ -ne $info.data }) }
         }
-        Render-PatternTree -Pattern $Script:CurrentPattern
-        $Script:CurrentPatNode = $null
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
+        $global:WT_CurrentPatNode = $null
         _ClearPatNode
         # パターンレベルへ戻す
         $u.PatDetailTitle.Text = '編集中: パターン'
         $u.PatKindText.Text = 'パターン'
-        $u.PatCodeBox.Text = [string]$Script:CurrentPattern.id
-        $u.PatNameBox.Text = [string]$Script:CurrentPattern.name
+        $u.PatCodeBox.Text = [string]$global:WT_CurrentPattern.id
+        $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
         $u.PatCodeBox.IsEnabled = $true
         $u.PatNameBox.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = $true

@@ -165,7 +165,7 @@ function Initialize-AppContext {
             $ForceDialog = $false
         }
         $token = $null
-        if ($cfg.mode -in @('gitlab','github')) { $token = Get-GitLabToken }
+        if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
         $source = New-DataSource -Config $cfg -Token $token
 
         # リモートモードならまずマスタを pull (ローカルキャッシュ更新)
@@ -305,9 +305,8 @@ $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
 
 $ui.ModeText.Text = switch ($Script:Config.mode) {
-    'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
-    'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
-    'local'  { "local | {0}" -f $Script:Config.local_store }
+    'gitlab' { "Gitlab モード | {0} / {1} @ {2} | local: {3}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch, $Script:Config.local_store }
+    default  { "スタンドアローン | {0}" -f $Script:Config.local_store }
 }
 
 # ---- 状態 ----
@@ -697,9 +696,8 @@ $ui.SettingsBtn.Add_Click({
         $Script:Categories   = @($newCtx['Categories'])
         $Script:TaskPatterns = @($newCtx['TaskPatterns'])
         $ui.ModeText.Text = switch ($Script:Config.mode) {
-    'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
-    'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
-    'local'  { "local | {0}" -f $Script:Config.local_store }
+    'gitlab' { "Gitlab モード | {0} / {1} @ {2} | local: {3}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch, $Script:Config.local_store }
+    default  { "スタンドアローン | {0}" -f $Script:Config.local_store }
 }
 
         $Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
@@ -732,41 +730,36 @@ $ui.AdminBtn.Add_Click({
 })
 
 # ---- 保存先を開く ----
-# local: local_store フォルダをエクスプローラで
-# gitlab/github: リモートリポジトリをブラウザで
+# スタンドアローン: ローカルフォルダのみ / Gitlab モード: ローカル or Gitlab リポジトリ
 $ui.OpenFolderBtn.Add_Click({
     try {
-        # ローカルストアは常時オープン可能 (どのモードでも)
-        $r = [System.Windows.MessageBox]::Show(
-            "どちらを開きますか?`n`n[はい] ローカル保管先 (Explorer)`n[いいえ] リモートリポジトリ (ブラウザ)",
-            '保存先を開く', 'YesNoCancel', 'Question')
-        if ($r -eq 'Cancel') { return }
-        if ($r -eq 'Yes') {
+        if ($Script:Config.mode -eq 'gitlab') {
+            $r = [System.Windows.MessageBox]::Show(
+                "どちらを開きますか?`n`n[はい] ローカル保管先 (Explorer)`n[いいえ] Gitlab リポジトリ (ブラウザ)",
+                '保存先を開く', 'YesNoCancel', 'Question')
+            if ($r -eq 'Cancel') { return }
+            if ($r -eq 'Yes') {
+                $path = $Script:Config.local_store
+                if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+                    [System.Windows.MessageBox]::Show("ローカル保存先が見つかりません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
+                    return
+                }
+                Start-Process explorer.exe -ArgumentList "`"$path`""
+            } else {
+                Set-Status '保存先 URL を取得中...' '#6b7280'
+                $proj = Test-GitLabConnection -Ctx $Script:Source.RemoteCtx
+                $url = if ($proj.web_url) { $proj.web_url } else { '{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id }
+                Set-Status "ブラウザで開く: $url" '#10b981'
+                Start-Process $url
+            }
+        } else {
+            # スタンドアローン: ローカルフォルダのみ
             $path = $Script:Config.local_store
             if (-not $path -or -not (Test-Path -LiteralPath $path)) {
                 [System.Windows.MessageBox]::Show("ローカル保存先が見つかりません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
                 return
             }
             Start-Process explorer.exe -ArgumentList "`"$path`""
-        } else {
-            switch ($Script:Config.mode) {
-                'gitlab' {
-                    Set-Status '保存先 URL を取得中...' '#6b7280'
-                    $proj = Test-GitLabConnection -Ctx $Script:Source.RemoteCtx
-                    $url = if ($proj.web_url) { $proj.web_url } else { '{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id }
-                    Set-Status "ブラウザで開く: $url" '#10b981'
-                    Start-Process $url
-                }
-                'github' {
-                    $url = 'https://github.com/{0}' -f $Script:Config.github_repo
-                    if ($Script:Config.branch) { $url = "$url/tree/$($Script:Config.branch)" }
-                    Set-Status "ブラウザで開く: $url" '#10b981'
-                    Start-Process $url
-                }
-                default {
-                    [System.Windows.MessageBox]::Show('現在のモードはローカルのみです。', '情報', 'OK', 'Information') | Out-Null
-                }
-            }
         }
     } catch {
         [System.Windows.MessageBox]::Show("保存先を開けませんでした:`n$_", 'エラー', 'OK', 'Error') | Out-Null
@@ -777,7 +770,7 @@ $ui.OpenFolderBtn.Add_Click({
 # ---- 送信ボタン (= ローカル保存 → リモート push) ----
 $ui.PushBtn.Add_Click({
     if (-not $Script:Source.RemoteCtx) {
-        [System.Windows.MessageBox]::Show('現在のモードは local のみです。設定でリモート (gitlab/github) を有効にしてください。', '送信不可', 'OK', 'Information') | Out-Null
+        [System.Windows.MessageBox]::Show('現在はスタンドアローンモードです。送信するには設定で Gitlab モードに切替えてください。', '送信不可', 'OK', 'Information') | Out-Null
         return
     }
     $m = Get-SelectedMember

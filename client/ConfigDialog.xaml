@@ -130,12 +130,11 @@
 
             <Label Grid.Row="0" Grid.Column="0" Content="保存先モード:"/>
             <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ModeCombo">
-                <ComboBoxItem Tag="local"  Content="local のみ (ローカル保管のみ)" IsSelected="True"/>
-                <ComboBoxItem Tag="gitlab" Content="local + GitLab (ローカル保管+送信ボタンで同期)"/>
-                <ComboBoxItem Tag="github" Content="local + GitHub (ローカル保管+送信ボタンで同期)"/>
+                <ComboBoxItem Tag="local"  Content="スタンドアローン (ローカルのみ)" IsSelected="True"/>
+                <ComboBoxItem Tag="gitlab" Content="Gitlab モード (ローカル保管 + 送信ボタンで Gitlab に同期)"/>
             </ComboBox>
             <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
-                       Text="保存ボタン: 常にローカルへ。送信ボタン: リモートへ push (gitlab/github 時のみ)。"/>
+                       Text="保存ボタン: 常にローカルへ。送信ボタン: Gitlab へ push (Gitlab モード時のみ)。"/>
 
             <!-- ローカル保管先 (全モード共通・必須) -->
             <Label Grid.Row="2" Grid.Column="0" Content="ローカル保管先:"/>

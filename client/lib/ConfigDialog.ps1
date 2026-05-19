@@ -1,16 +1,14 @@
 ﻿# ConfigDialog.ps1 — 初回設定/設定変更ダイアログ
 #
 # モード:
-#   local        : ローカル保管のみ
-#   local+gitlab : ローカル保管 + 送信ボタンで GitLab に同期
-#   local+github : ローカル保管 + 送信ボタンで GitHub に同期
+#   local  : スタンドアローン (ローカル保管のみ)
+#   gitlab : Gitlab モード (ローカル保管 + 送信ボタンで Gitlab に同期)
 #
-# ModeCombo.SelectedItem.Tag が config.mode に対応 ('local'/'gitlab'/'github')
+# ModeCombo.SelectedItem.Tag が config.mode に対応 ('local'/'gitlab')
 
 . (Join-Path $PSScriptRoot 'Config.ps1')
 . (Join-Path $PSScriptRoot 'Credential.ps1')
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
-. (Join-Path $PSScriptRoot 'GitHub.ps1')
 
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -36,10 +34,9 @@ function Show-ConfigDialog {
     $u.BranchBox.Text    = $Config.branch
     $u.MemberIdBox.Text  = if ($Config.member_id) { $Config.member_id } else { $env:USERNAME }
     $u.LocalRootBox.Text = if ($Config.local_store) { $Config.local_store } else { (Get-DefaultLocalStore) }
-    $u.ProjectIdBox.Text = if ($Config.mode -eq 'github') { [string]$Config.github_repo } else { [string]$Config.project_id }
+    $u.ProjectIdBox.Text = [string]$Config.project_id
 
-    # mode に該当する ComboBoxItem を選択 (Tag で比較)
-    $modeWanted = if ($Config.mode) { [string]$Config.mode } else { 'local' }
+    $modeWanted = if ($Config.mode -and ($Config.mode -eq 'gitlab')) { 'gitlab' } else { 'local' }
     foreach ($i in $u.ModeCombo.Items) {
         if ([string]$i.Tag -eq $modeWanted) { $u.ModeCombo.SelectedItem = $i; break }
     }
@@ -57,15 +54,11 @@ function Show-ConfigDialog {
 
     function _SetVis {
         $mode = _GetMode
-        $gl = ($mode -eq 'gitlab')
-        $gh = ($mode -eq 'github')
-        $lo = ($mode -eq 'local')
+        $remote = ($mode -eq 'gitlab')
+        $vRemote = if ($remote) { 'Visible' } else { 'Collapsed' }
 
-        $vRemote = if ($gl -or $gh) { 'Visible' } else { 'Collapsed' }
-        $vUrl    = if ($gl)         { 'Visible' } else { 'Collapsed' }
-
-        $u.UrlLabel.Visibility       = $vUrl
-        $win.FindName('UrlBox').Visibility = $vUrl
+        $u.UrlLabel.Visibility       = $vRemote
+        $win.FindName('UrlBox').Visibility = $vRemote
 
         $u.ProjectIdLabel.Visibility = $vRemote
         $win.FindName('ProjectIdBox').Visibility = $vRemote
@@ -77,14 +70,10 @@ function Show-ConfigDialog {
         $u.TokenHint.Visibility      = $vRemote
         $u.TestBtn.Visibility        = $vRemote
 
-        if ($gh) {
-            $u.ProjectIdLabel.Content = 'Repository (owner/repo):'
-            $u.ProjectIdHint.Text     = '例: noritakekohji/worktime-data'
-            $u.TokenHint.Text         = 'GitHub PAT (Contents: Read/Write)。DPAPI 暗号化保管。'
-        } elseif ($gl) {
+        if ($remote) {
             $u.ProjectIdLabel.Content = 'Project ID / Path:'
             $u.ProjectIdHint.Text     = '数値 ID (例: 12345) または "group/subgroup/project"'
-            $u.TokenHint.Text         = 'GitLab Project Access Token (api, write_repository)。DPAPI 暗号化保管。'
+            $u.TokenHint.Text         = 'Gitlab Project Access Token (api, write_repository)。DPAPI 暗号化保管。'
         }
     }
     _SetVis
@@ -114,11 +103,8 @@ function Show-ConfigDialog {
                 $ctx = New-GitLabContext -BaseUrl $u.UrlBox.Text -ProjectId $u.ProjectIdBox.Text `
                                          -Branch  $u.BranchBox.Text -Token $tok
                 $proj = Test-GitLabConnection -Ctx $ctx
-            } elseif ($mode -eq 'github') {
-                $ctx = New-GitHubContext -Repo $u.ProjectIdBox.Text -Branch $u.BranchBox.Text -Token $tok
-                $proj = Test-GitHubConnection -Ctx $ctx
             } else {
-                throw 'local モードでは接続テスト不要です'
+                throw 'スタンドアローン モードでは接続テスト不要です'
             }
             $u.StatusText.Text = "OK: $($proj.name_with_namespace) (default branch: $($proj.default_branch))"
             $u.StatusText.Foreground = [System.Windows.Media.Brushes]::LightGreen
@@ -135,26 +121,17 @@ function Show-ConfigDialog {
         if (-not $u.LocalRootBox.Text.Trim()) {
             $missing.Add('ローカル保管先')
         }
-        switch ($mode) {
-            'gitlab' {
-                if (-not $u.UrlBox.Text.Trim())       { $missing.Add('GitLab URL') }
-                if (-not $u.ProjectIdBox.Text.Trim()) { $missing.Add('Project ID / Path') }
-                if (-not $u.BranchBox.Text.Trim())    { $missing.Add('ブランチ') }
-                if (-not $u.TokenBox.Password -and -not (Test-GitLabTokenStored)) { $missing.Add('Access Token') }
-            }
-            'github' {
-                if (-not $u.ProjectIdBox.Text.Trim()) { $missing.Add('Repository (owner/repo)') }
-                if (-not $u.BranchBox.Text.Trim())    { $missing.Add('ブランチ') }
-                if (-not $u.TokenBox.Password -and -not (Test-GitLabTokenStored)) { $missing.Add('Access Token') }
-            }
-            'local' { }
+        if ($mode -eq 'gitlab') {
+            if (-not $u.UrlBox.Text.Trim())       { $missing.Add('Gitlab URL') }
+            if (-not $u.ProjectIdBox.Text.Trim()) { $missing.Add('Project ID / Path') }
+            if (-not $u.BranchBox.Text.Trim())    { $missing.Add('ブランチ') }
+            if (-not $u.TokenBox.Password -and -not (Test-GitLabTokenStored)) { $missing.Add('Access Token') }
         }
         if ($missing.Count -gt 0) {
             $u.StatusText.Text = "未入力の項目があります: " + ($missing -join '、')
             $u.StatusText.Foreground = [System.Windows.Media.Brushes]::Salmon
             return
         }
-        # ローカル保管先の作成
         $lr = $u.LocalRootBox.Text.Trim()
         if (-not (Test-Path -LiteralPath $lr)) {
             try { New-Item -ItemType Directory -Path $lr -Force | Out-Null }
@@ -172,8 +149,6 @@ function Show-ConfigDialog {
             if ($mode -eq 'gitlab') {
                 $Config.gitlab_url = $u.UrlBox.Text.Trim()
                 $Config.project_id = $u.ProjectIdBox.Text.Trim()
-            } elseif ($mode -eq 'github') {
-                $Config.github_repo = $u.ProjectIdBox.Text.Trim()
             }
             Save-Config -Config $Config
             if ($u.TokenBox.Password) {

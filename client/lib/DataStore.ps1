@@ -1,17 +1,16 @@
-﻿# DataStore.ps1 — マスタ/実績データの読み書き (ハイブリッド: ローカル常用 + 任意でリモート同期)
+﻿# DataStore.ps1 — マスタ/実績データの読み書き (ハイブリッド: ローカル常用 + 任意で Gitlab 同期)
 #
 # Source 構造:
 #   @{
-#     Mode       = 'local' | 'gitlab' | 'github'
+#     Mode       = 'local' | 'gitlab'
 #     LocalRoot  = <常用ローカルストア。全モード共通>
-#     RemoteCtx  = $null (local) or GitLab/GitHub Context (リモート同期可)
+#     RemoteCtx  = $null (local) or GitLab Context (Gitlab モード)
 #   }
 #
 # 読み書きは常に LocalRoot に対して行う。
-# リモートとの同期は Sync-Pull-Masters / Sync-Push-MyData を明示的に呼ぶ。
+# Gitlab との同期は Sync-Pull-Masters / Sync-Push-MyData を明示的に呼ぶ。
 
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
-. (Join-Path $PSScriptRoot 'GitHub.ps1')
 
 function _AsScalarStr { param($v)
     if ($null -eq $v) { return '' }
@@ -74,18 +73,9 @@ function New-DataSource {
     _EnsureDir (Join-Path $local 'data')
 
     $remote = $null
-    switch ($Config.mode) {
-        'gitlab' {
-            if ($Token) {
-                $remote = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
-                                            -Branch  $Config.branch     -Token     $Token
-            }
-        }
-        'github' {
-            if ($Token) {
-                $remote = New-GitHubContext -Repo $Config.github_repo -Branch $Config.branch -Token $Token
-            }
-        }
+    if ($Config.mode -eq 'gitlab' -and $Token) {
+        $remote = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
+                                    -Branch  $Config.branch     -Token     $Token
     }
 
     return [pscustomobject]@{
@@ -302,13 +292,8 @@ function Load-AllEntries-Remote {
     # リモートから全件取得 (他人のデータも含めて Report 用)
     param([Parameter(Mandatory)]$Source)
     if (-not $Source.RemoteCtx) { throw 'Load-AllEntries-Remote: リモート未設定' }
-    if ($Source.Mode -eq 'gitlab') {
-        $tree   = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
-        $getter = { param($p) Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $p }
-    } else {
-        $tree   = Get-GitHubTree -Ctx $Source.RemoteCtx -Path 'data'
-        $getter = { param($p) Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path $p }
-    }
+    $tree   = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
+    $getter = { param($p) Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $p }
     foreach ($item in $tree) {
         if ($item.type -ne 'blob') { continue }
         if (-not $item.path.EndsWith('.json')) { continue }
@@ -342,11 +327,7 @@ function Sync-Pull-Masters {
     $pulled = 0; $missing = 0; $errors = @()
     foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
         try {
-            $raw = if ($Source.Mode -eq 'gitlab') {
-                Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
-            } else {
-                Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
-            }
+            $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
             if (-not $raw) { $missing++; continue }
             $dst = Join-Path $Source.LocalRoot "master/$name"
             _EnsureDir (Split-Path -Parent $dst)
@@ -372,13 +353,8 @@ function Sync-Push-Masters {
         if (-not (Test-Path -LiteralPath $local)) { continue }
         try {
             $content = [System.IO.File]::ReadAllText($local, [System.Text.UTF8Encoding]::new($false))
-            if ($Source.Mode -eq 'gitlab') {
-                $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
-                                       -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-            } else {
-                $null = Set-GitHubFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
-                                       -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-            }
+            $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
+                                   -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
             $pushed++
         } catch {
             $errors += "master/$name : $($_.Exception.Message)"
@@ -399,10 +375,8 @@ function Sync-Push-Masters {
 
 function _GetRemoteEntryDoc {
     param($Source, [string]$RelPath)
-    try {
-        if ($Source.Mode -eq 'gitlab') { return Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
-        else                            { return Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
-    } catch { return $null }
+    try { return Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
+    catch { return $null }
 }
 
 function Sync-Push-MyData {
@@ -466,13 +440,8 @@ function Sync-Push-MyData {
             }
             if ($shouldPush) {
                 $commitMsg = ('upload: {0}' -f $rel)
-                if ($Source.Mode -eq 'gitlab') {
-                    $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
-                                           -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-                } else {
-                    $null = Set-GitHubFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
-                                           -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-                }
+                $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
+                                       -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
                 $result.Pushed++
             }
         } catch {

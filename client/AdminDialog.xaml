@@ -271,8 +271,9 @@
                                     <TextBlock x:Name="PatHeader" Text="階層 (工程 > タスク分類1 > タスク分類2)" FontWeight="Bold" Foreground="{StaticResource SakuraD}"/>
                                 </DockPanel>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="PatNodeAddSibBtn" Content="＋ 兄弟を追加" IsEnabled="False"/>
                                     <Button x:Name="PatNodeAddBtn" Content="＋ 子を追加" IsEnabled="False"/>
-                                    <Button x:Name="PatNodeDelBtn" Content="🗑 この階層を削除" Style="{StaticResource Danger}" IsEnabled="False"/>
+                                    <Button x:Name="PatNodeDelBtn" Content="🗑 削除" Style="{StaticResource Danger}" IsEnabled="False"/>
                                 </StackPanel>
                                 <TreeView x:Name="PatternTree"
                                           Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"

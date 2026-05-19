@@ -20,7 +20,7 @@ if (-not (Test-ConfigComplete -Config $Script:Config)) {
     [System.Windows.MessageBox]::Show('クライアントの初回設定が完了していません。WorkTimeTracker.ps1 を先に起動して設定してください。', 'ReportViewer', 'OK', 'Warning') | Out-Null
     return
 }
-$Script:Token = if ($Script:Config.mode -in @('gitlab','github')) { Get-GitLabToken } else { $null }
+$Script:Token = if ($Script:Config.mode -eq 'gitlab') { Get-GitLabToken } else { $null }
 $Script:Source = New-DataSource -Config $Script:Config -Token $Script:Token
 
 $Script:Members = @(Get-MasterMembers -Source $Script:Source)
@@ -42,7 +42,6 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
 # データソース表示 (フッタ)
 $u.StatusText.Text = "保存先: {0}  |  local={1}{2}" -f $Script:Config.mode, $Script:Config.local_store, $(switch ($Script:Config.mode) {
     'gitlab' { " | remote=$($Script:Config.gitlab_url)/$($Script:Config.project_id) @ $($Script:Config.branch)" }
-    'github' { " | remote=$($Script:Config.github_repo) @ $($Script:Config.branch)" }
     default  { '' }
 })
 
