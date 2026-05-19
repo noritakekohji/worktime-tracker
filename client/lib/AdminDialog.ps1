@@ -227,13 +227,13 @@ function Show-AdminDialog {
         [void]$script:OtherEntries.Remove($sel)
     })
 
-    $u.OtherSaveBtn.Add_Click({
+    # ローカル保存 (共通ロジック)。成功で true、失敗で false
+    $script:OtherLocalSave = {
         $mid = $u.OtherMemberCombo.SelectedValue
-        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return }
+        if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return $false }
         $y = [int]$u.OtherYearCombo.SelectedItem
         $m = [int]$u.OtherMonthCombo.SelectedItem
         try {
-            # 配列化して date 月別グルーピングは ViewYear/ViewMonth で全置換 → 単純化
             $entriesArr = @($script:OtherEntries | ForEach-Object {
                 if ([string]::IsNullOrWhiteSpace([string]$_.date)) { return }
                 [pscustomobject]@{
@@ -252,22 +252,30 @@ function Show-AdminDialog {
                                 -AuthorName "$MemberName (管理者編集)" `
                                 -AuthorEmail "$MemberId@worktime-tracker.local"
             _OStatus ("ローカル保存完了 ({0} 件)" -f $entriesArr.Count) '#059669'
+            return $true
         } catch {
             _OStatus "保存失敗: $_" '#dc2626'
+            return $false
         }
-    })
+    }.GetNewClosure()
+
+    $u.OtherSaveBtn.Add_Click({ [void](& $script:OtherLocalSave) })
 
     $u.OtherPushBtn.Add_Click({
         $mid = $u.OtherMemberCombo.SelectedValue
         if (-not $mid) { _OStatus 'メンバー未選択' '#f59e0b'; return }
         if (-not $Source.RemoteCtx) { _OStatus 'リモート未設定 (local モード)' '#f59e0b'; return }
+        # Step 1: ローカル保存
+        $ok = & $script:OtherLocalSave
+        if (-not $ok) { return }
+        # Step 2: リモート push
         try {
-            _OStatus '送信中...' '#db2777'
+            _OStatus '送信: リモートへ push 中...' '#db2777'
             $r = Sync-Push-MyData -Source $Source -MemberId $mid `
                                   -AuthorName "$MemberName (管理者)" `
                                   -AuthorEmail "$MemberId@worktime-tracker.local"
-            $summary = "送信: push={0} / 競合={1} / 同一={2} / エラー={3}" -f $r.Pushed, $r.SkippedNewer, $r.SkippedSame, $r.Errors.Count
-            _OStatus $summary '#059669'
+            $summary = "保存 → 送信 完了`n  push: {0}`n  競合: {1}`n  同一: {2}`n  エラー: {3}" -f $r.Pushed, $r.SkippedNewer, $r.SkippedSame, $r.Errors.Count
+            _OStatus ("送信完了 push={0}" -f $r.Pushed) '#059669'
             if ($r.Conflicts.Count -gt 0 -or $r.Errors.Count -gt 0) {
                 $detail = $summary + "`n`n"
                 if ($r.Conflicts.Count -gt 0) {
@@ -593,8 +601,24 @@ function Show-AdminDialog {
             $where = 'Save-MasterCategories'
             Save-MasterCategories -Source $Source -Data $catsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
-            _Status '保存完了。クライアントの再読込で反映されます。' '#059669'
-            [System.Windows.MessageBox]::Show('保存しました。', '完了', 'OK', 'Information') | Out-Null
+            # Step 2: リモート モードならリモートへも push
+            if ($Source.RemoteCtx) {
+                $where = 'Sync-Push-Masters'
+                _Status 'リモートへ送信中...' '#db2777'
+                $pushResult = Sync-Push-Masters -Source $Source -AuthorName $authorName -AuthorEmail $authorEmail
+                $msg = "保存 → 送信 完了`n  ローカル保存: 4 ファイル`n  リモート push: $($pushResult.Pushed)`n  エラー: $($pushResult.Errors.Count)"
+                if ($pushResult.Errors.Count -gt 0) {
+                    $msg += "`n`n[リモート push エラー]`n" + (($pushResult.Errors | Select-Object -First 5) -join "`n")
+                    _Status "ローカル保存完了 / リモート push 失敗" '#dc2626'
+                    [System.Windows.MessageBox]::Show($msg, '送信エラー', 'OK', 'Warning') | Out-Null
+                } else {
+                    _Status 'ローカル保存 + リモート送信 完了。各クライアントの再読込で反映。' '#059669'
+                    [System.Windows.MessageBox]::Show($msg, '完了', 'OK', 'Information') | Out-Null
+                }
+            } else {
+                _Status 'ローカル保存完了 (local モードのためリモート送信なし)' '#059669'
+                [System.Windows.MessageBox]::Show('ローカルに保存しました。`n(リモート設定がないため送信なし)', '完了', 'OK', 'Information') | Out-Null
+            }
         } catch {
             $detail = "場所: $where`n`n$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
             _Status "保存失敗 (詳細はダイアログ)" '#dc2626'

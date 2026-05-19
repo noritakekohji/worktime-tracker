@@ -618,14 +618,13 @@ $ui.DuplicateBtn.Add_Click({
     Set-Status "選択行をフォームに複製しました。値を編集して『追加』してください。" '#89b4fa'
 })
 
-# ---- 保存 ----
-$ui.SaveBtn.Add_Click({
+# ---- 保存ロジック (共通) ----
+# 戻り値: @{ Ok=bool; MemberId=string; MemberName=string; Year=int; Month=int; Count=int; ErrorDetail=string }
+function _DoLocalSave {
     $m = Get-SelectedMember
-    if (-not $m) { return }
+    if (-not $m) { return @{ Ok = $false; ErrorDetail = '作業者が未選択です' } }
     $vy = [int]$ui.YearCombo.SelectedItem
     $vm = [int]$ui.MonthCombo.SelectedItem
-    Set-Status "保存中..." '#f9e2af'
-    $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
 
     function _Sc { param($v) if ($v -is [array]) { if ($v.Count -gt 0) { $v[0] } else { $null } } else { $v } }
     $clean = New-Object 'System.Collections.Generic.List[object]'
@@ -647,7 +646,6 @@ $ui.SaveBtn.Add_Click({
         })
     }
     $entriesArr = $clean.ToArray()
-    # 配列化されたプロパティから安全にスカラ取出し
     $midRaw = $m.id;   if ($midRaw   -is [array]) { $midRaw   = $midRaw[0] }
     $nameRaw = $m.name; if ($nameRaw -is [array]) { $nameRaw = $nameRaw[0] }
     $midStr  = [string]$midRaw
@@ -659,13 +657,27 @@ $ui.SaveBtn.Add_Click({
                             -AllEntries $entriesArr `
                             -ViewYear $vy -ViewMonth $vm `
                             -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local"
-        Set-Status "保存完了 ($midStr $vy/$vm)" '#a6e3a1'
-        [System.Windows.MessageBox]::Show("保存しました。", '保存完了', 'OK', 'Information') | Out-Null
+        return @{ Ok = $true; MemberId = $midStr; MemberName = $nameStr; Year = $vy; Month = $vm; Count = $entriesArr.Count }
     } catch {
         $detail = "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)`n`n$($_.Exception.InnerException | Out-String)"
         Write-FatalLog "SAVE FAIL: $detail"
-        Set-Status "保存失敗 (詳細はダイアログ)" '#f38ba8'
-        Show-ErrorDialog -Title '保存失敗' -Message '保存に失敗しました。詳細:' -Detail $detail
+        return @{ Ok = $false; ErrorDetail = $detail }
+    }
+}
+
+# ---- 保存ボタン (ローカルのみ) ----
+$ui.SaveBtn.Add_Click({
+    Set-Status "保存中..." '#f9e2af'
+    $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+    try {
+        $r = _DoLocalSave
+        if ($r.Ok) {
+            Set-Status "保存完了 ($($r.MemberId) $($r.Year)/$($r.Month))" '#a6e3a1'
+            [System.Windows.MessageBox]::Show("ローカルに保存しました。`nリモートにも反映するには『送信』を押してください。", '保存完了', 'OK', 'Information') | Out-Null
+        } else {
+            Set-Status "保存失敗 (詳細はダイアログ)" '#f38ba8'
+            Show-ErrorDialog -Title '保存失敗' -Message '保存に失敗しました。' -Detail $r.ErrorDetail
+        }
     } finally {
         $Script:Window.Cursor = $null
     }
@@ -762,6 +774,7 @@ $ui.OpenFolderBtn.Add_Click({
 })
 
 # ---- 📤 送信 (自分の全データを local → リモートへ) ----
+# ---- 送信ボタン (= ローカル保存 → リモート push) ----
 $ui.PushBtn.Add_Click({
     if (-not $Script:Source.RemoteCtx) {
         [System.Windows.MessageBox]::Show('現在のモードは local のみです。設定でリモート (gitlab/github) を有効にしてください。', '送信不可', 'OK', 'Information') | Out-Null
@@ -770,14 +783,25 @@ $ui.PushBtn.Add_Click({
     $m = Get-SelectedMember
     if (-not $m) { return }
 
-    Set-Status '送信中...' '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
-        $midStr  = _AsScalarStr $m.id
-        $nameStr = _AsScalarStr $m.name
+        # Step 1: ローカル保存
+        Set-Status '送信: ローカル保存中...' '#f9e2af'
+        $saveResult = _DoLocalSave
+        if (-not $saveResult.Ok) {
+            Set-Status '送信中断 (ローカル保存失敗)' '#f38ba8'
+            Show-ErrorDialog -Title '送信失敗 (保存ステップ)' -Message 'ローカル保存に失敗したため送信を中断しました。' -Detail $saveResult.ErrorDetail
+            return
+        }
+
+        # Step 2: リモート push
+        Set-Status '送信: リモートへ push 中...' '#f9e2af'
+        $midStr  = $saveResult.MemberId
+        $nameStr = $saveResult.MemberName
         $result = Sync-Push-MyData -Source $Script:Source -MemberId $midStr `
                                    -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local"
-        $summary = "送信完了`n  push: {0}`n  リモートが新しいためスキップ: {1}`n  変更なし: {2}`n  エラー: {3}" -f `
+        $summary = "保存 → 送信 完了`n  保存: {0} 件 ({1}/{2})`n  push: {3}`n  リモートが新しいためスキップ: {4}`n  変更なし: {5}`n  エラー: {6}" -f `
+            $saveResult.Count, $saveResult.Year, $saveResult.Month, `
             $result.Pushed, $result.SkippedNewer, $result.SkippedSame, $result.Errors.Count
         if ($result.Conflicts.Count -gt 0) {
             $confLines = $result.Conflicts | ForEach-Object { "  - {0}  (local: {1} / remote: {2})" -f $_.path, $_.local_updated, $_.remote_updated }
@@ -787,7 +811,7 @@ $ui.PushBtn.Add_Click({
             $summary += "`n`n[エラー]`n" + (($result.Errors | Select-Object -First 5) -join "`n")
         }
         Write-FatalLog "PUSH: $summary"
-        Set-Status ("送信: push={0} / 競合={1} / エラー={2}" -f $result.Pushed, $result.SkippedNewer, $result.Errors.Count) '#10b981'
+        Set-Status ("送信完了 (保存={0} push={1})" -f $saveResult.Count, $result.Pushed) '#10b981'
         if ($result.Errors.Count -gt 0 -or $result.Conflicts.Count -gt 0) {
             Show-ErrorDialog -Title '送信結果' -Message '送信を実行しました (詳細)' -Detail $summary
         } else {
