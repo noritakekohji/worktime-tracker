@@ -54,6 +54,8 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
+. (Join-Path $libDir 'UserPrefs.ps1')
+. (Join-Path $libDir 'UserPrefsDialog.ps1')
 
 Write-FatalLog "==== START $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===="
 Write-FatalLog "PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScriptRoot"
@@ -298,8 +300,8 @@ $names = @(
     'EntryDate','TodayBtn','YesterdayBtn',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
-    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText',
-    'AdminBtn','SettingsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
+    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
+    'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
@@ -318,6 +320,19 @@ function Update-HoursTotal {
     $sum = 0.0
     foreach ($e in $Script:Entries) { $sum += [double]$e.hours }
     $ui.HoursTotalText.Text = '{0:N1} h' -f $sum
+    Update-HoursDay
+}
+
+function Update-HoursDay {
+    if (-not $ui.HoursDayText) { return }
+    $d = $ui.EntryDate.SelectedDate
+    if (-not $d) { $ui.HoursDayText.Text = '0.0 h'; return }
+    $dStr = $d.ToString('yyyy-MM-dd')
+    $sum = 0.0
+    foreach ($e in $Script:Entries) {
+        if ([string]$e.date -eq $dStr) { $sum += [double]$e.hours }
+    }
+    $ui.HoursDayText.Text = '{0:N1} h' -f $sum
 }
 
 function Set-Status {
@@ -368,22 +383,44 @@ function Reset-Cascade {
     }
 }
 
+function Load-UserPrefsFav {
+    # 自分のお気に入りプロジェクト集合を取得
+    if (-not $Script:CurrentMember) { return New-Object System.Collections.Generic.HashSet[string] }
+    $prefs = Get-UserPrefs -MemberId ([string]$Script:CurrentMember.id)
+    $set = New-Object System.Collections.Generic.HashSet[string]
+    foreach ($p in @($prefs.favorite_projects)) {
+        if ($p) { [void]$set.Add([string]$p) }
+    }
+    return $set
+}
+
 function Build-ProjectComboItems {
-    @($Script:Projects | Where-Object { $_.active } | ForEach-Object {
-        $disp = if ($_.unit_name) { "[{0}] {1} ({2})" -f $_.unit_code, $_.project_name, $_.unit_name }
-                else                { "[{0}] {1}"         -f $_.unit_code, $_.project_name }
-        [pscustomobject]@{
-            unit_code      = [string]$_.unit_code
-            project_name   = [string]$_.project_name
-            unit_name      = [string]$_.unit_name
-            target_system  = [string]$_.target_system
-            work_type      = [string]$_.work_type
-            task_pattern_id= [string]$_.task_pattern_id
-            period_from    = [string]$_.period_from
-            period_to      = [string]$_.period_to
-            display        = $disp
+    # お気に入りを先頭に並べ替え、表示に ⭐ プレフィックス
+    $favs = Load-UserPrefsFav
+    $allActive = @($Script:Projects | Where-Object { $_.active })
+    $items = foreach ($p in $allActive) {
+        $isFav = $favs.Contains([string]$p.unit_code)
+        $star  = if ($isFav) { '⭐ ' } else { '' }
+        $disp = if ($p.unit_name) {
+            "{0}[{1}] {2} ({3})" -f $star, $p.unit_code, $p.project_name, $p.unit_name
+        } else {
+            "{0}[{1}] {2}" -f $star, $p.unit_code, $p.project_name
         }
-    })
+        [pscustomobject]@{
+            unit_code       = [string]$p.unit_code
+            project_name    = [string]$p.project_name
+            unit_name       = [string]$p.unit_name
+            target_system   = [string]$p.target_system
+            work_type       = [string]$p.work_type
+            task_pattern_id = [string]$p.task_pattern_id
+            period_from     = [string]$p.period_from
+            period_to       = [string]$p.period_to
+            display         = $disp
+            is_favorite     = $isFav
+        }
+    }
+    # お気に入り優先でソート (お気に入り内は unit_code 順、その他は unit_code 順)
+    return @($items | Sort-Object @{Expression='is_favorite'; Descending=$true}, @{Expression='unit_code'; Descending=$false})
 }
 $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
 
@@ -452,6 +489,7 @@ function Load-ViewMonth {
                 category        = _Str $e.category
                 hours           = _Num $e.hours
                 comment         = _Str $e.comment
+                dirty           = $false   # 読み込み直後はクリーン
             })
         }
         Update-HoursTotal
@@ -469,6 +507,7 @@ $ui.MonthCombo.Add_SelectionChanged({ Load-ViewMonth })
 $ui.EntryDate.SelectedDate = [datetime]::Today
 $ui.TodayBtn.Add_Click({ $ui.EntryDate.SelectedDate = [datetime]::Today })
 $ui.YesterdayBtn.Add_Click({ $ui.EntryDate.SelectedDate = ([datetime]::Today).AddDays(-1) })
+$ui.EntryDate.Add_SelectedDateChanged({ Update-HoursDay })
 
 # クイック工数ボタン
 foreach ($n in 'H025','H05','H1','H2','H4','H8') {
@@ -516,6 +555,7 @@ function Get-EntryFromForm {
         task_code       = if ($task) { [string]$task.code } else { '' }
         category        = if ($cat)  { [string]$cat.code }  else { '' }
         hours           = $hours
+        dirty           = $true   # 新規/編集行はダーティ
         comment         = [string]$ui.CommentBox.Text
     }
 }
@@ -671,8 +711,10 @@ $ui.SaveBtn.Add_Click({
     try {
         $r = _DoLocalSave
         if ($r.Ok) {
+            # 保存成功 → 再読込 (全行クリーンに)
+            Load-ViewMonth
             Set-Status "保存完了 ($($r.MemberId) $($r.Year)/$($r.Month))" '#a6e3a1'
-            [System.Windows.MessageBox]::Show("ローカルに保存しました。`nリモートにも反映するには『送信』を押してください。", '保存完了', 'OK', 'Information') | Out-Null
+            [System.Windows.MessageBox]::Show("ローカルに保存しました。`nGitlab にも反映するには『送信』を押してください。", '保存完了', 'OK', 'Information') | Out-Null
         } else {
             Set-Status "保存失敗 (詳細はダイアログ)" '#f38ba8'
             Show-ErrorDialog -Title '保存失敗' -Message '保存に失敗しました。' -Detail $r.ErrorDetail
@@ -684,6 +726,23 @@ $ui.SaveBtn.Add_Click({
 
 # ---- 再読込 / 設定 / 管理者 ----
 $ui.ReloadBtn.Add_Click({ Reload-Masters; Load-ViewMonth })
+
+# ---- 個人設定 (お気に入り) ----
+$ui.UserPrefsBtn.Add_Click({
+    if (-not $Script:CurrentMember) { return }
+    try {
+        $changed = Show-UserPrefsDialog -MemberId ([string]$Script:CurrentMember.id) `
+                                        -MemberName ([string]$Script:CurrentMember.name) `
+                                        -Projects $Script:Projects
+        if ($changed) {
+            # Project Combo を再構築 (お気に入りが上に来る)
+            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
+            Set-Status '個人設定を保存しました。プロジェクト一覧を更新。' '#10b981'
+        }
+    } catch {
+        Show-ErrorDialog -Title '個人設定エラー' -Message $_.Exception.Message -Detail $_.ScriptStackTrace
+    }
+})
 
 $ui.SettingsBtn.Add_Click({
     $newCtx = Initialize-AppContext -ForceDialog
@@ -786,9 +845,11 @@ $ui.PushBtn.Add_Click({
             Show-ErrorDialog -Title '送信失敗 (保存ステップ)' -Message 'ローカル保存に失敗したため送信を中断しました。' -Detail $saveResult.ErrorDetail
             return
         }
+        # 保存成功 → ダーティ表示を消すため reload
+        Load-ViewMonth
 
         # Step 2: リモート push
-        Set-Status '送信: リモートへ push 中...' '#f9e2af'
+        Set-Status '送信: Gitlab へ push 中...' '#f9e2af'
         $midStr  = $saveResult.MemberId
         $nameStr = $saveResult.MemberName
         $result = Sync-Push-MyData -Source $Script:Source -MemberId $midStr `
