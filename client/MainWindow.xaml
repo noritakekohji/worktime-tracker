@@ -234,9 +234,6 @@
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="ListTitle" Text="📋 当月エントリ一覧" Style="{StaticResource SectionTitle}"/>
-                            <Border Background="#fef9c3" BorderBrush="#facc15" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="12,0,0,8" VerticalAlignment="Center">
-                                <TextBlock Text="未保存" FontSize="10" Foreground="#854d0e"/>
-                            </Border>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="DuplicateBtn" Content="⎘ 行を複製"/>
