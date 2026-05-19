@@ -385,13 +385,17 @@ function Reset-Cascade {
 
 function Load-UserPrefsFav {
     # 自分のお気に入りプロジェクト集合を取得
-    if (-not $Script:CurrentMember) { return New-Object System.Collections.Generic.HashSet[string] }
-    $prefs = Get-UserPrefs -MemberId ([string]$Script:CurrentMember.id)
+    # PS 関数出力ストリームが IEnumerable を auto-unroll するため Write-Output -NoEnumerate で塊で返す
     $set = New-Object System.Collections.Generic.HashSet[string]
+    if (-not $Script:CurrentMember) {
+        Write-Output -NoEnumerate $set
+        return
+    }
+    $prefs = Get-UserPrefs -MemberId ([string]$Script:CurrentMember.id)
     foreach ($p in @($prefs.favorite_projects)) {
         if ($p) { [void]$set.Add([string]$p) }
     }
-    return $set
+    Write-Output -NoEnumerate $set
 }
 
 function Build-ProjectComboItems {
