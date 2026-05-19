@@ -302,8 +302,8 @@
                                 <Button x:Name="YesterdayBtn" Content="昨日" MinWidth="60" Margin="2,2,0,2"/>
                             </StackPanel>
 
-                            <Label Content="プロジェクト" Margin="0,10,0,0"/>
-                            <ComboBox x:Name="ProjectCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+                            <Label Content="プロジェクト (ユニット)" Margin="0,10,0,0"/>
+                            <ComboBox x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"/>
 
                             <Label Content="工程"/>
                             <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>

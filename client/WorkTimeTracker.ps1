@@ -240,7 +240,7 @@ function Reload-Masters {
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         # UI 反映: プロジェクト / カテゴリ / 現在の作業者
         if ($ui -and $ui.ProjectCombo) {
-            $ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
+            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
         }
         if ($ui -and $ui.CategoryCombo) {
             $ui.CategoryCombo.ItemsSource = @($Script:Categories)
@@ -347,7 +347,24 @@ function Reset-Cascade {
     }
 }
 
-$ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
+function Build-ProjectComboItems {
+    @($Script:Projects | Where-Object { $_.active } | ForEach-Object {
+        $disp = if ($_.unit_name) { "[{0}] {1} ({2})" -f $_.unit_code, $_.project_name, $_.unit_name }
+                else                { "[{0}] {1}"         -f $_.unit_code, $_.project_name }
+        [pscustomobject]@{
+            unit_code      = [string]$_.unit_code
+            project_name   = [string]$_.project_name
+            unit_name      = [string]$_.unit_name
+            target_system  = [string]$_.target_system
+            work_type      = [string]$_.work_type
+            task_pattern_id= [string]$_.task_pattern_id
+            period_from    = [string]$_.period_from
+            period_to      = [string]$_.period_to
+            display        = $disp
+        }
+    })
+}
+$ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
 
 function Get-TaskPatternFor {
     param($Project)
@@ -355,6 +372,12 @@ function Get-TaskPatternFor {
     $ptnId = [string]$Project.task_pattern_id
     if (-not $ptnId) { return $null }
     return ($Script:TaskPatterns | Where-Object { $_.id -eq $ptnId } | Select-Object -First 1)
+}
+
+function Find-ProjectByCode {
+    param([string]$Code)
+    if (-not $Code) { return $null }
+    return ($Script:Projects | Where-Object { $_.unit_code -eq $Code } | Select-Object -First 1)
 }
 
 $ui.ProjectCombo.Add_SelectionChanged({
@@ -449,15 +472,30 @@ function Get-EntryFromForm {
     if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
         throw '工数は正の数値で入力してください'
     }
+
+    # 対象期間チェック (period_from / period_to を持つプロジェクトのみ)
+    if ($proj.period_from) {
+        $pf = [datetime]::MinValue
+        if ([datetime]::TryParse([string]$proj.period_from, [ref]$pf) -and $d -lt $pf) {
+            throw ("日付 {0} は対象期間 (FROM: {1}) より前です" -f $d.ToString('yyyy-MM-dd'), $proj.period_from)
+        }
+    }
+    if ($proj.period_to) {
+        $pt = [datetime]::MinValue
+        if ([datetime]::TryParse([string]$proj.period_to, [ref]$pt) -and $d -gt $pt) {
+            throw ("日付 {0} は対象期間 (TO: {1}) より後です" -f $d.ToString('yyyy-MM-dd'), $proj.period_to)
+        }
+    }
+
     return [pscustomobject]@{
         date            = $d.ToString('yyyy-MM-dd')
-        project_code    = $proj.code
-        process_code    = $proc.code
-        task_group_code = if ($tg)   { $tg.code }   else { '' }
-        task_code       = if ($task) { $task.code } else { '' }
-        category        = if ($cat)  { $cat.code }  else { '' }
+        project_code    = [string]$proj.unit_code
+        process_code    = [string]$proc.code
+        task_group_code = if ($tg)   { [string]$tg.code }   else { '' }
+        task_code       = if ($task) { [string]$task.code } else { '' }
+        category        = if ($cat)  { [string]$cat.code }  else { '' }
         hours           = $hours
-        comment         = $ui.CommentBox.Text
+        comment         = [string]$ui.CommentBox.Text
     }
 }
 
@@ -638,7 +676,7 @@ $ui.SettingsBtn.Add_Click({
         if ($Script:CurrentMember.role -eq 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
 
         $ui.CategoryCombo.ItemsSource = $Script:Categories
-        $ui.ProjectCombo.ItemsSource  = @($Script:Projects | Where-Object { $_.active })
+        $ui.ProjectCombo.ItemsSource  = Build-ProjectComboItems
         Load-ViewMonth
     }
 })

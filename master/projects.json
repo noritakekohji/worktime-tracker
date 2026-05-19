@@ -1,18 +1,35 @@
 [
   {
-    "id": "ABC001",
-    "name": "ABC案件",
+    "unit_code": "ABC001",
+    "project_name": "ABC案件",
+    "unit_name": "ABC開発ユニット",
     "target_system": "ABCシステム",
-    "work_type": "開発",
+    "work_type": "案件対応",
     "task_pattern_id": "PAT_DEV",
+    "period_from": "2026-04-01",
+    "period_to":   "2027-03-31",
     "active": true
   },
   {
-    "id": "XYZ002",
-    "name": "社内ツール改修",
+    "unit_code": "XYZ002",
+    "project_name": "社内ツール改修",
+    "unit_name": "社内ポータル運用ユニット",
     "target_system": "社内ポータル",
     "work_type": "維持運用",
     "task_pattern_id": "PAT_MAINT",
+    "period_from": "2026-04-01",
+    "period_to":   "2027-03-31",
+    "active": true
+  },
+  {
+    "unit_code": "MISC",
+    "project_name": "その他社内活動",
+    "unit_name": "全社共通",
+    "target_system": "-",
+    "work_type": "その他",
+    "task_pattern_id": "PAT_MAINT",
+    "period_from": "2026-04-01",
+    "period_to":   "2027-03-31",
     "active": true
   }
 ]

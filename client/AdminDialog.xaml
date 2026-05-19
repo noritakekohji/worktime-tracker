@@ -229,11 +229,14 @@
                                 </Style>
                             </DataGrid.Resources>
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="プロジェクトID" Binding="{Binding id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
-                                <DataGridTextColumn Header="プロジェクト名称" Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
-                                <DataGridTextColumn Header="対象システム" Binding="{Binding target_system, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
-                                <DataGridTextColumn Header="業務区分 (開発/維持運用)" Binding="{Binding work_type, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
-                                <DataGridTextColumn Header="タスクパターンID" Binding="{Binding task_pattern_id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="170"/>
+                                <DataGridTextColumn Header="ユニットコード" Binding="{Binding unit_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                <DataGridTextColumn Header="案件名称" Binding="{Binding project_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                                <DataGridTextColumn Header="ユニット名称" Binding="{Binding unit_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridTextColumn Header="対象システム" Binding="{Binding target_system, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridTextColumn Header="業務種別 (案件対応/維持運用/その他)" Binding="{Binding work_type, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                <DataGridTextColumn Header="期間 FROM (YYYY-MM-DD)" Binding="{Binding period_from, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridTextColumn Header="期間 TO (YYYY-MM-DD)" Binding="{Binding period_to, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridTextColumn Header="タスクパターンID" Binding="{Binding task_pattern_id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
                                 <DataGridCheckBoxColumn Header="有効" Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                             </DataGrid.Columns>
                         </DataGrid>

@@ -74,11 +74,17 @@ function Show-AdminDialog {
             }
             $projects.Clear()
             foreach ($p in (Get-MasterProjects -Source $Source)) {
+                # 旧スキーマ (id/name) からのフォールバック
+                $uc  = if ($p.unit_code)    { [string]$p.unit_code }    else { [string]$p.id }
+                $pn  = if ($p.project_name) { [string]$p.project_name } else { [string]$p.name }
                 $projects.Add([pscustomobject]@{
-                    id              = [string]$p.id
-                    name            = [string]$p.name
+                    unit_code       = $uc
+                    project_name    = $pn
+                    unit_name       = [string]$p.unit_name
                     target_system   = [string]$p.target_system
-                    work_type       = if ($p.work_type) { [string]$p.work_type } else { '開発' }
+                    work_type       = if ($p.work_type) { [string]$p.work_type } else { '案件対応' }
+                    period_from     = [string]$p.period_from
+                    period_to       = [string]$p.period_to
                     task_pattern_id = [string]$p.task_pattern_id
                     active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
                 })
@@ -115,7 +121,15 @@ function Show-AdminDialog {
     # ---- プロジェクト ----
     $u.PrjAddBtn.Add_Click({
         $projects.Add([pscustomobject]@{
-            id=''; name=''; target_system=''; work_type='開発'; task_pattern_id=''; active=$true
+            unit_code      = ''
+            project_name   = ''
+            unit_name      = ''
+            target_system  = ''
+            work_type      = '案件対応'
+            period_from    = ''
+            period_to      = ''
+            task_pattern_id= ''
+            active         = $true
         })
     })
     $u.PrjDelBtn.Add_Click({
@@ -358,11 +372,18 @@ function Show-AdminDialog {
                 'projects' {
                     $projects.Clear()
                     foreach ($p in @($parsed)) {
+                        $uc = if ($p.unit_code) { [string]$p.unit_code } else { [string]$p.id }
+                        $pn = if ($p.project_name) { [string]$p.project_name } else { [string]$p.name }
                         $projects.Add([pscustomobject]@{
-                            id=[string]$p.id; name=[string]$p.name; target_system=[string]$p.target_system
-                            work_type=if($p.work_type){[string]$p.work_type}else{'開発'}
-                            task_pattern_id=[string]$p.task_pattern_id
-                            active=if($null -ne $p.active){[bool]$p.active}else{$true}
+                            unit_code       = $uc
+                            project_name    = $pn
+                            unit_name       = [string]$p.unit_name
+                            target_system   = [string]$p.target_system
+                            work_type       = if ($p.work_type) { [string]$p.work_type } else { '案件対応' }
+                            period_from     = [string]$p.period_from
+                            period_to       = [string]$p.period_to
+                            task_pattern_id = [string]$p.task_pattern_id
+                            active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
                         })
                     }
                 }
@@ -397,10 +418,13 @@ function Show-AdminDialog {
 
             $projectsOut = @($projects | ForEach-Object {
                 [ordered]@{
-                    id              = $_.id
-                    name            = $_.name
+                    unit_code       = $_.unit_code
+                    project_name    = $_.project_name
+                    unit_name       = $_.unit_name
                     target_system   = $_.target_system
                     work_type       = $_.work_type
+                    period_from     = $_.period_from
+                    period_to       = $_.period_to
                     task_pattern_id = $_.task_pattern_id
                     active          = [bool]$_.active
                 }
