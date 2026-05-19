@@ -1,22 +1,17 @@
-﻿# DataStore.ps1 — マスタ/実績データの読み書き
-# mode = 'gitlab' なら GitLab REST API 経由 (git CLI 不要)
-# mode = 'local'  ならローカルファイルシステム (開発・テスト用)
+﻿# DataStore.ps1 — マスタ/実績データの読み書き (ハイブリッド: ローカル常用 + 任意でリモート同期)
+#
+# Source 構造:
+#   @{
+#     Mode       = 'local' | 'gitlab' | 'github'
+#     LocalRoot  = <常用ローカルストア。全モード共通>
+#     RemoteCtx  = $null (local) or GitLab/GitHub Context (リモート同期可)
+#   }
+#
+# 読み書きは常に LocalRoot に対して行う。
+# リモートとの同期は Sync-Pull-Masters / Sync-Push-MyData を明示的に呼ぶ。
 
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
 . (Join-Path $PSScriptRoot 'GitHub.ps1')
-
-function Get-RepoRoot {
-    param([string]$StartPath = $PSScriptRoot)
-    $d = Get-Item -LiteralPath $StartPath
-    while ($d) {
-        if ((Test-Path (Join-Path $d.FullName 'master')) -and
-            (Test-Path (Join-Path $d.FullName 'data'))) {
-            return $d.FullName
-        }
-        $d = $d.Parent
-    }
-    return $null
-}
 
 function _AsScalarStr { param($v)
     if ($null -eq $v) { return '' }
@@ -35,43 +30,78 @@ function Get-MonthRelPath {
 function _ReadJsonString {
     param([string]$Json)
     if ([string]::IsNullOrWhiteSpace($Json)) { return $null }
-    return $Json | ConvertFrom-Json
+    return ConvertFrom-Json -InputObject $Json
 }
+
+# JSON 配列ファイルを読み、配列を Object[] として一意に返すヘルパ。
+# PowerShell 関数の出力ストリームは配列を auto-unroll するため、
+# 配列をひと塊として渡すには Write-Output -NoEnumerate を使う。
+# 呼び出し側は @() で囲んで N 要素配列に戻す。
+function _ReadJsonArray {
+    # JSON 配列を読み、関数の出力ストリームに 1 要素ずつ emit する。
+    # 呼び出し側は @(funcCall) で N 要素配列に集約する。
+    param($Source, [string]$RelPath)
+    $raw = Get-DataFile -Source $Source -RelPath $RelPath
+    if ([string]::IsNullOrWhiteSpace($raw)) { return }
+    $parsed = ConvertFrom-Json -InputObject ([string]$raw)
+    if ($null -eq $parsed) { return }
+    # 配列 → 各要素を Write-Output (auto-unroll)
+    # 単一オブジェクト → そのまま 1 要素
+    if ($parsed -is [System.Collections.IEnumerable] -and -not ($parsed -is [string])) {
+        foreach ($e in $parsed) { Write-Output $e }
+    } else {
+        Write-Output $parsed
+    }
+}
+
+function _EnsureDir {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    }
+}
+
+# ---- DataSource 生成 ----
 
 function New-DataSource {
     param(
         [Parameter(Mandatory)]$Config,
         [string]$Token
     )
+    $local = if ($Config.local_store) { [string]$Config.local_store } else { (Join-Path $env:LOCALAPPDATA 'worktime-tracker\store') }
+    _EnsureDir $local
+    _EnsureDir (Join-Path $local 'master')
+    _EnsureDir (Join-Path $local 'data')
+
+    $remote = $null
     switch ($Config.mode) {
         'gitlab' {
-            $ctx = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
-                                     -Branch  $Config.branch     -Token     $Token
-            return [pscustomobject]@{ Mode = 'gitlab'; Ctx = $ctx; Root = $null }
+            if ($Token) {
+                $remote = New-GitLabContext -BaseUrl $Config.gitlab_url -ProjectId $Config.project_id `
+                                            -Branch  $Config.branch     -Token     $Token
+            }
         }
         'github' {
-            $ctx = New-GitHubContext -Repo $Config.github_repo -Branch $Config.branch -Token $Token
-            return [pscustomobject]@{ Mode = 'github'; Ctx = $ctx; Root = $null }
+            if ($Token) {
+                $remote = New-GitHubContext -Repo $Config.github_repo -Branch $Config.branch -Token $Token
+            }
         }
-        default {
-            $root = $Config.local_root
-            if (-not $root) { $root = Get-RepoRoot -StartPath $PSScriptRoot }
-            return [pscustomobject]@{ Mode = 'local'; Ctx = $null; Root = $root }
-        }
+    }
+
+    return [pscustomobject]@{
+        Mode       = [string]$Config.mode
+        LocalRoot  = $local
+        RemoteCtx  = $remote
     }
 }
 
+# ---- ローカル I/O (Source.Mode に関係なく LocalRoot を対象) ----
+
 function Get-DataFile {
     param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)][string]$RelPath)
-    switch ($Source.Mode) {
-        'gitlab' { return Get-GitLabFileRaw -Ctx $Source.Ctx -Path $RelPath }
-        'github' { return Get-GitHubFileRaw -Ctx $Source.Ctx -Path $RelPath }
-        default  {
-            $p = Join-Path $Source.Root $RelPath
-            if (-not (Test-Path -LiteralPath $p)) { return $null }
-            return Get-Content -LiteralPath $p -Raw -Encoding UTF8
-        }
-    }
+    $p = Join-Path $Source.LocalRoot $RelPath
+    if (-not (Test-Path -LiteralPath $p)) { return $null }
+    return [System.IO.File]::ReadAllText($p, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Set-DataFile {
@@ -79,67 +109,37 @@ function Set-DataFile {
         [Parameter(Mandatory)]$Source,
         [Parameter(Mandatory)][string]$RelPath,
         [Parameter(Mandatory)][string]$Content,
-        [Parameter(Mandatory)][string]$CommitMessage,
+        [string]$CommitMessage,
         [string]$AuthorName,
         [string]$AuthorEmail
     )
-    try {
-        switch ($Source.Mode) {
-            'gitlab' {
-                $null = Set-GitLabFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
-                                       -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-            }
-            'github' {
-                $null = Set-GitHubFile -Ctx $Source.Ctx -Path $RelPath -Content $Content `
-                                       -CommitMessage $CommitMessage -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-            }
-            default {
-                $p = Join-Path $Source.Root $RelPath
-                $dir = Split-Path -Parent $p
-                if (-not (Test-Path -LiteralPath $dir)) {
-                    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-                }
-                Set-Content -LiteralPath $p -Value $Content -Encoding UTF8
-            }
-        }
-    } catch {
-        throw ("Set-DataFile failed: mode={0} path={1} :: {2}" -f $Source.Mode, $RelPath, $_.Exception.Message)
-    }
+    $p = Join-Path $Source.LocalRoot $RelPath
+    _EnsureDir (Split-Path -Parent $p)
+    [System.IO.File]::WriteAllText($p, $Content, [System.Text.UTF8Encoding]::new($false))
 }
 
 # ---- マスタ ----
 
-function Get-MasterMembers      { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/members.json') }
-function Get-MasterProjects     { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/projects.json') }
-function Get-MasterCategories   { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/categories.json') }
-function Get-MasterTaskPatterns { param($Source) _ReadJsonString (Get-DataFile -Source $Source -RelPath 'master/task_patterns.json') }
+function Get-MasterMembers      { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/members.json' }
+function Get-MasterProjects     { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/projects.json' }
+function Get-MasterCategories   { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/categories.json' }
+function Get-MasterTaskPatterns { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/task_patterns.json' }
 
 function _SaveMasterJson {
     param($Source, $Data, [string]$RelPath, [string]$CommitMessage, $AuthorName, $AuthorEmail)
-    # 配列の単一要素化を防ぐため Write-Output で配列のまま渡す
     $arr = @($Data)
-    # ConvertTo-Json はパイプライン経由で配列を渡すと PS 5.1 で 1 要素時に
-    # オブジェクトとして出力するため -InputObject を使い、配列でラップする
     $json = ConvertTo-Json -InputObject $arr -Depth 10
     Set-DataFile -Source $Source -RelPath $RelPath -Content ([string]$json) `
                  -CommitMessage $CommitMessage `
                  -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 
-function Save-MasterMembers      { param($Source, $Data, $AuthorName, $AuthorEmail)
-    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/members.json'       -CommitMessage 'update master: members'       -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-}
-function Save-MasterProjects     { param($Source, $Data, $AuthorName, $AuthorEmail)
-    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/projects.json'      -CommitMessage 'update master: projects'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-}
-function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEmail)
-    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/categories.json'    -CommitMessage 'update master: categories'    -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-}
-function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail)
-    _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-}
+function Save-MasterMembers      { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/members.json'       -CommitMessage 'update master: members'       -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
+function Save-MasterProjects     { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/projects.json'      -CommitMessage 'update master: projects'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
+function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/categories.json'    -CommitMessage 'update master: categories'    -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
+function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 
-# ---- 実績データ ----
+# ---- 実績データ (ローカル) ----
 
 function Load-MonthEntries {
     param($Source, $MemberId, $Year, $Month)
@@ -164,14 +164,14 @@ function Save-MonthEntries {
     $Entries = @($Entries)
     $rel = Get-MonthRelPath -MemberId $mid -Year $y -Month $m
     $doc = [ordered]@{
-        member_id = $mid
-        year      = $y
-        month     = $m
-        entries   = @($Entries)
+        member_id  = $mid
+        year       = $y
+        month      = $m
+        entries    = @($Entries)
+        updated_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     }
-    $json = $doc | ConvertTo-Json -Depth 10
-    $msg = 'update: {0} {1:D4}-{2:D2}' -f $mid, $y, $m
-    Set-DataFile -Source $Source -RelPath $rel -Content $json -CommitMessage $msg `
+    $json = ConvertTo-Json -InputObject $doc -Depth 10
+    Set-DataFile -Source $Source -RelPath $rel -Content ([string]$json) `
                  -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 
@@ -226,43 +226,218 @@ function Save-EntriesGrouped {
     }
 }
 
-function Load-AllEntries {
+# ---- 全件取得 (Report 用) ----
+
+function Load-AllEntries-Local {
     param([Parameter(Mandatory)]$Source)
     $results = New-Object System.Collections.Generic.List[object]
-    if ($Source.Mode -eq 'local') {
-        $dataRoot = Join-Path $Source.Root 'data'
-        if (-not (Test-Path $dataRoot)) { return ,@() }
-        Get-ChildItem -Path $dataRoot -Recurse -Filter '*.json' | ForEach-Object {
-            try {
-                $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-                foreach ($e in @($doc.entries)) {
-                    $row = [ordered]@{ member_id = $doc.member_id }
-                    foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                    $results.Add([pscustomobject]$row)
-                }
-            } catch { Write-Warning "skip $($_.FullName): $_" }
-        }
-    } else {
-        if ($Source.Mode -eq 'gitlab') {
-            $tree    = Get-GitLabTree    -Ctx $Source.Ctx -Path 'data'
-            $getter  = { param($p) Get-GitLabFileRaw -Ctx $Source.Ctx -Path $p }
-        } else {
-            $tree    = Get-GitHubTree    -Ctx $Source.Ctx -Path 'data'
-            $getter  = { param($p) Get-GitHubFileRaw -Ctx $Source.Ctx -Path $p }
-        }
-        foreach ($item in $tree) {
-            if ($item.type -ne 'blob') { continue }
-            if (-not $item.path.EndsWith('.json')) { continue }
-            try {
-                $raw = & $getter $item.path
-                $doc = $raw | ConvertFrom-Json
-                foreach ($e in @($doc.entries)) {
-                    $row = [ordered]@{ member_id = $doc.member_id }
-                    foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                    $results.Add([pscustomobject]$row)
-                }
-            } catch { Write-Warning "skip $($item.path): $_" }
-        }
+    $dataRoot = Join-Path $Source.LocalRoot 'data'
+    if (-not (Test-Path $dataRoot)) { return ,@() }
+    Get-ChildItem -Path $dataRoot -Recurse -Filter '*.json' | ForEach-Object {
+        try {
+            $doc = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($e in @($doc.entries)) {
+                $row = [ordered]@{ member_id = $doc.member_id }
+                foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
+                $results.Add([pscustomobject]$row)
+            }
+        } catch { Write-Warning "skip $($_.FullName): $_" }
     }
     return ,$results.ToArray()
+}
+
+function Load-AllEntries-Remote {
+    # リモートから全件取得 (他人のデータも含めて Report 用)
+    param([Parameter(Mandatory)]$Source)
+    if (-not $Source.RemoteCtx) { throw 'Load-AllEntries-Remote: リモート未設定' }
+    $results = New-Object System.Collections.Generic.List[object]
+    if ($Source.Mode -eq 'gitlab') {
+        $tree   = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
+        $getter = { param($p) Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $p }
+    } else {
+        $tree   = Get-GitHubTree -Ctx $Source.RemoteCtx -Path 'data'
+        $getter = { param($p) Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path $p }
+    }
+    foreach ($item in $tree) {
+        if ($item.type -ne 'blob') { continue }
+        if (-not $item.path.EndsWith('.json')) { continue }
+        try {
+            $raw = & $getter $item.path
+            $doc = $raw | ConvertFrom-Json
+            foreach ($e in @($doc.entries)) {
+                $row = [ordered]@{ member_id = $doc.member_id }
+                foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
+                $results.Add([pscustomobject]$row)
+            }
+        } catch { Write-Warning "skip $($item.path): $_" }
+    }
+    return ,$results.ToArray()
+}
+
+function Load-AllEntries {
+    # 互換: local モードならローカル、リモートモードならリモート優先 (Report で使用)
+    param([Parameter(Mandatory)]$Source)
+    if ($Source.Mode -eq 'local') { return Load-AllEntries-Local -Source $Source }
+    if ($Source.RemoteCtx)        { return Load-AllEntries-Remote -Source $Source }
+    return Load-AllEntries-Local -Source $Source
+}
+
+# ---- 同期: マスタ pull (リモート → local_store) ----
+
+function Sync-Pull-Masters {
+    param([Parameter(Mandatory)]$Source)
+    if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
+        return [pscustomobject]@{ Pulled = 0; Missing = 0; Errors = @() }
+    }
+    $pulled = 0; $missing = 0; $errors = @()
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+        try {
+            $raw = if ($Source.Mode -eq 'gitlab') {
+                Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
+            } else {
+                Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
+            }
+            if (-not $raw) { $missing++; continue }
+            $dst = Join-Path $Source.LocalRoot "master/$name"
+            _EnsureDir (Split-Path -Parent $dst)
+            [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
+            $pulled++
+        } catch {
+            $errors += "master/$name : $($_.Exception.Message)"
+        }
+    }
+    return [pscustomobject]@{ Pulled = $pulled; Missing = $missing; Errors = $errors }
+}
+
+# ---- 同期: マスタ push (local_store → リモート) ----
+
+function Sync-Push-Masters {
+    param([Parameter(Mandatory)]$Source, $AuthorName, $AuthorEmail)
+    if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
+        return [pscustomobject]@{ Pushed = 0; Errors = @() }
+    }
+    $pushed = 0; $errors = @()
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+        $local = Join-Path $Source.LocalRoot "master/$name"
+        if (-not (Test-Path -LiteralPath $local)) { continue }
+        try {
+            $content = [System.IO.File]::ReadAllText($local, [System.Text.UTF8Encoding]::new($false))
+            if ($Source.Mode -eq 'gitlab') {
+                $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
+                                       -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+            } else {
+                $null = Set-GitHubFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
+                                       -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+            }
+            $pushed++
+        } catch {
+            $errors += "master/$name : $($_.Exception.Message)"
+        }
+    }
+    return [pscustomobject]@{ Pushed = $pushed; Errors = $errors }
+}
+
+# ---- 同期: 自分のデータ push (local_store → リモート, 全期間) ----
+# 動作:
+#   1. local_store/data/**/*.json で member_id == 自分 のもの全件
+#   2. 各ファイルについてリモートを fetch → updated_at 比較
+#       - local 新しい → PUT
+#       - remote 新しい → スキップ (要警告)
+#       - 同じ → スキップ
+#       - リモート無し → POST
+#   3. 結果サマリを返す
+
+function _GetRemoteEntryDoc {
+    param($Source, [string]$RelPath)
+    try {
+        if ($Source.Mode -eq 'gitlab') { return Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
+        else                            { return Get-GitHubFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
+    } catch { return $null }
+}
+
+function Sync-Push-MyData {
+    param(
+        [Parameter(Mandatory)]$Source,
+        [Parameter(Mandatory)][string]$MemberId,
+        $AuthorName,
+        $AuthorEmail
+    )
+    if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
+        throw 'Sync-Push-MyData: リモート未設定のため送信できません'
+    }
+    $result = [pscustomobject]@{
+        Pushed       = 0
+        SkippedNewer = 0    # リモートが新しいためスキップ
+        SkippedSame  = 0
+        Errors       = @()
+        Conflicts    = @()  # @{ path; local_updated; remote_updated }
+    }
+    $dataRoot = Join-Path $Source.LocalRoot 'data'
+    if (-not (Test-Path -LiteralPath $dataRoot)) { return $result }
+
+    $myFiles = Get-ChildItem -Path $dataRoot -Recurse -Filter "$MemberId.json"
+    foreach ($f in $myFiles) {
+        $rel = $f.FullName.Substring($Source.LocalRoot.Length).TrimStart('\','/') -replace '\\','/'
+        try {
+            $localText = [System.IO.File]::ReadAllText($f.FullName, [System.Text.UTF8Encoding]::new($false))
+            $localDoc  = $localText | ConvertFrom-Json
+            $localTs   = [string]$localDoc.updated_at
+
+            $remoteText = _GetRemoteEntryDoc -Source $Source -RelPath $rel
+            $shouldPush = $true
+            if ($remoteText) {
+                try {
+                    $remoteDoc = $remoteText | ConvertFrom-Json
+                    $remoteTs  = [string]$remoteDoc.updated_at
+                    if ($remoteTs -and $localTs) {
+                        $rL = [datetime]::MinValue; $rR = [datetime]::MinValue
+                        $okL = [datetime]::TryParse($localTs,  [ref]$rL)
+                        $okR = [datetime]::TryParse($remoteTs, [ref]$rR)
+                        if ($okL -and $okR) {
+                            if ($rR -gt $rL) {
+                                $shouldPush = $false
+                                $result.SkippedNewer++
+                                $result.Conflicts += [pscustomobject]@{
+                                    path = $rel
+                                    local_updated  = $localTs
+                                    remote_updated = $remoteTs
+                                }
+                                continue
+                            } elseif ($rR -eq $rL) {
+                                $shouldPush = $false
+                                $result.SkippedSame++
+                                continue
+                            }
+                        }
+                    }
+                } catch {
+                    # remote doc 不正なら上書きする
+                }
+            }
+            if ($shouldPush) {
+                $commitMsg = ('upload: {0}' -f $rel)
+                if ($Source.Mode -eq 'gitlab') {
+                    $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
+                                           -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                } else {
+                    $null = Set-GitHubFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
+                                           -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                }
+                $result.Pushed++
+            }
+        } catch {
+            $result.Errors += "$rel : $($_.Exception.Message)"
+        }
+    }
+    return $result
+}
+
+# ---- マスタ存在チェック (bootstrap 用) ----
+
+function Test-LocalMastersComplete {
+    param([Parameter(Mandatory)]$Source)
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Source.LocalRoot "master/$name"))) { return $false }
+    }
+    return $true
 }

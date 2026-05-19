@@ -60,6 +60,7 @@ Write-FatalLog "PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScrip
 
 # ---- 同梱マスタを GitLab にアップロード (リポジトリが空のとき用) ----
 function Push-BundledMasters {
+    # 同梱の master サンプルを local_store に展開 (初回 bootstrap)
     param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)]$Config)
     $bundle = Join-Path (Split-Path $PSScriptRoot -Parent) 'master'
     foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
@@ -69,7 +70,6 @@ function Push-BundledMasters {
         }
         $content = [System.IO.File]::ReadAllText($local, [System.Text.UTF8Encoding]::new($false))
         Set-DataFile -Source $Source -RelPath "master/$name" -Content $content `
-                     -CommitMessage "bootstrap: initial $name" `
                      -AuthorName $Config.member_id -AuthorEmail "$($Config.member_id)@worktime-tracker.local"
     }
 }
@@ -168,12 +168,28 @@ function Initialize-AppContext {
         if ($cfg.mode -in @('gitlab','github')) { $token = Get-GitLabToken }
         $source = New-DataSource -Config $cfg -Token $token
 
+        # リモートモードならまずマスタを pull (ローカルキャッシュ更新)
+        if ($source.RemoteCtx) {
+            try {
+                $pullResult = Sync-Pull-Masters -Source $source
+                Write-FatalLog ("Master pull: pulled={0} missing={1} errors={2}" -f $pullResult.Pulled, $pullResult.Missing, $pullResult.Errors.Count)
+            } catch {
+                Show-ErrorDialog -Title '接続エラー' `
+                                 -Message 'リモートマスタの取得に失敗しました。設定を見直してください。' `
+                                 -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
+                $confirm = [System.Windows.MessageBox]::Show('設定ダイアログを開きますか? (いいえで終了)', '確認', 'YesNo', 'Question')
+                if ($confirm -ne 'Yes') { return $null }
+                $ForceDialog = $true
+                continue
+            }
+        }
+
         $r = Try-LoadAll -Source $source
 
         if ($r['Error']) {
             $detail = "ファイル: $($r['ErrorAt'])`n`n$($r['Error'].Exception.Message)`n`n$($r['Error'].ScriptStackTrace)"
-            Show-ErrorDialog -Title 'WorkTime Tracker - 接続エラー' `
-                             -Message "マスタ取得に失敗しました。設定を見直してください。" `
+            Show-ErrorDialog -Title 'マスタ読込エラー' `
+                             -Message "マスタの読込に失敗しました。" `
                              -Detail $detail
             $confirm = [System.Windows.MessageBox]::Show('設定ダイアログを開きますか? (いいえで終了)', '確認', 'YesNo', 'Question')
             if ($confirm -ne 'Yes') { return $null }
@@ -182,19 +198,20 @@ function Initialize-AppContext {
         }
 
         if ($r['MissingCount'] -gt 0) {
-            $msg = "GitLab リポジトリに master/ 配下のマスタファイルが $($r['MissingCount']) 個ありません。`n`n" +
-                   "同梱のサンプルマスタを GitLab にアップロードして開始しますか?`n" +
-                   "  [はい] 同梱マスタを push して開始`n" +
-                   "  [いいえ] 設定を見直す"
+            $where = if ($source.RemoteCtx) { 'リモート + ローカル' } else { 'ローカル保管先' }
+            $msg = ("$where にマスタファイルが $($r['MissingCount']) 個ありません。`n`n" +
+                    "同梱のサンプルマスタをローカルに展開して開始しますか?`n" +
+                    "  [はい] 展開して開始 (後で『送信』ボタンでリモートに push 可)`n" +
+                    "  [いいえ] 設定を見直す")
             $r2 = [System.Windows.MessageBox]::Show($msg, 'マスタ未登録', 'YesNo', 'Question')
             if ($r2 -eq 'Yes') {
                 try {
                     Push-BundledMasters -Source $source -Config $cfg
-                    [System.Windows.MessageBox]::Show('マスタを push しました。再読込します。', '完了', 'OK', 'Information') | Out-Null
-                    continue   # 再試行
+                    [System.Windows.MessageBox]::Show('マスタをローカルに展開しました。再読込します。', '完了', 'OK', 'Information') | Out-Null
+                    continue
                 } catch {
-                    Show-ErrorDialog -Title 'マスタ push 失敗' `
-                                     -Message '同梱マスタの push に失敗しました。' `
+                    Show-ErrorDialog -Title 'マスタ展開失敗' `
+                                     -Message '同梱マスタのローカル展開に失敗しました。' `
                                      -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
                     $ForceDialog = $true
                     continue
@@ -234,6 +251,11 @@ Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2} TaskPatterns={3
 
 function Reload-Masters {
     try {
+        # リモートモードならまず pull (ローカルキャッシュを最新化)
+        if ($Script:Source.RemoteCtx) {
+            $pull = Sync-Pull-Masters -Source $Script:Source
+            Write-FatalLog ("Reload pull: pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count)
+        }
         $Script:Members      = @(Get-MasterMembers      -Source $Script:Source)
         $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)
         $Script:Categories   = @(Get-MasterCategories   -Source $Script:Source)
@@ -277,7 +299,7 @@ $names = @(
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText',
-    'AdminBtn','SettingsBtn','OpenFolderBtn','FormHeader','ListTitle','ModeText'
+    'AdminBtn','SettingsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
@@ -285,7 +307,7 @@ foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
 $ui.ModeText.Text = switch ($Script:Config.mode) {
     'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
     'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
-    'local'  { "local | {0}" -f $Script:Config.local_root }
+    'local'  { "local | {0}" -f $Script:Config.local_store }
 }
 
 # ---- 状態 ----
@@ -665,7 +687,7 @@ $ui.SettingsBtn.Add_Click({
         $ui.ModeText.Text = switch ($Script:Config.mode) {
     'gitlab' { "gitlab | {0} / {1} @ {2}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch }
     'github' { "github | {0} @ {1}" -f $Script:Config.github_repo, $Script:Config.branch }
-    'local'  { "local | {0}" -f $Script:Config.local_root }
+    'local'  { "local | {0}" -f $Script:Config.local_store }
 }
 
         $Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
@@ -698,33 +720,86 @@ $ui.AdminBtn.Add_Click({
 })
 
 # ---- 保存先を開く ----
+# local: local_store フォルダをエクスプローラで
+# gitlab/github: リモートリポジトリをブラウザで
 $ui.OpenFolderBtn.Add_Click({
     try {
-        switch ($Script:Config.mode) {
-            'local' {
-                $path = $Script:Config.local_root
-                if (-not $path -or -not (Test-Path -LiteralPath $path)) {
-                    [System.Windows.MessageBox]::Show("ローカル保存先が設定されていないか、存在しません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
-                    return
+        # ローカルストアは常時オープン可能 (どのモードでも)
+        $r = [System.Windows.MessageBox]::Show(
+            "どちらを開きますか?`n`n[はい] ローカル保管先 (Explorer)`n[いいえ] リモートリポジトリ (ブラウザ)",
+            '保存先を開く', 'YesNoCancel', 'Question')
+        if ($r -eq 'Cancel') { return }
+        if ($r -eq 'Yes') {
+            $path = $Script:Config.local_store
+            if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+                [System.Windows.MessageBox]::Show("ローカル保存先が見つかりません:`n$path", 'エラー', 'OK', 'Warning') | Out-Null
+                return
+            }
+            Start-Process explorer.exe -ArgumentList "`"$path`""
+        } else {
+            switch ($Script:Config.mode) {
+                'gitlab' {
+                    Set-Status '保存先 URL を取得中...' '#6b7280'
+                    $proj = Test-GitLabConnection -Ctx $Script:Source.RemoteCtx
+                    $url = if ($proj.web_url) { $proj.web_url } else { '{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id }
+                    Set-Status "ブラウザで開く: $url" '#10b981'
+                    Start-Process $url
                 }
-                Start-Process explorer.exe -ArgumentList "`"$path`""
-            }
-            'gitlab' {
-                Set-Status '保存先 URL を取得中...' '#6b7280'
-                $proj = Test-GitLabConnection -Ctx $Script:Source.Ctx
-                $url = if ($proj.web_url) { $proj.web_url } else { '{0}/{1}' -f $Script:Config.gitlab_url.TrimEnd('/'), $Script:Config.project_id }
-                Set-Status "ブラウザで開く: $url" '#10b981'
-                Start-Process $url
-            }
-            'github' {
-                $url = 'https://github.com/{0}' -f $Script:Config.github_repo
-                if ($Script:Config.branch) { $url = "$url/tree/$($Script:Config.branch)" }
-                Set-Status "ブラウザで開く: $url" '#10b981'
-                Start-Process $url
+                'github' {
+                    $url = 'https://github.com/{0}' -f $Script:Config.github_repo
+                    if ($Script:Config.branch) { $url = "$url/tree/$($Script:Config.branch)" }
+                    Set-Status "ブラウザで開く: $url" '#10b981'
+                    Start-Process $url
+                }
+                default {
+                    [System.Windows.MessageBox]::Show('現在のモードはローカルのみです。', '情報', 'OK', 'Information') | Out-Null
+                }
             }
         }
     } catch {
         [System.Windows.MessageBox]::Show("保存先を開けませんでした:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+    }
+})
+
+# ---- 📤 送信 (自分の全データを local → リモートへ) ----
+$ui.PushBtn.Add_Click({
+    if (-not $Script:Source.RemoteCtx) {
+        [System.Windows.MessageBox]::Show('現在のモードは local のみです。設定でリモート (gitlab/github) を有効にしてください。', '送信不可', 'OK', 'Information') | Out-Null
+        return
+    }
+    $m = Get-SelectedMember
+    if (-not $m) { return }
+
+    Set-Status '送信中...' '#f9e2af'
+    $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+    try {
+        $midStr  = _AsScalarStr $m.id
+        $nameStr = _AsScalarStr $m.name
+        $result = Sync-Push-MyData -Source $Script:Source -MemberId $midStr `
+                                   -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local"
+        $summary = "送信完了`n  push: {0}`n  リモートが新しいためスキップ: {1}`n  変更なし: {2}`n  エラー: {3}" -f `
+            $result.Pushed, $result.SkippedNewer, $result.SkippedSame, $result.Errors.Count
+        if ($result.Conflicts.Count -gt 0) {
+            $confLines = $result.Conflicts | ForEach-Object { "  - {0}  (local: {1} / remote: {2})" -f $_.path, $_.local_updated, $_.remote_updated }
+            $summary += "`n`n[競合 (リモート優先でスキップ)]`n" + ($confLines -join "`n")
+        }
+        if ($result.Errors.Count -gt 0) {
+            $summary += "`n`n[エラー]`n" + (($result.Errors | Select-Object -First 5) -join "`n")
+        }
+        Write-FatalLog "PUSH: $summary"
+        Set-Status ("送信: push={0} / 競合={1} / エラー={2}" -f $result.Pushed, $result.SkippedNewer, $result.Errors.Count) '#10b981'
+        if ($result.Errors.Count -gt 0 -or $result.Conflicts.Count -gt 0) {
+            Show-ErrorDialog -Title '送信結果' -Message '送信を実行しました (詳細)' -Detail $summary
+        } else {
+            [System.Windows.MessageBox]::Show($summary, '送信完了', 'OK', 'Information') | Out-Null
+        }
+    } catch {
+        $detail = "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
+        Write-FatalLog "PUSH FAIL: $detail"
+        Set-Status "送信失敗 (詳細はダイアログ)" '#f38ba8'
+        Show-ErrorDialog -Title '送信失敗' -Message '送信に失敗しました。' -Detail $detail
+    } finally {
+        $Script:Window.Cursor = $null
     }
 })
 

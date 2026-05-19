@@ -40,10 +40,10 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
 }
 
 # データソース表示 (フッタ)
-$u.StatusText.Text = "保存先: {0}  |  {1}" -f $Script:Config.mode, $(switch ($Script:Config.mode) {
-    'gitlab' { "$($Script:Config.gitlab_url) / $($Script:Config.project_id) @ $($Script:Config.branch)" }
-    'github' { "$($Script:Config.github_repo) @ $($Script:Config.branch)" }
-    'local'  { $Script:Config.local_root }
+$u.StatusText.Text = "保存先: {0}  |  local={1}{2}" -f $Script:Config.mode, $Script:Config.local_store, $(switch ($Script:Config.mode) {
+    'gitlab' { " | remote=$($Script:Config.gitlab_url)/$($Script:Config.project_id) @ $($Script:Config.branch)" }
+    'github' { " | remote=$($Script:Config.github_repo) @ $($Script:Config.branch)" }
+    default  { '' }
 })
 
 # 既定期間: 当月
@@ -59,7 +59,7 @@ $u.MemberFilter.ItemsSource = $memberItems
 $u.MemberFilter.SelectedIndex = 0
 
 $projItems = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
-    [pscustomobject]@{ code = [string]$_.id; name = [string]$_.name }
+    [pscustomobject]@{ code = [string]$_.unit_code; name = [string]$_.project_name }
 })
 $u.ProjectFilter.ItemsSource = $projItems
 $u.ProjectFilter.SelectedIndex = 0
@@ -529,7 +529,7 @@ function Reload-Masters {
         $u.MemberFilter.ItemsSource = $newMembers
         if ($selMid) { $u.MemberFilter.SelectedValue = $selMid } else { $u.MemberFilter.SelectedIndex = 0 }
         $newProjs = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
-            [pscustomobject]@{ code = [string]$_.id; name = [string]$_.name }
+            [pscustomobject]@{ code = [string]$_.unit_code; name = [string]$_.project_name }
         })
         $selPid = $u.ProjectFilter.SelectedValue
         $u.ProjectFilter.ItemsSource = $newProjs

@@ -2,7 +2,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="初回設定 - WorkTime Tracker"
-    Height="620" Width="620"
+    Height="680" Width="640"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
     Background="#f6faf8"
@@ -114,56 +114,59 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="150"/>
+                <ColumnDefinition Width="160"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <Label Grid.Row="0" Grid.Column="0" Content="保存先モード:"/>
             <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ModeCombo">
-                <ComboBoxItem Content="gitlab" IsSelected="True"/>
-                <ComboBoxItem Content="github"/>
-                <ComboBoxItem Content="local"/>
+                <ComboBoxItem Tag="local"  Content="local のみ (ローカル保管のみ)" IsSelected="True"/>
+                <ComboBoxItem Tag="gitlab" Content="local + GitLab (ローカル保管+送信ボタンで同期)"/>
+                <ComboBoxItem Tag="github" Content="local + GitHub (ローカル保管+送信ボタンで同期)"/>
             </ComboBox>
             <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
-                       Text="gitlab/github: REST API 経由で保管 / local: 指定フォルダ (共有ドライブ等) に保管"/>
+                       Text="保存ボタン: 常にローカルへ。送信ボタン: リモートへ push (gitlab/github 時のみ)。"/>
 
-            <Label Grid.Row="2" Grid.Column="0" x:Name="UrlLabel" Content="GitLab URL:"/>
-            <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="UrlBox"/>
+            <!-- ローカル保管先 (全モード共通・必須) -->
+            <Label Grid.Row="2" Grid.Column="0" Content="ローカル保管先:"/>
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="LocalRootBox"/>
+            <Button  Grid.Row="2" Grid.Column="2" x:Name="BrowseBtn" Content="📁 参照…"/>
+            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
+                       Text="master/ と data/ をここに保管 (デフォルト %LOCALAPPDATA%\worktime-tracker\store)"/>
 
-            <Label Grid.Row="3" Grid.Column="0" x:Name="ProjectIdLabel" Content="Project ID / Path:"/>
-            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ProjectIdBox"/>
-            <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ProjectIdHint" FontSize="11"
-                       Text='数値 ID (例: 12345) または "group/subgroup/project"'/>
+            <!-- GitLab 専用 -->
+            <Label Grid.Row="4" Grid.Column="0" x:Name="UrlLabel" Content="GitLab URL:"/>
+            <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" x:Name="UrlBox"/>
 
-            <Label Grid.Row="5" Grid.Column="0" x:Name="BranchLabel" Content="ブランチ:"/>
-            <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" x:Name="BranchBox" Text="main"/>
+            <Label Grid.Row="5" Grid.Column="0" x:Name="ProjectIdLabel" Content="Project ID / Path:"/>
+            <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ProjectIdBox"/>
+            <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ProjectIdHint" FontSize="11"
+                       Text='数値 ID または "owner/repo" 形式'/>
 
-            <Label Grid.Row="6" Grid.Column="0" x:Name="TokenLabel" Content="Access Token:"/>
-            <PasswordBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" x:Name="TokenBox"/>
-            <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" x:Name="TokenHint" FontSize="11"
-                       Text="GitLab Project Access Token (DPAPI 暗号化で保管)"/>
+            <Label Grid.Row="7" Grid.Column="0" x:Name="BranchLabel" Content="ブランチ:"/>
+            <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" x:Name="BranchBox" Text="main"/>
 
-            <Label Grid.Row="8" Grid.Column="0" x:Name="LocalRootLabel" Content="データフォルダ:" Visibility="Collapsed"/>
-            <TextBox Grid.Row="8" Grid.Column="1" x:Name="LocalRootBox" Visibility="Collapsed"/>
-            <Button  Grid.Row="8" Grid.Column="2" x:Name="BrowseBtn" Content="📁 参照…" Visibility="Collapsed"/>
-            <TextBlock Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" x:Name="LocalRootHint" FontSize="11"
-                       Text="master/ と data/ サブフォルダがこの下に作成されます (共有ドライブ可)"
-                       Visibility="Collapsed"/>
+            <Label Grid.Row="8" Grid.Column="0" x:Name="TokenLabel" Content="Access Token:"/>
+            <PasswordBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" x:Name="TokenBox"/>
+            <TextBlock Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" x:Name="TokenHint" FontSize="11"
+                       Text="GitLab Project Access Token / GitHub PAT (DPAPI 暗号化で保管)"/>
 
-            <Label Grid.Row="10" Grid.Column="0" Content="あなたの Member ID:"/>
-            <TextBox Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="2" x:Name="MemberIdBox"/>
-            <TextBlock Grid.Row="11" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
-                       Text="master/members.json に登録されている ID (空欄なら Windows ログイン名で補完)"/>
+            <Label Grid.Row="11" Grid.Column="0" Content="あなたの Member ID:"/>
+            <TextBox Grid.Row="11" Grid.Column="1" Grid.ColumnSpan="2" x:Name="MemberIdBox"/>
+            <TextBlock Grid.Row="12" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
+                       Text="master/members.json の id (空なら Windows ログイン名で補完)"/>
 
-            <TextBlock Grid.Row="12" Grid.Column="0" Grid.ColumnSpan="3" x:Name="StatusText" FontSize="12" Margin="0,14,0,0" TextWrapping="Wrap"/>
+            <TextBlock Grid.Row="14" Grid.Column="0" Grid.ColumnSpan="3" x:Name="StatusText" FontSize="12" Margin="0,14,0,0" TextWrapping="Wrap"/>
         </Grid>
     </DockPanel>
 </Window>

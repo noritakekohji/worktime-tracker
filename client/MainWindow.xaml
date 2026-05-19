@@ -205,8 +205,9 @@
                             <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="White"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="140"/>
-                    <Button x:Name="OpenFolderBtn" Content="📂 保存先を開く" Margin="6,3,3,3" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
+                    <Button x:Name="SaveBtn" Content="💾 保存 (ローカル)" Style="{StaticResource Primary}" MinWidth="140"/>
+                    <Button x:Name="PushBtn" Content="📤 送信 (リモートへ)" Style="{StaticResource Primary}" MinWidth="170" Margin="6,3,3,3"/>
+                    <Button x:Name="OpenFolderBtn" Content="📂 開く" Margin="6,3,3,3" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
                 </StackPanel>
             </DockPanel>
         </Border>
