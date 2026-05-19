@@ -238,7 +238,28 @@ function Reload-Masters {
         $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)
         $Script:Categories   = @(Get-MasterCategories   -Source $Script:Source)
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
-        $ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
+        # UI 反映: プロジェクト / カテゴリ / 現在の作業者
+        if ($ui -and $ui.ProjectCombo) {
+            $ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
+        }
+        if ($ui -and $ui.CategoryCombo) {
+            $ui.CategoryCombo.ItemsSource = @($Script:Categories)
+        }
+        # 現在ユーザの会社/部署/ランク/役割の変化を反映
+        $cur = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
+        if ($cur) {
+            $Script:CurrentMember = $cur
+            if ($ui -and $ui.CurrentMemberText) {
+                $ui.CurrentMemberText.Text = ("{0}  {1}" -f $cur.id, $cur.name)
+            }
+            if ($ui -and $ui.AdminBtn) {
+                $ui.AdminBtn.Visibility = if ($cur.role -eq 'admin') { 'Visible' } else { 'Collapsed' }
+            }
+        }
+        if ($ui -and $ui.StatusText) {
+            Set-Status ("マスタ再読込: メンバー={0} / プロジェクト={1} / パターン={2} / カテゴリ={3}" -f `
+                $Script:Members.Count, $Script:Projects.Count, $Script:TaskPatterns.Count, $Script:Categories.Count) '#10b981'
+        }
     } catch {
         [System.Windows.MessageBox]::Show("マスタ再読込に失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
     }
