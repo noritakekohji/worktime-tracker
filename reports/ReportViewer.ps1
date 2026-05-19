@@ -59,7 +59,7 @@ $u.MemberFilter.ItemsSource = $memberItems
 $u.MemberFilter.SelectedIndex = 0
 
 $projItems = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
-    [pscustomobject]@{ code = $_.code; name = $_.name }
+    [pscustomobject]@{ code = [string]$_.id; name = [string]$_.name }
 })
 $u.ProjectFilter.ItemsSource = $projItems
 $u.ProjectFilter.SelectedIndex = 0
@@ -517,7 +517,29 @@ $u.ChartTypeCombo.Add_SelectionChanged({ Build-Chart })
 $u.ChartSortCombo.Add_SelectionChanged({ Build-Chart })
 $u.ChartTopCombo.Add_SelectionChanged({ Build-Chart })
 
-$u.ReloadBtn.Add_Click({ Reload-Entries })
+function Reload-Masters {
+    try {
+        $Script:Members  = @(Get-MasterMembers  -Source $Script:Source)
+        $Script:Projects = @(Get-MasterProjects -Source $Script:Source)
+        # フィルタ コンボを再構築
+        $newMembers = @([pscustomobject]@{ id = ''; display = '(全員)' }) + @($Script:Members | ForEach-Object {
+            [pscustomobject]@{ id = [string]$_.id; display = "$($_.id) - $($_.name)" }
+        })
+        $selMid = $u.MemberFilter.SelectedValue
+        $u.MemberFilter.ItemsSource = $newMembers
+        if ($selMid) { $u.MemberFilter.SelectedValue = $selMid } else { $u.MemberFilter.SelectedIndex = 0 }
+        $newProjs = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
+            [pscustomobject]@{ code = [string]$_.id; name = [string]$_.name }
+        })
+        $selPid = $u.ProjectFilter.SelectedValue
+        $u.ProjectFilter.ItemsSource = $newProjs
+        if ($selPid) { $u.ProjectFilter.SelectedValue = $selPid } else { $u.ProjectFilter.SelectedIndex = 0 }
+    } catch {
+        $u.SummaryText.Text = "マスタ再読込失敗: $_"
+    }
+}
+
+$u.ReloadBtn.Add_Click({ Reload-Masters; Reload-Entries })
 $u.ApplyBtn.Add_Click({ Apply-Filters })
 $u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })
 $u.ProjectFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })

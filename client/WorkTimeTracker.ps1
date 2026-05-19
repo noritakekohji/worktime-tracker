@@ -331,9 +331,9 @@ $ui.ProjectCombo.ItemsSource = @($Script:Projects | Where-Object { $_.active })
 function Get-TaskPatternFor {
     param($Project)
     if (-not $Project) { return $null }
-    $pid = [string]$Project.task_pattern_id
-    if (-not $pid) { return $null }
-    return ($Script:TaskPatterns | Where-Object { $_.id -eq $pid } | Select-Object -First 1)
+    $ptnId = [string]$Project.task_pattern_id
+    if (-not $ptnId) { return $null }
+    return ($Script:TaskPatterns | Where-Object { $_.id -eq $ptnId } | Select-Object -First 1)
 }
 
 $ui.ProjectCombo.Add_SelectionChanged({
