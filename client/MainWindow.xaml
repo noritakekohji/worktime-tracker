@@ -294,7 +294,7 @@
                             </Style>
                         </DataGrid.Resources>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="未保存" Binding="{Binding dirty_mark}" Width="55" IsReadOnly="True">
+                            <DataGridTextColumn Header="" Binding="{Binding dirty_mark}" Width="28" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="#d97706"/>

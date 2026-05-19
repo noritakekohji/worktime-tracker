@@ -561,7 +561,7 @@ function Get-EntryFromForm {
         category        = if ($cat)  { [string]$cat.code }  else { '' }
         hours           = $hours
         dirty           = 'yes'  # 新規/編集行はダーティ (文字列フラグ)
-        dirty_mark      = '● 未保存'
+        dirty_mark      = '●'
         comment         = [string]$ui.CommentBox.Text
     }
 }
