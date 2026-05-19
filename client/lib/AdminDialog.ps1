@@ -322,7 +322,8 @@ function Show-AdminDialog {
     })
 
     # ---- JSON 直接編集 ----
-    function _JsonLoad {
+    # WPF イベントハンドラから内部 function が見えないことがあるので script: 変数として保持
+    $script:DoJsonLoad = {
         $t = $u.JsonTargetCombo.SelectedItem.Content
         $data = switch ($t) {
             'members'       { @($members)    }
@@ -331,9 +332,9 @@ function Show-AdminDialog {
             'categories'    { @($categories) }
         }
         $u.JsonBox.Text = ($data | ConvertTo-Json -Depth 10)
-    }
-    $u.JsonTargetCombo.Add_SelectionChanged({ _JsonLoad })
-    $u.JsonReloadBtn.Add_Click({ _JsonLoad })
+    }.GetNewClosure()
+    $u.JsonTargetCombo.Add_SelectionChanged({ & $script:DoJsonLoad })
+    $u.JsonReloadBtn.Add_Click({ & $script:DoJsonLoad })
     $u.JsonValidateBtn.Add_Click({
         try { [void]($u.JsonBox.Text | ConvertFrom-Json); _Status 'JSON OK' '#059669' }
         catch { _Status "JSON 構文エラー: $_" '#dc2626' }
@@ -421,10 +422,10 @@ function Show-AdminDialog {
         }
     })
 
-    $u.ReloadBtn.Add_Click({ Load-All; _JsonLoad })
+    $u.ReloadBtn.Add_Click({ Load-All; & $script:DoJsonLoad })
     $u.CloseBtn.Add_Click({ $win.Close() })
 
     Load-All
-    _JsonLoad
+    & $script:DoJsonLoad
     [void]$win.ShowDialog()
 }
