@@ -65,8 +65,16 @@ $sc2.IconLocation = "$env:WINDIR\System32\imageres.dll,114"
 $sc2.WindowStyle = 7
 $sc2.Save()
 
+$sc3 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime WBS入力.lnk'))
+$sc3.TargetPath = "$InstallDir\client\WbsInput.cmd"
+$sc3.WorkingDirectory = "$InstallDir\client"
+$sc3.IconLocation = "$env:WINDIR\System32\imageres.dll,110"
+$sc3.WindowStyle = 7
+$sc3.Save()
+
 Write-Host "完了。デスクトップのショートカットから起動してください。" -ForegroundColor Green
-Write-Host "  - WorkTime Tracker (実績入力)"
-Write-Host "  - WorkTime Report  (集計ビューア)"
+Write-Host "  - WorkTime Tracker  (実績入力)"
+Write-Host "  - WorkTime WBS入力  (WBS形式実績入力)"
+Write-Host "  - WorkTime Report   (集計ビューア)"
 Write-Host ""
 Write-Host "初回起動時に GitLab URL / Project ID / Project Access Token を入力してください。"
