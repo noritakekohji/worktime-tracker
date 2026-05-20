@@ -126,6 +126,17 @@ function Get-TaskPatternFor {
     return ($Script:TaskPatterns | Where-Object { $_.id -eq $ptnId } | Select-Object -First 1)
 }
 
+# メンバー ID から 2 文字短縮表記を生成
+function Get-MemberAbbrev {
+    param([string]$MemberId)
+    if ([string]::IsNullOrWhiteSpace($MemberId)) { return '' }
+    $m = $Script:Members | Where-Object { [string]$_.id -eq $MemberId } | Select-Object -First 1
+    $src = if ($m -and $m.name) { [string]$m.name } else { $MemberId }
+    if ([string]::IsNullOrWhiteSpace($src)) { return '' }
+    if ($src.Length -le 2) { return $src }
+    return $src.Substring(0, 2)
+}
+
 function Build-DataTable {
     param([int]$Year, [int]$Month)
     $tbl = New-Object 'System.Data.DataTable'
@@ -307,6 +318,9 @@ function Load-WbsData {
             $planMap[$k] = $p
         }
 
+        # デフォルト担当者の 2 文字短縮 (新規/空行用)
+        $defaultAbbrev = Get-MemberAbbrev -MemberId $memberId
+
         # 行作成のヘルパスクリプトブロック (プラン値の埋め込み)
         # 注: scriptblock 化せず inline で参照する
         $addedKeys = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -337,14 +351,20 @@ function Load-WbsData {
                             ([string]$_.task_group_code) -eq $tgc -and
                             ([string]$_.task_code) -eq $tc
                         })
-                        $catMap = @{}
+                        # 既存エントリを (カテゴリ, 担当者) で集約 — 担当が異なれば別行
+                        $rowMap = @{}
                         foreach ($e in $taskEntries) {
                             if (-not $e) { continue }
                             $cat = [string]$e.category
-                            if (-not $catMap.ContainsKey($cat)) {
-                                $catMap[$cat] = New-Object 'System.Collections.Generic.List[object]'
+                            $assn = if ($e.assignee) { [string]$e.assignee } else { $defaultAbbrev }
+                            $rk = "$cat||$assn"
+                            if (-not $rowMap.ContainsKey($rk)) {
+                                $rowMap[$rk] = @{
+                                    cat = $cat; assignee = $assn
+                                    entries = (New-Object 'System.Collections.Generic.List[object]')
+                                }
                             }
-                            [void]$catMap[$cat].Add($e)
+                            [void]$rowMap[$rk].entries.Add($e)
                         }
 
                         # 共通: プラン値マージ関数
@@ -353,21 +373,27 @@ function Load-WbsData {
                             if ($planMap.ContainsKey($key)) {
                                 $p = $planMap[$key]
                                 if ($p.planned_hours) { $r["計画"] = [string]$p.planned_hours }
-                                if ($p.assignee)      { $r["担当"] = [string]$p.assignee }
+                                if ($p.assignee -and [string]::IsNullOrWhiteSpace($r["担当"])) {
+                                    $r["担当"] = [string]$p.assignee
+                                }
                                 if ($p.planned_start) { $r["開始"] = [string]$p.planned_start }
                                 if ($p.planned_end)   { $r["終了"] = [string]$p.planned_end }
                             }
                         }
 
-                        if ($catMap.Count -gt 0) {
-                            foreach ($cat in $catMap.Keys) {
+                        if ($rowMap.Count -gt 0) {
+                            foreach ($rk in $rowMap.Keys) {
+                                $grp = $rowMap[$rk]
+                                $cat = $grp.cat; $assn = $grp.assignee
                                 $row = $dt.NewRow()
                                 $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
                                 $row["_proc_idx"] = "$procIdx"
                                 $row["WBS"] = $wbsNo
-                                $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
+                                $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
+                                $row["担当"] = $assn
+                                $row["カテゴリ"] = $cat
                                 & $applyPlan $row "$pc|$tgc|$tc|$cat"
-                                foreach ($e in $catMap[$cat]) {
+                                foreach ($e in $grp.entries) {
                                     $dk = [string]$e.date
                                     if ($dt.Columns.Contains($dk)) {
                                         $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
@@ -375,15 +401,17 @@ function Load-WbsData {
                                     }
                                 }
                                 [void]$dt.Rows.Add($row)
-                                [void]$addedKeys.Add("$pc|$tgc|$tc|$cat")
+                                [void]$addedKeys.Add("$pc|$tgc|$tc|$cat|$assn")
                             }
                         } else {
-                            # 実績なし → カテゴリ空白行
+                            # 実績なし → カテゴリ空白行 (担当はデフォルト)
                             $row = $dt.NewRow()
                             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
                             $row["_proc_idx"] = "$procIdx"
                             $row["WBS"] = $wbsNo
-                            $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = ''
+                            $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
+                            $row["担当"] = $defaultAbbrev
+                            $row["カテゴリ"] = ''
                             & $applyPlan $row "$pc|$tgc|$tc|"
                             [void]$dt.Rows.Add($row)
                         }
@@ -393,30 +421,46 @@ function Load-WbsData {
         }
 
         # タスクパターンに含まれないエントリ (旧データ / パターンなしプロジェクト)
+        # こちらも (cat, assignee) 単位で集約
+        $orphanGroup = @{}
         foreach ($e in $projEntries) {
             if (-not $e) { continue }
             $pc = [string]$e.process_code; $tgc = [string]$e.task_group_code
             $tc = [string]$e.task_code;    $cat = [string]$e.category
-            $key = "$pc|$tgc|$tc|$cat"
+            $assn = if ($e.assignee) { [string]$e.assignee } else { $defaultAbbrev }
+            $key = "$pc|$tgc|$tc|$cat|$assn"
+            # パターン側で既に追加済みのキーはスキップ
             if ($addedKeys.Contains($key)) { continue }
-            # インラインで行作成 (パターン外エントリ)
+            if (-not $orphanGroup.ContainsKey($key)) {
+                $orphanGroup[$key] = @{
+                    pc=$pc; tgc=$tgc; tc=$tc; cat=$cat; assn=$assn
+                    entries = (New-Object 'System.Collections.Generic.List[object]')
+                }
+            }
+            [void]$orphanGroup[$key].entries.Add($e)
+        }
+        foreach ($key in $orphanGroup.Keys) {
+            $g = $orphanGroup[$key]
             $row = $dt.NewRow()
-            $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+            $row["_pc"] = $g.pc; $row["_tgc"] = $g.tgc; $row["_tc"] = $g.tc
             $row["_proc_idx"] = '0'
             $row["WBS"] = ''
-            $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''; $row["カテゴリ"] = $cat
-            # プラン値マージ
-            if ($planMap.ContainsKey($key)) {
-                $p = $planMap[$key]
+            $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
+            $row["担当"] = $g.assn
+            $row["カテゴリ"] = $g.cat
+            $planKey = "$($g.pc)|$($g.tgc)|$($g.tc)|$($g.cat)"
+            if ($planMap.ContainsKey($planKey)) {
+                $p = $planMap[$planKey]
                 if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
-                if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
                 if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
                 if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
             }
-            $dk = [string]$e.date
-            if ($dt.Columns.Contains($dk)) {
-                $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
-                if ($h -gt 0) { $row[$dk] = $h.ToString("N1") }
+            foreach ($e in $g.entries) {
+                $dk = [string]$e.date
+                if ($dt.Columns.Contains($dk)) {
+                    $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
+                    if ($h -gt 0) { $row[$dk] = $h.ToString("N1") }
+                }
             }
             [void]$dt.Rows.Add($row)
             [void]$addedKeys.Add($key)
@@ -528,13 +572,15 @@ $ui.AddRowBtn.Add_Click({
     $sel = $ui.WbsTree.SelectedItem
     if (-not $sel -or -not $sel.Tag -or -not $Script:DataTable) { return }
     $info = $sel.Tag
-    # インラインで行作成
+    # インラインで行作成 (担当者は選択中メンバーの 2 文字短縮)
     $row = $Script:DataTable.NewRow()
     $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
     $row["_proc_idx"] = '0'
     $row["WBS"] = ''
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
-    $row["タスク"] = [string]$info.tn; $row["カテゴリ"] = ''
+    $row["タスク"] = [string]$info.tn
+    $row["担当"] = Get-MemberAbbrev -MemberId ([string]$ui.MemberCombo.SelectedItem.id)
+    $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     # 追加行へスクロール
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
@@ -554,6 +600,7 @@ function _BuildEntries {
         $row = $drv.Row
         $pc  = [string]$row["_pc"];  $tgc = [string]$row["_tgc"]
         $tc  = [string]$row["_tc"];  $cat = [string]$row["カテゴリ"]
+        $assn = [string]$row["担当"]
         foreach ($col in $dateCols) {
             $v = [string]$row[$col.ColumnName]; $h = 0.0
             if ([string]::IsNullOrWhiteSpace($v) -or -not [double]::TryParse($v, [ref]$h) -or $h -le 0) { continue }
@@ -564,6 +611,7 @@ function _BuildEntries {
                 task_group_code = $tgc
                 task_code       = $tc
                 category        = $cat
+                assignee        = $assn
                 hours           = $h
                 comment         = ''
             })
