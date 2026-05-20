@@ -221,16 +221,16 @@ function Load-WbsData {
     Set-Status "読込中…" '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
-        $Script:CurrentProj = $Script:Projects | Where-Object { $_.unit_code -eq $projCode } | Select-Object -First 1
+        $Script:CurrentProj = $Script:Projects | Where-Object { $null -ne $_ -and ([string]$_.unit_code) -eq $projCode } | Select-Object -First 1
         $Script:CurrentPtn  = Get-TaskPatternFor -Project $Script:CurrentProj
 
         $dt = Build-DataTable -Year $year -Month $month
 
         # 既存エントリ読込
         $loaded      = @(Load-MonthEntries -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
-        $projEntries = @($loaded | Where-Object { [string]$_.project_code -eq $projCode })
+        $projEntries = @($loaded | Where-Object { $null -ne $_ -and ([string]$_.project_code) -eq $projCode })
 
-        $addedKeys = New-Object System.Collections.Generic.HashSet[string]
+        $addedKeys = New-Object 'System.Collections.Generic.HashSet[string]'
 
         # タスクパターンから全タスクを展開
         if ($Script:CurrentPtn -and $Script:CurrentPtn.processes) {
@@ -246,15 +246,19 @@ function Load-WbsData {
 
                         # このタスクの既存エントリをカテゴリ別に集約
                         $taskEntries = @($projEntries | Where-Object {
-                            [string]$_.process_code -eq $pc -and
-                            [string]$_.task_group_code -eq $tgc -and
-                            [string]$_.task_code -eq $tc
+                            $null -ne $_ -and
+                            ([string]$_.process_code) -eq $pc -and
+                            ([string]$_.task_group_code) -eq $tgc -and
+                            ([string]$_.task_code) -eq $tc
                         })
                         $catMap = @{}
                         foreach ($e in $taskEntries) {
+                            if (-not $e) { continue }
                             $cat = [string]$e.category
-                            if (-not $catMap.ContainsKey($cat)) { $catMap[$cat] = [System.Collections.Generic.List[object]]::new() }
-                            $catMap[$cat].Add($e)
+                            if (-not $catMap.ContainsKey($cat)) {
+                                $catMap[$cat] = New-Object 'System.Collections.Generic.List[object]'
+                            }
+                            [void]$catMap[$cat].Add($e)
                         }
 
                         if ($catMap.Count -gt 0) {
@@ -306,8 +310,9 @@ function Load-WbsData {
         $ui.GridTitle.Text = ("📊 {0} — {1:D4}/{2:D2}" -f $projItem.project_name, $year, $month)
         Set-Status ("読込完了: {0} 行" -f $dt.Rows.Count) '#10b981'
     } catch {
-        Set-Status "読込失敗: $_" '#ef4444'
-        [System.Windows.MessageBox]::Show("読込に失敗しました:`n$_", '読込エラー', 'OK', 'Error') | Out-Null
+        $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
+        Set-Status "読込失敗: $($_.Exception.Message)" '#ef4444'
+        [System.Windows.MessageBox]::Show($detail, '読込エラー詳細', 'OK', 'Error') | Out-Null
     } finally {
         $Script:Window.Cursor = $null
     }
