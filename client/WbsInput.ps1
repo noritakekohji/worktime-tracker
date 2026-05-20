@@ -1,4 +1,4 @@
-# WbsInput.ps1 — WBS 形式実績入力
+﻿# WbsInput.ps1 — WBS 形式実績入力
 #
 # 起動: client\WbsInput.cmd  または
 #        powershell -ExecutionPolicy Bypass -File client\WbsInput.ps1
@@ -73,11 +73,13 @@ $ui.MonthCombo.ItemsSource  = 1..12
 $ui.MonthCombo.SelectedItem = $now.Month
 
 # プロジェクト ComboBox
+# PS 5.1: 文字列内の "$var (..." は $var(...) と誤解析されるため文字列連結を使う
+#         文字列内の "[$var]" も型キャストと誤解析されるため同様
 $projItems = @($Script:Projects | ForEach-Object {
     $uc   = if ($_.unit_code)    { [string]$_.unit_code }    else { [string]$_.id }
     $pn   = if ($_.project_name) { [string]$_.project_name } else { [string]$_.name }
     $un   = [string]$_.unit_name
-    $disp = if ($un) { "[$uc] $pn ($un)" } else { "[$uc] $pn" }
+    $disp = if ($un) { '[' + $uc + '] ' + $pn + ' (' + $un + ')' } else { '[' + $uc + '] ' + $pn }
     [pscustomobject]@{
         unit_code       = $uc
         project_name    = $pn
@@ -89,15 +91,18 @@ $projItems = @($Script:Projects | ForEach-Object {
 $ui.ProjectCombo.ItemsSource = $projItems
 
 # 担当者 ComboBox
+# PS 5.1: @{} 内で "{0}" -f は { と衝突するため変数へ退避してから設定する
 $currentMember = $Script:Members | Where-Object { $_.id -eq $cfg.member_id -and $_.active } | Select-Object -First 1
 $Script:IsAdmin = $currentMember -and ($currentMember.role -eq 'admin')
 $memberItems = if ($Script:IsAdmin) {
     @($Script:Members | Where-Object { $_.active } | ForEach-Object {
-        [pscustomobject]@{ id=[string]$_.id; name=[string]$_.name; display=("{0}  {1}" -f $_.id, $_.name) }
+        $mid = [string]$_.id; $mnm = [string]$_.name; $mdisp = $mid + '  ' + $mnm
+        [pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp }
     })
 } else {
     if ($currentMember) {
-        @([pscustomobject]@{ id=[string]$currentMember.id; name=[string]$currentMember.name; display=("{0}  {1}" -f $currentMember.id, $currentMember.name) })
+        $mid = [string]$currentMember.id; $mnm = [string]$currentMember.name; $mdisp = $mid + '  ' + $mnm
+        @([pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp })
     } else {
         @([pscustomobject]@{ id=$cfg.member_id; name='(自分)'; display=$cfg.member_id })
     }
