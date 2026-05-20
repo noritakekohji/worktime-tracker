@@ -128,22 +128,23 @@ function Get-TaskPatternFor {
 
 function Build-DataTable {
     param([int]$Year, [int]$Month)
-    $dt = New-Object System.Data.DataTable
-    # 内部コード列 (非表示)
-    foreach ($col in @('_pc','_tgc','_tc')) {
-        [void]$dt.Columns.Add((New-Object System.Data.DataColumn $col, ([string])))
+    $tbl = New-Object 'System.Data.DataTable'
+    if ($null -eq $tbl) { throw 'New-Object System.Data.DataTable returned null' }
+
+    $stringType = [System.String]
+    $allCols = @('_pc','_tgc','_tc','工程','タスクグループ','タスク','カテゴリ','合計')
+    foreach ($name in $allCols) {
+        $dc = New-Object 'System.Data.DataColumn' -ArgumentList $name, $stringType
+        $null = $tbl.Columns.Add($dc)
     }
-    # 表示列
-    foreach ($col in @('工程','タスクグループ','タスク','カテゴリ','合計')) {
-        [void]$dt.Columns.Add((New-Object System.Data.DataColumn $col, ([string])))
-    }
-    # 日付列 (yyyy-MM-dd 形式)
     $days = [DateTime]::DaysInMonth($Year, $Month)
     for ($d = 1; $d -le $days; $d++) {
-        $key = "{0:D4}-{1:D2}-{2:D2}" -f $Year, $Month, $d
-        [void]$dt.Columns.Add((New-Object System.Data.DataColumn $key, ([string])))
+        $key = '{0:D4}-{1:D2}-{2:D2}' -f $Year, $Month, $d
+        $dc = New-Object 'System.Data.DataColumn' -ArgumentList $key, $stringType
+        $null = $tbl.Columns.Add($dc)
     }
-    return $dt
+    # 戻り値の auto-unroll を防止
+    Write-Output -NoEnumerate $tbl
 }
 
 function Update-AllTotals {
@@ -227,6 +228,11 @@ function Load-WbsData {
         $Script:CurrentPtn  = Get-TaskPatternFor -Project $Script:CurrentProj
 
         $dt = Build-DataTable -Year $year -Month $month
+        if ($null -eq $dt) { throw "Build-DataTable returned null (year=$year month=$month)" }
+        if ($dt -is [array]) {
+            throw ("Build-DataTable returned array (count={0}, type[0]={1}). PSバージョン={2}" -f `
+                $dt.Count, ($dt[0].GetType().FullName), $PSVersionTable.PSVersion)
+        }
 
         # 既存エントリ読込
         $loaded      = @(Load-MonthEntries -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
