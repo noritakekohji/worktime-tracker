@@ -353,11 +353,11 @@ function Show-AdminDialog {
     $global:WT_CurrentPatNode   = $null
     $global:WT_SuppressPatEdit  = $false
 
-    $u.PatternsList.Add_SelectionChanged({
+    # パターン編集モードへ切替 (SelectionChanged でも再クリック検出でも共通で使う)
+    $global:WT_ShowPatternEdit = {
         $sel = $u.PatternsList.SelectedItem
-        if (-not $sel) { $global:WT_CurrentPattern = $null; $u.PatternTree.Items.Clear(); return }
+        if (-not $sel) { return }
         $global:WT_CurrentPattern = $sel.data
-        # パターン自体を編集できるように右ペインに反映
         $global:WT_SuppressPatEdit = $true
         $global:WT_CurrentPatNode = $null
         $u.PatDetailTitle.Text = '編集中: パターン'
@@ -366,12 +366,34 @@ function Show-AdminDialog {
         $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
         $u.PatCodeBox.IsEnabled = $true
         $u.PatNameBox.IsEnabled = $true
-        $u.PatNodeAddBtn.IsEnabled = $true       # 工程を追加できる
-        $u.PatNodeAddSibBtn.IsEnabled = $false   # パターンに兄弟なし
-        $u.PatNodeDelBtn.IsEnabled = $false      # パターン自体は左で削除
+        $u.PatNodeAddBtn.IsEnabled = $true
+        $u.PatNodeAddSibBtn.IsEnabled = $false
+        $u.PatNodeDelBtn.IsEnabled = $false
         $u.PatHint.Text = '直下に「工程」を追加できます。'
         $global:WT_SuppressPatEdit = $false
         Render-PatternTree -Pattern $global:WT_CurrentPattern
+    }.GetNewClosure()
+
+    $u.PatternsList.Add_SelectionChanged({
+        $sel = $u.PatternsList.SelectedItem
+        if (-not $sel) { $global:WT_CurrentPattern = $null; $u.PatternTree.Items.Clear(); _ClearPatNode; return }
+        & $global:WT_ShowPatternEdit
+    })
+
+    # WPF の ListBox は同じ項目を再クリックしても SelectionChanged が発火しない。
+    # ツリーノード選択後にパターン一覧の同じ行を再クリックしたときを PreviewMouseDown で検出する。
+    $u.PatternsList.Add_PreviewMouseDown({
+        param($s, $e)
+        # クリックされた ListBoxItem を visual tree から探す
+        $el = $e.OriginalSource -as [System.Windows.DependencyObject]
+        while ($el -and ($el -isnot [System.Windows.Controls.ListBoxItem])) {
+            $el = [System.Windows.Media.VisualTreeHelper]::GetParent($el)
+        }
+        if (-not $el) { return }
+        # 既選択行を再クリック かつ ツリーノード編集中 → パターン編集モードへ戻す
+        if ($el.DataContext -eq $u.PatternsList.SelectedItem -and $global:WT_CurrentPatNode) {
+            & $global:WT_ShowPatternEdit
+        }
     })
 
     $u.PatternTree.Add_SelectedItemChanged({
