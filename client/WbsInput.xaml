@@ -163,7 +163,7 @@
                               HeadersVisibility="Column"
                               Background="White" RowBackground="White"
                               AlternatingRowBackground="#f0fdf4"
-                              GridLinesVisibility="All" GridLinesBrush="#d1fae5"
+                              GridLinesVisibility="All" HorizontalGridLinesBrush="#d1fae5" VerticalGridLinesBrush="#d1fae5"
                               BorderBrush="{StaticResource Border}" BorderThickness="1"
                               RowHeight="28" ColumnHeaderHeight="34" FontSize="12"
                               SelectionMode="Single" SelectionUnit="Cell"
