@@ -199,8 +199,10 @@ function Build-GridColumns {
 }
 
 function _MakeRow {
-    param($dt, [string]$pc, [string]$pn, [string]$tgc, [string]$tgn, [string]$tc, [string]$tn, [string]$cat)
-    $row = $dt.NewRow()
+    # PS 5.1: パラメータ名を $dt にすると、呼び出し元ローカル $dt とバインディング衝突する事象があるため $Table に改名
+    param($Table, [string]$pc, [string]$pn, [string]$tgc, [string]$tgn, [string]$tc, [string]$tn, [string]$cat)
+    if ($null -eq $Table) { throw "_MakeRow: Table パラメータが null" }
+    $row = $Table.NewRow()
     $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
     $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
     return $row
@@ -263,7 +265,10 @@ function Load-WbsData {
 
                         if ($catMap.Count -gt 0) {
                             foreach ($cat in $catMap.Keys) {
-                                $row = _MakeRow $dt $pc $pn $tgc $tgn $tc $tn $cat
+                                # インラインで行作成 (関数呼び出し時の $dt スコープ問題を回避)
+                                $row = $dt.NewRow()
+                                $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                                $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
                                 foreach ($e in $catMap[$cat]) {
                                     $dk = [string]$e.date
                                     if ($dt.Columns.Contains($dk)) {
@@ -275,8 +280,11 @@ function Load-WbsData {
                                 [void]$addedKeys.Add("$pc|$tgc|$tc|$cat")
                             }
                         } else {
-                            # 実績なし → カテゴリ空白行
-                            [void]$dt.Rows.Add((_MakeRow $dt $pc $pn $tgc $tgn $tc $tn ''))
+                            # 実績なし → カテゴリ空白行 (インライン)
+                            $row = $dt.NewRow()
+                            $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                            $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = ''
+                            [void]$dt.Rows.Add($row)
                         }
                     }
                 }
@@ -285,11 +293,15 @@ function Load-WbsData {
 
         # タスクパターンに含まれないエントリ (旧データ / パターンなしプロジェクト)
         foreach ($e in $projEntries) {
+            if (-not $e) { continue }
             $pc = [string]$e.process_code; $tgc = [string]$e.task_group_code
             $tc = [string]$e.task_code;    $cat = [string]$e.category
             $key = "$pc|$tgc|$tc|$cat"
             if ($addedKeys.Contains($key)) { continue }
-            $row = _MakeRow $dt $pc '' $tgc '' $tc '' $cat
+            # インラインで行作成
+            $row = $dt.NewRow()
+            $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+            $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''; $row["カテゴリ"] = $cat
             $dk = [string]$e.date
             if ($dt.Columns.Contains($dk)) {
                 $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
@@ -366,9 +378,11 @@ $ui.AddRowBtn.Add_Click({
     $sel = $ui.WbsTree.SelectedItem
     if (-not $sel -or -not $sel.Tag -or -not $Script:DataTable) { return }
     $info = $sel.Tag
-    $row = _MakeRow $Script:DataTable `
-        ([string]$info.pc) ([string]$info.pn) ([string]$info.tgc) ([string]$info.tgn) `
-        ([string]$info.tc)  ([string]$info.tn) ''
+    # インラインで行作成
+    $row = $Script:DataTable.NewRow()
+    $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
+    $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
+    $row["タスク"] = [string]$info.tn; $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     # 追加行へスクロール
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
