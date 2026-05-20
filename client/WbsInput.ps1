@@ -132,7 +132,12 @@ function Build-DataTable {
     if ($null -eq $tbl) { throw 'New-Object System.Data.DataTable returned null' }
 
     $stringType = [System.String]
-    $allCols = @('_pc','_tgc','_tc','WBS','工程','タスクグループ','タスク','カテゴリ','合計')
+    # 内部 + 表示列。順番が DataGrid 列順に対応
+    $allCols = @(
+        '_pc','_tgc','_tc','_proc_idx',                                            # 内部用
+        'WBS','工程','タスクグループ','タスク',                                    # 階層
+        '担当','カテゴリ','計画','合計','進捗','開始','終了'                        # 編集/集計
+    )
     foreach ($name in $allCols) {
         $dc = New-Object 'System.Data.DataColumn' -ArgumentList $name, $stringType
         $null = $tbl.Columns.Add($dc)
@@ -157,21 +162,69 @@ function Update-AllTotals {
             if (-not [string]::IsNullOrWhiteSpace($v) -and [double]::TryParse([string]$v, [ref]$d)) { $total += $d }
         }
         $row["合計"] = if ($total -gt 0) { $total.ToString("N1") } else { "" }
+        # 進捗% = 実績合計 / 計画 * 100
+        $planRaw = [string]$row["計画"]; $plan = 0.0
+        if (-not [string]::IsNullOrWhiteSpace($planRaw) -and [double]::TryParse($planRaw, [ref]$plan) -and $plan -gt 0) {
+            $pct = [Math]::Round(($total / $plan) * 100.0, 0)
+            $row["進捗"] = "$pct%"
+        } else {
+            $row["進捗"] = ''
+        }
     }
+}
+
+# ---- プランファイル I/O ----
+function Get-WbsPlanRelPath {
+    param([string]$MemberId, [int]$Year, [int]$Month)
+    return ("data/{0}/{1}/{2:D2}_wbs_plan.json" -f $MemberId, $Year, $Month)
+}
+
+function Load-WbsPlanItems {
+    param($Source, [string]$MemberId, [int]$Year, [int]$Month)
+    $rel = Get-WbsPlanRelPath -MemberId $MemberId -Year $Year -Month $Month
+    $raw = Get-DataFile -Source $Source -RelPath $rel
+    if (-not $raw) { return @() }
+    try {
+        $doc = ConvertFrom-Json -InputObject ([string]$raw)
+        if ($null -eq $doc -or $null -eq $doc.items) { return @() }
+        return @($doc.items)
+    } catch {
+        return @()
+    }
+}
+
+function Save-WbsPlanItems {
+    param($Source, [string]$MemberId, [int]$Year, [int]$Month, $Items, [string]$AuthorName, [string]$AuthorEmail)
+    $rel = Get-WbsPlanRelPath -MemberId $MemberId -Year $Year -Month $Month
+    $doc = [ordered]@{
+        member_id  = $MemberId
+        year       = $Year
+        month      = $Month
+        items      = @($Items)
+        updated_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
+    $json = ConvertTo-Json -InputObject $doc -Depth 10
+    Set-DataFile -Source $Source -RelPath $rel -Content ([string]$json) `
+                 -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 
 function Build-GridColumns {
     param($Grid, [int]$Year, [int]$Month)
     $Grid.Columns.Clear()
 
-    # ---- 固定列 (左ペイン: WBS 階層情報) ----
+    # ---- 固定列 (左ペイン: WBS 階層情報 + 計画情報) ----
     $fixedDef = @(
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
-        @{H="工程";           B="[工程]";           W=80;  RO=$true  },
-        @{H="タスクグループ"; B="[タスクグループ]"; W=110; RO=$true  },
-        @{H="タスク";         B="[タスク]";         W=110; RO=$true  },
-        @{H="カテゴリ";       B="[カテゴリ]";       W=80;  RO=$false },
-        @{H="合計";           B="[合計]";           W=52;  RO=$true  }
+        @{H="工程";           B="[工程]";           W=75;  RO=$true  },
+        @{H="タスクグループ"; B="[タスクグループ]"; W=100; RO=$true  },
+        @{H="タスク";         B="[タスク]";         W=100; RO=$true  },
+        @{H="担当";           B="[担当]";           W=70;  RO=$false },
+        @{H="カテゴリ";       B="[カテゴリ]";       W=70;  RO=$false },
+        @{H="計画";           B="[計画]";           W=50;  RO=$false },
+        @{H="合計";           B="[合計]";           W=50;  RO=$true  },
+        @{H="進捗";           B="[進捗]";           W=55;  RO=$true  },
+        @{H="開始";           B="[開始]";           W=80;  RO=$false },
+        @{H="終了";           B="[終了]";           W=80;  RO=$false }
     )
     foreach ($fd in $fixedDef) {
         $col = New-Object System.Windows.Controls.DataGridTextColumn
@@ -243,6 +296,19 @@ function Load-WbsData {
         $loaded      = @(Load-MonthEntries -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
         $projEntries = @($loaded | Where-Object { $null -ne $_ -and ([string]$_.project_code) -eq $projCode })
 
+        # プランファイル読込 + ルックアップマップ構築 (key = "pc|tgc|tc|cat")
+        $planItems = @(Load-WbsPlanItems -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
+        $planMap = @{}
+        foreach ($p in $planItems) {
+            if (-not $p) { continue }
+            $pProj = [string]$p.project_code
+            if ($pProj -ne $projCode) { continue }
+            $k = "{0}|{1}|{2}|{3}" -f [string]$p.process_code, [string]$p.task_group_code, [string]$p.task_code, [string]$p.category
+            $planMap[$k] = $p
+        }
+
+        # 行作成のヘルパスクリプトブロック (プラン値の埋め込み)
+        # 注: scriptblock 化せず inline で参照する
         $addedKeys = New-Object 'System.Collections.Generic.HashSet[string]'
 
         # タスクパターンから全タスクを展開 + WBS 階層番号を採番
@@ -281,13 +347,26 @@ function Load-WbsData {
                             [void]$catMap[$cat].Add($e)
                         }
 
+                        # 共通: プラン値マージ関数
+                        $applyPlan = {
+                            param($r, $key)
+                            if ($planMap.ContainsKey($key)) {
+                                $p = $planMap[$key]
+                                if ($p.planned_hours) { $r["計画"] = [string]$p.planned_hours }
+                                if ($p.assignee)      { $r["担当"] = [string]$p.assignee }
+                                if ($p.planned_start) { $r["開始"] = [string]$p.planned_start }
+                                if ($p.planned_end)   { $r["終了"] = [string]$p.planned_end }
+                            }
+                        }
+
                         if ($catMap.Count -gt 0) {
                             foreach ($cat in $catMap.Keys) {
-                                # インラインで行作成 (関数呼び出し時の $dt スコープ問題を回避)
                                 $row = $dt.NewRow()
                                 $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                                $row["_proc_idx"] = "$procIdx"
                                 $row["WBS"] = $wbsNo
                                 $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
+                                & $applyPlan $row "$pc|$tgc|$tc|$cat"
                                 foreach ($e in $catMap[$cat]) {
                                     $dk = [string]$e.date
                                     if ($dt.Columns.Contains($dk)) {
@@ -299,11 +378,13 @@ function Load-WbsData {
                                 [void]$addedKeys.Add("$pc|$tgc|$tc|$cat")
                             }
                         } else {
-                            # 実績なし → カテゴリ空白行 (インライン)
+                            # 実績なし → カテゴリ空白行
                             $row = $dt.NewRow()
                             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                            $row["_proc_idx"] = "$procIdx"
                             $row["WBS"] = $wbsNo
                             $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = ''
+                            & $applyPlan $row "$pc|$tgc|$tc|"
                             [void]$dt.Rows.Add($row)
                         }
                     }
@@ -321,8 +402,17 @@ function Load-WbsData {
             # インラインで行作成 (パターン外エントリ)
             $row = $dt.NewRow()
             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+            $row["_proc_idx"] = '0'
             $row["WBS"] = ''
             $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''; $row["カテゴリ"] = $cat
+            # プラン値マージ
+            if ($planMap.ContainsKey($key)) {
+                $p = $planMap[$key]
+                if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
+                if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
+                if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
+                if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
+            }
             $dk = [string]$e.date
             if ($dt.Columns.Contains($dk)) {
                 $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
@@ -397,6 +487,35 @@ function Build-WbsTree {
     }
 }
 
+# ---- 行カラーリング: 工程インデックスごとに背景色を変える ----
+# $global:WT_WbsRowBrushes は工程 idx (文字列) → Brush のマップ
+$global:WT_WbsRowBrushes = @{
+    '1' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#ffffff')))
+    '2' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#ecfdf5')))
+    '3' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#fef3c7')))
+    '4' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#dbeafe')))
+    '5' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#fce7f3')))
+    '6' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#ede9fe')))
+    '7' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#fed7aa')))
+    '0' = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#f3f4f6')))
+}
+$ui.WbsGrid.Add_LoadingRow({
+    param($s, $e)
+    $drv = $e.Row.Item -as [System.Data.DataRowView]
+    if (-not $drv) { return }
+    try {
+        $idx = [string]$drv.Row['_proc_idx']
+        if ([string]::IsNullOrWhiteSpace($idx)) { return }
+        # ループするように mod を取る
+        $modKey = ([int]$idx % 7) + 1
+        $key = [string]$modKey
+        if ($idx -eq '0') { $key = '0' }
+        if ($global:WT_WbsRowBrushes.ContainsKey($key)) {
+            $e.Row.Background = $global:WT_WbsRowBrushes[$key]
+        }
+    } catch { }
+})
+
 # ---- イベントハンドラ ----
 $ui.LoadBtn.Add_Click({ Load-WbsData })
 
@@ -412,6 +531,7 @@ $ui.AddRowBtn.Add_Click({
     # インラインで行作成
     $row = $Script:DataTable.NewRow()
     $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
+    $row["_proc_idx"] = '0'
     $row["WBS"] = ''
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = [string]$info.tn; $row["カテゴリ"] = ''
@@ -461,6 +581,35 @@ function _BuildEntries {
     }
 }
 
+function _BuildPlanItems {
+    param([string]$ProjCode)
+    # 各行から計画情報 (担当/計画工数/期間) を抽出
+    $items = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($drv in $Script:DataTable.DefaultView) {
+        $row = $drv.Row
+        $pc  = [string]$row["_pc"];  $tgc = [string]$row["_tgc"]
+        $tc  = [string]$row["_tc"];  $cat = [string]$row["カテゴリ"]
+        $plan = [string]$row["計画"]; $assn = [string]$row["担当"]
+        $st = [string]$row["開始"];   $en = [string]$row["終了"]
+        # 全て空ならスキップ
+        if ([string]::IsNullOrWhiteSpace($plan) -and [string]::IsNullOrWhiteSpace($assn) `
+            -and [string]::IsNullOrWhiteSpace($st) -and [string]::IsNullOrWhiteSpace($en)) { continue }
+        $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
+        $items.Add([pscustomobject]@{
+            project_code    = $ProjCode
+            process_code    = $pc
+            task_group_code = $tgc
+            task_code       = $tc
+            category        = $cat
+            planned_hours   = if ($planNum -gt 0) { $planNum } else { $null }
+            assignee        = $assn
+            planned_start   = $st
+            planned_end     = $en
+        })
+    }
+    return $items.ToArray()
+}
+
 function _DoSave {
     if (-not $Script:DataTable) { throw 'データが読み込まれていません' }
     $projCode   = [string]$ui.ProjectCombo.SelectedItem.unit_code
@@ -470,9 +619,19 @@ function _DoSave {
     $memberId   = [string]$memberItem.id
     $memberName = [string]$memberItem.name
 
+    # 1. 実績エントリ保存 (他プロジェクトとマージ)
     $r = _BuildEntries -ProjCode $projCode -Year $year -Month $month -MemberId $memberId
     Save-EntriesGrouped -Source $Script:Source -MemberId $memberId `
         -AllEntries $r.Merged -ViewYear $year -ViewMonth $month `
+        -AuthorName $memberName -AuthorEmail "$memberId@worktime-tracker.local"
+
+    # 2. プラン (計画/担当/期間) 保存 — 他プロジェクト分は保持してマージ
+    $thisProjPlanItems = _BuildPlanItems -ProjCode $projCode
+    $allOldPlan = @(Load-WbsPlanItems -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
+    $otherPlan  = @($allOldPlan | Where-Object { $null -ne $_ -and ([string]$_.project_code) -ne $projCode })
+    $mergedPlan = @($otherPlan) + @($thisProjPlanItems)
+    Save-WbsPlanItems -Source $Script:Source -MemberId $memberId -Year $year -Month $month `
+        -Items $mergedPlan `
         -AuthorName $memberName -AuthorEmail "$memberId@worktime-tracker.local"
     return $r
 }
