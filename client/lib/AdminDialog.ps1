@@ -353,7 +353,9 @@ function Show-AdminDialog {
     $global:WT_CurrentPatNode   = $null
     $global:WT_SuppressPatEdit  = $false
 
-    # パターン編集モードへ切替 (SelectionChanged でも再クリック検出でも共通で使う)
+    # パターン編集モードへ右ペインを切替する共通処理 (Render-PatternTree の呼び出しは含まない)
+    # GetNewClosure() クロージャからは Show-AdminDialog 内部関数が見えないため、
+    # Render-PatternTree は呼び出し元の通常ハンドラ側で実行する。
     $global:WT_ShowPatternEdit = {
         $sel = $u.PatternsList.SelectedItem
         if (-not $sel) { return }
@@ -371,28 +373,27 @@ function Show-AdminDialog {
         $u.PatNodeDelBtn.IsEnabled = $false
         $u.PatHint.Text = '直下に「工程」を追加できます。'
         $global:WT_SuppressPatEdit = $false
-        Render-PatternTree -Pattern $global:WT_CurrentPattern
     }.GetNewClosure()
 
     $u.PatternsList.Add_SelectionChanged({
         $sel = $u.PatternsList.SelectedItem
         if (-not $sel) { $global:WT_CurrentPattern = $null; $u.PatternTree.Items.Clear(); _ClearPatNode; return }
         & $global:WT_ShowPatternEdit
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
     })
 
     # WPF の ListBox は同じ項目を再クリックしても SelectionChanged が発火しない。
     # ツリーノード選択後にパターン一覧の同じ行を再クリックしたときを PreviewMouseDown で検出する。
     $u.PatternsList.Add_PreviewMouseDown({
         param($s, $e)
-        # クリックされた ListBoxItem を visual tree から探す
         $el = $e.OriginalSource -as [System.Windows.DependencyObject]
         while ($el -and ($el -isnot [System.Windows.Controls.ListBoxItem])) {
             $el = [System.Windows.Media.VisualTreeHelper]::GetParent($el)
         }
         if (-not $el) { return }
-        # 既選択行を再クリック かつ ツリーノード編集中 → パターン編集モードへ戻す
         if ($el.DataContext -eq $u.PatternsList.SelectedItem -and $global:WT_CurrentPatNode) {
             & $global:WT_ShowPatternEdit
+            Render-PatternTree -Pattern $global:WT_CurrentPattern
         }
     })
 
