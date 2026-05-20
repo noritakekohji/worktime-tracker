@@ -90,26 +90,24 @@ $projItems = @($Script:Projects | ForEach-Object {
 })
 $ui.ProjectCombo.ItemsSource = $projItems
 
-# 担当者 ComboBox
-# PS 5.1: @{} 内で "{0}" -f は { と衝突するため変数へ退避してから設定する
+# 担当者 ComboBox — 全メンバーを表示 (WBS は担当者を選んで閲覧するため)
 $currentMember = $Script:Members | Where-Object { $_.id -eq $cfg.member_id -and $_.active } | Select-Object -First 1
-$Script:IsAdmin = $currentMember -and ($currentMember.role -eq 'admin')
-$memberItems = if ($Script:IsAdmin) {
-    @($Script:Members | Where-Object { $_.active } | ForEach-Object {
-        $mid = [string]$_.id; $mnm = [string]$_.name; $mdisp = $mid + '  ' + $mnm
-        [pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp }
-    })
-} else {
-    if ($currentMember) {
-        $mid = [string]$currentMember.id; $mnm = [string]$currentMember.name; $mdisp = $mid + '  ' + $mnm
-        @([pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp })
-    } else {
-        @([pscustomobject]@{ id=$cfg.member_id; name='(自分)'; display=$cfg.member_id })
-    }
+$memberItems = @($Script:Members | Where-Object { $_.active } | ForEach-Object {
+    $mid = [string]$_.id; $mnm = [string]$_.name; $mdisp = $mid + '  ' + $mnm
+    [pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp }
+})
+if ($memberItems.Count -eq 0) {
+    # マスタになければ設定値から自分だけ追加
+    $mid = $cfg.member_id; $mnm = '(自分)'
+    $memberItems = @([pscustomobject]@{ id=$mid; name=$mnm; display="$mid  $mnm" })
 }
 $ui.MemberCombo.ItemsSource = $memberItems
-$ui.MemberCombo.SelectedIndex = 0
-if (-not $Script:IsAdmin) { $ui.MemberCombo.IsEnabled = $false }
+# 現在のメンバーを初期選択
+$selIdx = 0
+for ($i = 0; $i -lt $memberItems.Count; $i++) {
+    if ($memberItems[$i].id -eq $cfg.member_id) { $selIdx = $i; break }
+}
+$ui.MemberCombo.SelectedIndex = $selIdx
 
 # Gitlab モードなら送信ボタン表示
 if ($Script:Source.RemoteCtx) { $ui.PushBtn.Visibility = 'Visible' }
@@ -165,7 +163,7 @@ function Build-GridColumns {
     param($Grid, [int]$Year, [int]$Month)
     $Grid.Columns.Clear()
 
-    # ---- 固定列 ----
+    # ---- 固定列 (Style/Setter を使わずシンプルに) ----
     $fixedDef = @(
         @{H="工程";           B="[工程]";           W=80;  RO=$true  },
         @{H="タスクグループ"; B="[タスクグループ]"; W=110; RO=$true  },
@@ -173,27 +171,12 @@ function Build-GridColumns {
         @{H="カテゴリ";       B="[カテゴリ]";       W=80;  RO=$false },
         @{H="合計";           B="[合計]";           W=52;  RO=$true  }
     )
-    $converter = [System.Windows.Media.BrushConverter]::new()
     foreach ($fd in $fixedDef) {
         $col = New-Object System.Windows.Controls.DataGridTextColumn
-        $col.Header    = $fd.H
-        $col.Binding   = New-Object System.Windows.Data.Binding $fd.B
-        $col.Width     = $fd.W
+        $col.Header     = $fd.H
+        $col.Binding    = New-Object System.Windows.Data.Binding $fd.B
+        $col.Width      = $fd.W
         $col.IsReadOnly = $fd.RO
-
-        # 読取専用列は薄色フォント
-        if ($fd.RO) {
-            $es = New-Object System.Windows.Style ([System.Windows.Controls.TextBlock])
-            $setter = New-Object System.Windows.Setter ([System.Windows.Controls.TextBlock]::ForegroundProperty), ($converter.ConvertFrom('#374151'))
-            $es.Setters.Add($setter)
-            $col.ElementStyle = $es
-        } else {
-            # カテゴリ列はエメラルド色
-            $es = New-Object System.Windows.Style ([System.Windows.Controls.TextBlock])
-            $setter = New-Object System.Windows.Setter ([System.Windows.Controls.TextBlock]::ForegroundProperty), ($converter.ConvertFrom('#059669'))
-            $es.Setters.Add($setter)
-            $col.ElementStyle = $es
-        }
         $Grid.Columns.Add($col)
     }
     $Grid.FrozenColumnCount = $fixedDef.Count
@@ -201,31 +184,16 @@ function Build-GridColumns {
     # ---- 日付列 ----
     $days = [DateTime]::DaysInMonth($Year, $Month)
     for ($d = 1; $d -le $days; $d++) {
-        $dt  = [DateTime]::new($Year, $Month, $d)
-        $key = "{0:D4}-{1:D2}-{2:D2}" -f $Year, $Month, $d
-        $dow = $dt.DayOfWeek
+        $dtObj = [DateTime]::new($Year, $Month, $d)
+        $key   = "{0:D4}-{1:D2}-{2:D2}" -f $Year, $Month, $d
+        $dow   = $dtObj.DayOfWeek
 
         $col = New-Object System.Windows.Controls.DataGridTextColumn
-        $col.Header     = $d.ToString()
+        # 土日はヘッダに曜日表示 (スタイルは使わず文字で区別)
+        $col.Header     = if ($dow -eq 'Saturday') { "$d(土)" } elseif ($dow -eq 'Sunday') { "$d(日)" } else { $d.ToString() }
         $col.Binding    = New-Object System.Windows.Data.Binding "[$key]"
-        $col.Width      = 42
+        $col.Width      = 46
         $col.IsReadOnly = $false
-
-        # ヘッダスタイル (土日は橙色)
-        if ($dow -eq 'Saturday' -or $dow -eq 'Sunday') {
-            $hs = New-Object System.Windows.Style ([System.Windows.Controls.Primitives.DataGridColumnHeader])
-            $s1 = New-Object System.Windows.Setter ([System.Windows.Controls.Primitives.DataGridColumnHeader]::ForegroundProperty), ($converter.ConvertFrom('#b45309'))
-            $s2 = New-Object System.Windows.Setter ([System.Windows.Controls.Primitives.DataGridColumnHeader]::BackgroundProperty), ($converter.ConvertFrom('#fef3c7'))
-            $hs.Setters.Add($s1); $hs.Setters.Add($s2)
-            $col.HeaderStyle = $hs
-        }
-
-        # セルスタイル (右揃え)
-        $es = New-Object System.Windows.Style ([System.Windows.Controls.TextBlock])
-        $se = New-Object System.Windows.Setter ([System.Windows.FrameworkElement]::HorizontalAlignmentProperty), ([System.Windows.HorizontalAlignment]::Right)
-        $es.Setters.Add($se)
-        $col.ElementStyle = $es
-
         $Grid.Columns.Add($col)
     }
 }
