@@ -132,7 +132,7 @@ function Build-DataTable {
     if ($null -eq $tbl) { throw 'New-Object System.Data.DataTable returned null' }
 
     $stringType = [System.String]
-    $allCols = @('_pc','_tgc','_tc','工程','タスクグループ','タスク','カテゴリ','合計')
+    $allCols = @('_pc','_tgc','_tc','WBS','工程','タスクグループ','タスク','カテゴリ','合計')
     foreach ($name in $allCols) {
         $dc = New-Object 'System.Data.DataColumn' -ArgumentList $name, $stringType
         $null = $tbl.Columns.Add($dc)
@@ -164,8 +164,9 @@ function Build-GridColumns {
     param($Grid, [int]$Year, [int]$Month)
     $Grid.Columns.Clear()
 
-    # ---- 固定列 (Style/Setter を使わずシンプルに) ----
+    # ---- 固定列 (左ペイン: WBS 階層情報) ----
     $fixedDef = @(
+        @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
         @{H="工程";           B="[工程]";           W=80;  RO=$true  },
         @{H="タスクグループ"; B="[タスクグループ]"; W=110; RO=$true  },
         @{H="タスク";         B="[タスク]";         W=110; RO=$true  },
@@ -174,27 +175,31 @@ function Build-GridColumns {
     )
     foreach ($fd in $fixedDef) {
         $col = New-Object System.Windows.Controls.DataGridTextColumn
-        $col.Header     = $fd.H
-        $col.Binding    = New-Object System.Windows.Data.Binding $fd.B
-        $col.Width      = $fd.W
-        $col.IsReadOnly = $fd.RO
+        $col.Header      = $fd.H
+        $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
+        $col.Width       = $fd.W
+        $col.IsReadOnly  = $fd.RO
+        # WBS は階層順を保ちたいのでソート無効化 (DataView の [列名] 構文エラーも回避)
+        $col.CanUserSort = $false
         $Grid.Columns.Add($col)
     }
     $Grid.FrozenColumnCount = $fixedDef.Count
 
     # ---- 日付列 ----
+    $dayNames = @('日','月','火','水','木','金','土')
     $days = [DateTime]::DaysInMonth($Year, $Month)
     for ($d = 1; $d -le $days; $d++) {
         $dtObj = [DateTime]::new($Year, $Month, $d)
         $key   = "{0:D4}-{1:D2}-{2:D2}" -f $Year, $Month, $d
-        $dow   = $dtObj.DayOfWeek
+        $dow   = [int]$dtObj.DayOfWeek    # Sunday=0, Saturday=6
+        $dn    = $dayNames[$dow]
 
         $col = New-Object System.Windows.Controls.DataGridTextColumn
-        # 土日はヘッダに曜日表示 (スタイルは使わず文字で区別)
-        $col.Header     = if ($dow -eq 'Saturday') { "$d(土)" } elseif ($dow -eq 'Sunday') { "$d(日)" } else { $d.ToString() }
-        $col.Binding    = New-Object System.Windows.Data.Binding "[$key]"
-        $col.Width      = 46
-        $col.IsReadOnly = $false
+        $col.Header      = "$d`n$dn"      # 2行表示 (改行)
+        $col.Binding     = New-Object System.Windows.Data.Binding "[$key]"
+        $col.Width       = 42
+        $col.IsReadOnly  = $false
+        $col.CanUserSort = $false
         $Grid.Columns.Add($col)
     }
 }
@@ -240,14 +245,21 @@ function Load-WbsData {
 
         $addedKeys = New-Object 'System.Collections.Generic.HashSet[string]'
 
-        # タスクパターンから全タスクを展開
+        # タスクパターンから全タスクを展開 + WBS 階層番号を採番
         if ($Script:CurrentPtn -and $Script:CurrentPtn.processes) {
+            $procIdx = 0
             foreach ($proc in @($Script:CurrentPtn.processes)) {
                 if (-not $proc) { continue }
+                $procIdx++
+                $tgIdx = 0
                 foreach ($tg in @($proc.task_groups)) {
                     if (-not $tg) { continue }
+                    $tgIdx++
+                    $tkIdx = 0
                     foreach ($tk in @($tg.tasks)) {
                         if (-not $tk) { continue }
+                        $tkIdx++
+                        $wbsNo = "$procIdx.$tgIdx.$tkIdx"
                         $pc = [string]$proc.code; $pn = [string]$proc.name
                         $tgc = [string]$tg.code;  $tgn = [string]$tg.name
                         $tc  = [string]$tk.code;  $tn  = [string]$tk.name
@@ -274,6 +286,7 @@ function Load-WbsData {
                                 # インラインで行作成 (関数呼び出し時の $dt スコープ問題を回避)
                                 $row = $dt.NewRow()
                                 $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                                $row["WBS"] = $wbsNo
                                 $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
                                 foreach ($e in $catMap[$cat]) {
                                     $dk = [string]$e.date
@@ -289,6 +302,7 @@ function Load-WbsData {
                             # 実績なし → カテゴリ空白行 (インライン)
                             $row = $dt.NewRow()
                             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+                            $row["WBS"] = $wbsNo
                             $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = ''
                             [void]$dt.Rows.Add($row)
                         }
@@ -304,9 +318,10 @@ function Load-WbsData {
             $tc = [string]$e.task_code;    $cat = [string]$e.category
             $key = "$pc|$tgc|$tc|$cat"
             if ($addedKeys.Contains($key)) { continue }
-            # インラインで行作成
+            # インラインで行作成 (パターン外エントリ)
             $row = $dt.NewRow()
             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
+            $row["WBS"] = ''
             $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''; $row["カテゴリ"] = $cat
             $dk = [string]$e.date
             if ($dt.Columns.Contains($dk)) {
@@ -325,8 +340,18 @@ function Load-WbsData {
 
         Build-WbsTree
 
-        $ui.GridTitle.Text = ("📊 {0} — {1:D4}/{2:D2}" -f $projItem.project_name, $year, $month)
-        Set-Status ("読込完了: {0} 行" -f $dt.Rows.Count) '#10b981'
+        # サマリ計算 (実績合計とタスク数)
+        $dateColsForSum = @($dt.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
+        $totalHrs = 0.0
+        foreach ($r in $dt.Rows) {
+            foreach ($c in $dateColsForSum) {
+                $v = $r[$c.ColumnName]; $h = 0.0
+                if (-not [string]::IsNullOrWhiteSpace($v) -and [double]::TryParse([string]$v, [ref]$h)) { $totalHrs += $h }
+            }
+        }
+        $ui.GridTitle.Text = ("📊 {0}  /  {1:D4}年{2:D2}月  /  {3}行  /  実績合計 {4:N1}h" -f `
+            $projItem.project_name, $year, $month, $dt.Rows.Count, $totalHrs)
+        Set-Status ("読込完了: {0} 行 / 実績 {1:N1}h" -f $dt.Rows.Count, $totalHrs) '#10b981'
     } catch {
         $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
         Set-Status "読込失敗: $($_.Exception.Message)" '#ef4444'
@@ -387,6 +412,7 @@ $ui.AddRowBtn.Add_Click({
     # インラインで行作成
     $row = $Script:DataTable.NewRow()
     $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
+    $row["WBS"] = ''
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = [string]$info.tn; $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
