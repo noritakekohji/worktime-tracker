@@ -952,4 +952,18 @@ $ui.PushBtn.Add_Click({
 # ---- 初回ロード ----
 Load-ViewMonth
 
+# ---- キーボードショートカット (A2) ----
+# Ctrl+S = 保存 / Ctrl+R = 再読込 / F5 = 再読込
+$Script:Window.Add_PreviewKeyDown({
+    param($s, $e)
+    $ctrl = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+    if ($ctrl -and $e.Key -eq 'S' -and $ui.SaveBtn) {
+        $ui.SaveBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    } elseif ((($ctrl -and $e.Key -eq 'R') -or $e.Key -eq 'F5') -and $ui.ReloadBtn) {
+        $ui.ReloadBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    }
+})
+
 [void]$Script:Window.ShowDialog()
