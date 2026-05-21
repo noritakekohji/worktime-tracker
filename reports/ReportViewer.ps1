@@ -35,7 +35,8 @@ $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
 foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
-              'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas') {
+              'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
+              'HeatmapCanvas','AnomalyGrid','DashboardPanel') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -166,6 +167,306 @@ function Apply-Filters {
     Build-Analysis -Rows $rows
     $Script:ChartRows = $rows
     Build-Chart
+    Build-Heatmap -Rows $rows
+    Build-Anomalies -Rows $rows
+    Build-Dashboard -Rows $rows
+}
+
+# ---- C3: ダッシュボード (KPI カード + Top 一覧) ----
+function Build-Dashboard {
+    param($Rows)
+    if (-not $u.DashboardPanel) { return }
+    $u.DashboardPanel.Children.Clear()
+    if (-not $Rows -or $Rows.Count -eq 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = "(該当データなし)"
+        $tb.Foreground = [System.Windows.Media.Brushes]::Gray
+        [void]$u.DashboardPanel.Children.Add($tb)
+        return
+    }
+
+    # KPI 計算
+    $total = 0.0
+    $members = @{}
+    $projects = @{}
+    $days = @{}
+    foreach ($r in $Rows) {
+        $h = [double]$r.hours
+        $total += $h
+        $m = [string]$r.member_id;    if ($m)   { if (-not $members.ContainsKey($m))  { $members[$m]  = 0.0 }; $members[$m]  += $h }
+        $p = [string]$r.project_code; if ($p)   { if (-not $projects.ContainsKey($p)) { $projects[$p] = 0.0 }; $projects[$p] += $h }
+        $d = [string]$r.date;         if ($d)   { if (-not $days.ContainsKey($d))     { $days[$d]     = 0.0 }; $days[$d]     += $h }
+    }
+    $memberCount  = $members.Count
+    $projectCount = $projects.Count
+    $dayCount     = $days.Count
+    $avgPerDay    = if ($dayCount -gt 0)   { $total / $dayCount }   else { 0 }
+    $avgPerMember = if ($memberCount -gt 0){ $total / $memberCount } else { 0 }
+
+    # ヘッダ
+    $h1 = New-Object System.Windows.Controls.TextBlock
+    $h1.Text = "📊 ダッシュボード"
+    $h1.FontSize = 18; $h1.FontWeight = 'Bold'
+    $h1.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+    $h1.Margin = '0,0,0,12'
+    [void]$u.DashboardPanel.Children.Add($h1)
+
+    # KPI カード (横並び)
+    $kpiPanel = New-Object System.Windows.Controls.WrapPanel
+    $kpiPanel.Orientation = 'Horizontal'
+    $kpiPanel.Margin = '0,0,0,18'
+
+    $makeCard = {
+        param([string]$Title, [string]$Value, [string]$Color)
+        $b = New-Object System.Windows.Controls.Border
+        $b.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#f0f9ff')
+        $b.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#bae6fd')
+        $b.BorderThickness = '1'
+        $b.CornerRadius = '8'
+        $b.Padding = '14'
+        $b.Margin = '0,0,10,10'
+        $b.MinWidth = 160
+        $sp = New-Object System.Windows.Controls.StackPanel
+        $t1 = New-Object System.Windows.Controls.TextBlock
+        $t1.Text = $Title; $t1.FontSize = 11
+        $t1.Foreground = [System.Windows.Media.Brushes]::SlateGray
+        $sp.Children.Add($t1) | Out-Null
+        $t2 = New-Object System.Windows.Controls.TextBlock
+        $t2.Text = $Value; $t2.FontSize = 22; $t2.FontWeight = 'Bold'
+        $t2.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+        $sp.Children.Add($t2) | Out-Null
+        $b.Child = $sp
+        return $b
+    }
+
+    [void]$kpiPanel.Children.Add((& $makeCard '総工数'         ("{0:N1} h" -f $total)        '#0369a1'))
+    [void]$kpiPanel.Children.Add((& $makeCard 'メンバー数'     ("{0}" -f $memberCount)       '#059669'))
+    [void]$kpiPanel.Children.Add((& $makeCard 'プロジェクト数' ("{0}" -f $projectCount)      '#d97706'))
+    [void]$kpiPanel.Children.Add((& $makeCard '実績日数'       ("{0} 日" -f $dayCount)       '#7c3aed'))
+    [void]$kpiPanel.Children.Add((& $makeCard '日平均'         ("{0:N1} h/日" -f $avgPerDay) '#0891b2'))
+    [void]$kpiPanel.Children.Add((& $makeCard '一人平均'       ("{0:N1} h/人" -f $avgPerMember) '#db2777'))
+    [void]$u.DashboardPanel.Children.Add($kpiPanel)
+
+    # Top プロジェクト (上位 5)
+    $tb = New-Object System.Windows.Controls.TextBlock
+    $tb.Text = "🔝 工数 Top プロジェクト"
+    $tb.FontSize = 14; $tb.FontWeight = 'Bold'; $tb.Margin = '0,4,0,6'
+    $tb.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+    [void]$u.DashboardPanel.Children.Add($tb)
+
+    $top = $projects.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
+    $maxV = 1.0
+    foreach ($e in $top) { if ($e.Value -gt $maxV) { $maxV = $e.Value } }
+    foreach ($e in $top) {
+        $row = New-Object System.Windows.Controls.Grid
+        $row.Margin = '0,2'
+        $cd1 = New-Object System.Windows.Controls.ColumnDefinition; $cd1.Width = '180'
+        $cd2 = New-Object System.Windows.Controls.ColumnDefinition; $cd2.Width = '*'
+        $cd3 = New-Object System.Windows.Controls.ColumnDefinition; $cd3.Width = '80'
+        $row.ColumnDefinitions.Add($cd1); $row.ColumnDefinitions.Add($cd2); $row.ColumnDefinitions.Add($cd3)
+
+        $lbl = New-Object System.Windows.Controls.TextBlock
+        $lbl.Text = [string]$e.Key; $lbl.VerticalAlignment = 'Center'
+        [System.Windows.Controls.Grid]::SetColumn($lbl, 0)
+        $row.Children.Add($lbl) | Out-Null
+
+        $bg = New-Object System.Windows.Controls.Border
+        $bg.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#dbeafe')
+        $bg.HorizontalAlignment = 'Left'
+        $bg.Height = 16; $bg.CornerRadius = '4'
+        $bg.Width = [Math]::Max(20, [double](($e.Value / $maxV) * 400))
+        [System.Windows.Controls.Grid]::SetColumn($bg, 1)
+        $row.Children.Add($bg) | Out-Null
+
+        $val = New-Object System.Windows.Controls.TextBlock
+        $val.Text = ("{0:N1} h" -f $e.Value); $val.VerticalAlignment = 'Center'
+        $val.HorizontalAlignment = 'Right'
+        $val.FontWeight = 'Bold'
+        [System.Windows.Controls.Grid]::SetColumn($val, 2)
+        $row.Children.Add($val) | Out-Null
+
+        [void]$u.DashboardPanel.Children.Add($row)
+    }
+
+    # Top メンバー (上位 5)
+    $tb2 = New-Object System.Windows.Controls.TextBlock
+    $tb2.Text = "👥 工数 Top メンバー"
+    $tb2.FontSize = 14; $tb2.FontWeight = 'Bold'; $tb2.Margin = '0,16,0,6'
+    $tb2.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#0c4a6e')
+    [void]$u.DashboardPanel.Children.Add($tb2)
+
+    $topM = $members.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
+    $maxM = 1.0
+    foreach ($e in $topM) { if ($e.Value -gt $maxM) { $maxM = $e.Value } }
+    foreach ($e in $topM) {
+        $row = New-Object System.Windows.Controls.Grid
+        $row.Margin = '0,2'
+        $cd1 = New-Object System.Windows.Controls.ColumnDefinition; $cd1.Width = '180'
+        $cd2 = New-Object System.Windows.Controls.ColumnDefinition; $cd2.Width = '*'
+        $cd3 = New-Object System.Windows.Controls.ColumnDefinition; $cd3.Width = '80'
+        $row.ColumnDefinitions.Add($cd1); $row.ColumnDefinitions.Add($cd2); $row.ColumnDefinitions.Add($cd3)
+
+        $lbl = New-Object System.Windows.Controls.TextBlock
+        $lbl.Text = [string]$e.Key; $lbl.VerticalAlignment = 'Center'
+        [System.Windows.Controls.Grid]::SetColumn($lbl, 0)
+        $row.Children.Add($lbl) | Out-Null
+
+        $bg = New-Object System.Windows.Controls.Border
+        $bg.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#dcfce7')
+        $bg.HorizontalAlignment = 'Left'
+        $bg.Height = 16; $bg.CornerRadius = '4'
+        $bg.Width = [Math]::Max(20, [double](($e.Value / $maxM) * 400))
+        [System.Windows.Controls.Grid]::SetColumn($bg, 1)
+        $row.Children.Add($bg) | Out-Null
+
+        $val = New-Object System.Windows.Controls.TextBlock
+        $val.Text = ("{0:N1} h" -f $e.Value); $val.VerticalAlignment = 'Center'
+        $val.HorizontalAlignment = 'Right'
+        $val.FontWeight = 'Bold'
+        [System.Windows.Controls.Grid]::SetColumn($val, 2)
+        $row.Children.Add($val) | Out-Null
+
+        [void]$u.DashboardPanel.Children.Add($row)
+    }
+}
+
+# ---- C1: 日付 × プロジェクト ヒートマップ ----
+function Build-Heatmap {
+    param($Rows)
+    $cv = $u.HeatmapCanvas
+    if (-not $cv) { return }
+    $cv.Children.Clear()
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    # 日付集合とプロジェクト集合
+    $dates = @($Rows | ForEach-Object { $_.date } | Sort-Object -Unique)
+    $projs = @($Rows | ForEach-Object { $_.project_code } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($dates.Count -eq 0 -or $projs.Count -eq 0) { return }
+
+    # 集計: project_code,date → hours
+    $cell = @{}
+    $maxH = 0.0
+    foreach ($r in $Rows) {
+        $k = "$($r.project_code)|$($r.date)"
+        if (-not $cell.ContainsKey($k)) { $cell[$k] = 0.0 }
+        $cell[$k] += [double]$r.hours
+        if ($cell[$k] -gt $maxH) { $maxH = $cell[$k] }
+    }
+    if ($maxH -le 0) { $maxH = 1.0 }
+
+    # レイアウト
+    $colW = 22
+    $rowH = 22
+    $lblW = 200
+    $lblH = 60
+    $cv.Width  = $lblW + ($dates.Count * $colW) + 20
+    $cv.Height = $lblH + ($projs.Count * $rowH) + 20
+
+    # 日付ヘッダ (縦書き風: 日のみ)
+    for ($i = 0; $i -lt $dates.Count; $i++) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $d = [datetime]::MinValue
+        $label = if ([datetime]::TryParse([string]$dates[$i], [ref]$d)) { $d.ToString('M/d') } else { [string]$dates[$i] }
+        $tb.Text = $label
+        $tb.FontSize = 9
+        [System.Windows.Controls.Canvas]::SetLeft($tb, $lblW + ($i * $colW))
+        [System.Windows.Controls.Canvas]::SetTop($tb, 30)
+        $tb.Width = $colW; $tb.TextAlignment = 'Center'
+        [void]$cv.Children.Add($tb)
+    }
+
+    # プロジェクトラベル + セル
+    for ($r = 0; $r -lt $projs.Count; $r++) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = [string]$projs[$r]
+        $tb.FontSize = 11
+        $tb.FontWeight = 'SemiBold'
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 4)
+        [System.Windows.Controls.Canvas]::SetTop($tb, $lblH + ($r * $rowH) + 4)
+        $tb.Width = $lblW - 8
+        [void]$cv.Children.Add($tb)
+
+        for ($i = 0; $i -lt $dates.Count; $i++) {
+            $k = "$($projs[$r])|$($dates[$i])"
+            $h = 0.0
+            if ($cell.ContainsKey($k)) { $h = $cell[$k] }
+            if ($h -le 0) { continue }
+            $rect = New-Object System.Windows.Shapes.Rectangle
+            $rect.Width = $colW - 1; $rect.Height = $rowH - 1
+            # 濃度: 0..maxH → 240..40 (HSL Lightness)
+            $intensity = [Math]::Min(1.0, $h / $maxH)
+            $light = [int](240 - (200 * $intensity))   # 240→明 / 40→暗
+            $r1 = [int]($light * 0.6); $g1 = [int]$light; $b1 = [int]($light * 0.8)
+            $bg = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb($r1, $g1, $b1))
+            $rect.Fill = $bg
+            $rect.ToolTip = ("{0}  {1}  {2:N1}h" -f $projs[$r], $dates[$i], $h)
+            [System.Windows.Controls.Canvas]::SetLeft($rect, $lblW + ($i * $colW))
+            [System.Windows.Controls.Canvas]::SetTop($rect, $lblH + ($r * $rowH))
+            [void]$cv.Children.Add($rect)
+        }
+    }
+}
+
+# ---- C4: 異常検知 (過剰入力 / 高負荷 / 入力ゼロ日) ----
+function Build-Anomalies {
+    param($Rows)
+    if (-not $u.AnomalyGrid) { return }
+    $items = New-Object 'System.Collections.Generic.List[object]'
+
+    # 1) 日次 12h 超 = 過剰入力候補
+    $byMemberDay = $Rows | Group-Object member_id, date
+    foreach ($g in $byMemberDay) {
+        $sum = 0.0; foreach ($r in $g.Group) { $sum += [double]$r.hours }
+        if ($sum -gt 12.0) {
+            $items.Add([pscustomobject]@{
+                kind    = '⚠ 過剰入力'
+                target  = $g.Name
+                hours   = [Math]::Round($sum, 1)
+                message = ("1日に {0:N1} h は通常を超える可能性があります" -f $sum)
+            })
+        }
+    }
+
+    # 2) プロジェクト別合計 > 200h
+    $byProj = $Rows | Group-Object project_code
+    foreach ($g in $byProj) {
+        if ([string]::IsNullOrWhiteSpace($g.Name)) { continue }
+        $sum = 0.0; foreach ($r in $g.Group) { $sum += [double]$r.hours }
+        if ($sum -gt 200.0) {
+            $items.Add([pscustomobject]@{
+                kind    = '🔥 高負荷'
+                target  = $g.Name
+                hours   = [Math]::Round($sum, 1)
+                message = ("プロジェクト合計 {0:N1} h: スコープ見直しを検討" -f $sum)
+            })
+        }
+    }
+
+    # 3) 平日に実績ゼロ (1人) — 期間内で「平日 かつ そのメンバーの実績合計 0h」の日
+    $byMember = $Rows | Group-Object member_id
+    $from = $u.FromDate.SelectedDate
+    $to   = $u.ToDate.SelectedDate
+    if ($from -and $to) {
+        foreach ($mg in $byMember) {
+            $memberDates = @($mg.Group | ForEach-Object { [string]$_.date } | Sort-Object -Unique)
+            $missing = 0
+            for ($d = $from; $d -le $to; $d = $d.AddDays(1)) {
+                if ($d.DayOfWeek -eq 'Saturday' -or $d.DayOfWeek -eq 'Sunday') { continue }
+                $ds = $d.ToString('yyyy-MM-dd')
+                if ($memberDates -notcontains $ds) { $missing++ }
+            }
+            if ($missing -ge 3) {
+                $items.Add([pscustomobject]@{
+                    kind    = '📭 入力漏れ候補'
+                    target  = $mg.Name
+                    hours   = 0
+                    message = ("平日 {0} 日分の実績入力が見当たりません" -f $missing)
+                })
+            }
+        }
+    }
+
+    $u.AnomalyGrid.ItemsSource = @($items)
 }
 
 function _AnalysisRow {

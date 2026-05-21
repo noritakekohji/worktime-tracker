@@ -183,6 +183,11 @@
         <!-- 本体: タブ -->
         <Border Style="{StaticResource Card}">
             <TabControl Background="Transparent" BorderThickness="0">
+                <TabItem Header="📊 ダッシュボード">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="DashboardPanel" Margin="14"/>
+                    </ScrollViewer>
+                </TabItem>
                 <TabItem Header="📋 明細">
                     <DataGrid x:Name="DetailGrid"
                               AutoGenerateColumns="False"
@@ -273,6 +278,34 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="AnalysisPanel" Margin="10"/>
                     </ScrollViewer>
+                </TabItem>
+                <TabItem Header="🔥 ヒートマップ">
+                    <DockPanel Margin="10">
+                        <TextBlock DockPanel.Dock="Top" Text="日付 × プロジェクト ヒートマップ (色濃度=工数)"
+                                   FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                            <Canvas x:Name="HeatmapCanvas" Background="White" Width="1200" Height="600"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </TabItem>
+                <TabItem Header="⚠ 異常検知">
+                    <DockPanel Margin="10">
+                        <TextBlock DockPanel.Dock="Top" Text="閾値超過 / 過負荷 / 入力漏れ候補"
+                                   FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
+                        <DataGrid x:Name="AnomalyGrid" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                  HeadersVisibility="Column" RowHeight="32"
+                                  Background="White" RowBackground="White"
+                                  AlternatingRowBackground="#fef2f2"
+                                  BorderBrush="{StaticResource Border}" BorderThickness="1">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="種別"     Binding="{Binding kind}"    Width="120" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="対象"     Binding="{Binding target}"  Width="240" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="工数(h)"  Binding="{Binding hours}"   Width="80"  IsReadOnly="True"/>
+                                <DataGridTextColumn Header="メッセージ" Binding="{Binding message}" Width="*"  IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
                 </TabItem>
                 <TabItem Header="📉 グラフ">
                     <DockPanel Margin="10">

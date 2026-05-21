@@ -352,10 +352,29 @@ function Build-GridColumns {
         @{H="終了";           B="[終了]";           W=80;  RO=$false }
     )
     $overdueConv = New-Object WT.OverdueBgConverter
+    # E4: 担当列用に「全メンバー 2文字短縮 + メンバーID + 空」リストを作成
+    $assigneeItems = New-Object 'System.Collections.Generic.List[string]'
+    [void]$assigneeItems.Add('')
+    foreach ($m in $Script:Members) {
+        if (-not $m -or -not $m.active) { continue }
+        $abbr = Get-MemberAbbrev -MemberId ([string]$m.id)
+        if ($abbr -and -not $assigneeItems.Contains($abbr)) { [void]$assigneeItems.Add($abbr) }
+    }
     foreach ($fd in $fixedDef) {
-        $col = New-Object System.Windows.Controls.DataGridTextColumn
+        # 担当列のみ DataGridComboBoxColumn (IsEditable=True で自由文字列も可)
+        if ($fd.H -eq '担当') {
+            $col = New-Object System.Windows.Controls.DataGridComboBoxColumn
+            $col.ItemsSource = $assigneeItems
+            $col.SelectedValueBinding = New-Object System.Windows.Data.Binding $fd.B
+            # 編集用テンプレートの ComboBox を IsEditable に
+            $col.EditingElementStyle = (New-Object System.Windows.Style ([System.Windows.Controls.ComboBox]))
+            $isEdSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.ComboBox]::IsEditableProperty), $true
+            [void]$col.EditingElementStyle.Setters.Add($isEdSetter)
+        } else {
+            $col = New-Object System.Windows.Controls.DataGridTextColumn
+            $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
+        }
         $col.Header      = $fd.H
-        $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
         $col.Width       = $fd.W
         $col.IsReadOnly  = $fd.RO
         # WBS は階層順を保ちたいのでソート無効化 (DataView の [列名] 構文エラーも回避)

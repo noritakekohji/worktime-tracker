@@ -23,7 +23,7 @@ function Show-AdminDialog {
                    'PatternsList','PatAddBtn','PatDelBtn',
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
                    'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
-                   'PatNodeUpBtn','PatNodeDownBtn',
+                   'PatNodeUpBtn','PatNodeDownBtn','PatCopyBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
                    'OtherMemberCombo','OtherYearCombo','OtherMonthCombo','OtherReloadBtn',
                    'OtherStatusText','OtherEntriesGrid','OtherAddBtn','OtherDelBtn',
@@ -467,6 +467,44 @@ function Show-AdminDialog {
         [void]$patterns.Remove($sel.data)
         $global:WT_CurrentPattern = $null
         Render-PatternsList
+    })
+
+    # E3: テンプレートコピー — 選択パターンを丸ごと複製
+    $u.PatCopyBtn.Add_Click({
+        $sel = $u.PatternsList.SelectedItem
+        if (-not $sel) { return }
+        $src = $sel.data
+        # 再帰でディープコピー (hashtable 化)
+        $cloneNode = {
+            param($Node)
+            $h = @{}
+            foreach ($key in @('code','name','id')) {
+                if ($Node.PSObject.Properties.Match($key).Count -gt 0 -or ($Node -is [hashtable] -and $Node.ContainsKey($key))) {
+                    $h[$key] = [string]$Node.$key
+                }
+            }
+            foreach ($childKey in @('processes','task_groups','tasks')) {
+                if ($Node.PSObject.Properties.Match($childKey).Count -gt 0 -or ($Node -is [hashtable] -and $Node.ContainsKey($childKey))) {
+                    $children = @($Node.$childKey)
+                    $newChildren = @()
+                    foreach ($c in $children) {
+                        if ($c) { $newChildren += & $cloneNode $c }
+                    }
+                    $h[$childKey] = $newChildren
+                }
+            }
+            return $h
+        }
+        $copy = & $cloneNode $src
+        # 新 ID/名称
+        $copy.id   = ([string]$src.id) + '_COPY'
+        $copy.name = ([string]$src.name) + ' (コピー)'
+        $patterns.Add($copy)
+        Render-PatternsList
+        # 追加したパターンを選択
+        foreach ($it in $u.PatternsList.Items) {
+            if ($it.data -eq $copy) { $u.PatternsList.SelectedItem = $it; break }
+        }
     })
 
     # ＋ 子を追加

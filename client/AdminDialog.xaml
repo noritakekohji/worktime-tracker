@@ -256,8 +256,9 @@
                             <DockPanel>
                                 <TextBlock Text="パターン一覧" FontWeight="Bold" Foreground="{StaticResource SakuraD}" DockPanel.Dock="Top" Margin="0,0,0,6"/>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button x:Name="PatAddBtn" Content="＋ 追加" Style="{StaticResource Primary}"/>
-                                    <Button x:Name="PatDelBtn" Content="🗑 削除" Style="{StaticResource Danger}"/>
+                                    <Button x:Name="PatAddBtn"   Content="＋ 追加" Style="{StaticResource Primary}"/>
+                                    <Button x:Name="PatCopyBtn"  Content="📑 複製" ToolTip="選択パターンをまるごと複製"/>
+                                    <Button x:Name="PatDelBtn"   Content="🗑 削除" Style="{StaticResource Danger}"/>
                                 </StackPanel>
                                 <ListBox x:Name="PatternsList"
                                          Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
