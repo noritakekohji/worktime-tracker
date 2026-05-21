@@ -540,10 +540,12 @@ function Show-AdminDialog {
     })
 
     # ---- 順序入れ替え (▲ 上へ / ▼ 下へ) ----
-    # 親コレクション (processes / task_groups / tasks) を取得して、隣の要素と swap する
-    $moveNode = {
+    # GetNewClosure() のクロージャからは Show-AdminDialog 内部関数 (Render-PatternTree) が見えないため
+    # データの swap だけクロージャで行い、Render は Click ハンドラから呼ぶ。
+    # 戻り値: swap 成功した場合の「移動後の要素」/ 失敗時 $null
+    $global:WT_SwapPatNode = {
         param([int]$Delta)   # -1=上へ, +1=下へ
-        if (-not $global:WT_CurrentPatNode) { return }
+        if (-not $global:WT_CurrentPatNode) { return $null }
         $info = $global:WT_CurrentPatNode.Tag
         # 親コレクションを取得
         $parentList = $null
@@ -552,15 +554,15 @@ function Show-AdminDialog {
             'task_group' { $parentList = @($info.parent.task_groups) }
             'task'       { $parentList = @($info.parent.tasks) }
         }
-        if (-not $parentList -or $parentList.Count -le 1) { return }
+        if (-not $parentList -or $parentList.Count -le 1) { return $null }
         # 現在 index を探す
         $idx = -1
         for ($i = 0; $i -lt $parentList.Count; $i++) {
             if ($parentList[$i] -eq $info.data) { $idx = $i; break }
         }
-        if ($idx -lt 0) { return }
+        if ($idx -lt 0) { return $null }
         $newIdx = $idx + $Delta
-        if ($newIdx -lt 0 -or $newIdx -ge $parentList.Count) { return }   # 端は移動不可
+        if ($newIdx -lt 0 -or $newIdx -ge $parentList.Count) { return $null }   # 端は移動不可
         # swap
         $tmp = $parentList[$idx]
         $parentList[$idx] = $parentList[$newIdx]
@@ -571,27 +573,37 @@ function Show-AdminDialog {
             'task_group' { $info.parent.task_groups = @($parentList) }
             'task'       { $info.parent.tasks      = @($parentList) }
         }
-        # 再描画後、移動先のノードを選択
-        Render-PatternTree -Pattern $global:WT_CurrentPattern
-        # ツリーから対応ノードを再選択
-        $selectMoved = {
-            param($items, $target)
-            foreach ($it in $items) {
-                if ($it.Tag -and $it.Tag.data -eq $target) {
-                    $it.IsSelected = $true; $it.BringIntoView() | Out-Null
-                    return $true
-                }
-                if ($it.Items.Count -gt 0) {
-                    if (& $selectMoved $it.Items $target) { return $true }
-                }
-            }
-            return $false
-        }
-        [void](& $selectMoved $u.PatternTree.Items $parentList[$newIdx])
+        return $parentList[$newIdx]
     }.GetNewClosure()
 
-    $u.PatNodeUpBtn.Add_Click({   & $moveNode -1 })
-    $u.PatNodeDownBtn.Add_Click({ & $moveNode  1 })
+    # 再描画後にツリーから対応ノードを探して選択するヘルパ (再帰)
+    function _SelectPatNodeByData {
+        param($Items, $TargetData)
+        foreach ($it in $Items) {
+            if ($it.Tag -and $it.Tag.data -eq $TargetData) {
+                $it.IsSelected = $true
+                $it.BringIntoView() | Out-Null
+                return $true
+            }
+            if ($it.Items.Count -gt 0) {
+                if (_SelectPatNodeByData -Items $it.Items -TargetData $TargetData) { return $true }
+            }
+        }
+        return $false
+    }
+
+    $u.PatNodeUpBtn.Add_Click({
+        $moved = & $global:WT_SwapPatNode -1
+        if ($null -eq $moved) { return }
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
+        [void](_SelectPatNodeByData -Items $u.PatternTree.Items -TargetData $moved)
+    })
+    $u.PatNodeDownBtn.Add_Click({
+        $moved = & $global:WT_SwapPatNode 1
+        if ($null -eq $moved) { return }
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
+        [void](_SelectPatNodeByData -Items $u.PatternTree.Items -TargetData $moved)
+    })
 
     # ---- JSON 直接編集 ----
     # WPF イベントハンドラから内部 function が見えないことがあるので script: 変数として保持
