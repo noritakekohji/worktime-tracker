@@ -430,8 +430,8 @@ function Load-WbsData {
             $planMap[$k] = $p
         }
 
-        # デフォルト担当者の 2 文字短縮 (新規/空行用)
-        $defaultAbbrev = Get-MemberAbbrev -MemberId $memberId
+        # デフォルト担当者 = 未アサイン (空文字)。必要なら手入力で設定
+        $defaultAbbrev = ''
 
         # 行作成のヘルパスクリプトブロック (プラン値の埋め込み)
         # 注: scriptblock 化せず inline で参照する
@@ -684,14 +684,14 @@ $ui.AddRowBtn.Add_Click({
     $sel = $ui.WbsTree.SelectedItem
     if (-not $sel -or -not $sel.Tag -or -not $Script:DataTable) { return }
     $info = $sel.Tag
-    # インラインで行作成 (担当者は選択中メンバーの 2 文字短縮)
+    # インラインで行作成 (担当は未アサイン)
     $row = $Script:DataTable.NewRow()
     $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
     $row["_proc_idx"] = '0'
     $row["WBS"] = ''
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = [string]$info.tn
-    $row["担当"] = Get-MemberAbbrev -MemberId ([string]$ui.MemberCombo.SelectedItem.id)
+    $row["担当"] = ''
     $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     # 追加行へスクロール
@@ -701,6 +701,32 @@ $ui.AddRowBtn.Add_Click({
 # セル編集後に合計を更新 (CurrentCellChanged は編集確定後に発火)
 $ui.WbsGrid.Add_CurrentCellChanged({
     if ($Script:DataTable) { Update-AllTotals }
+})
+
+# 開始/終了 列の編集確定時に yyyy-MM-dd に正規化
+# 例: "19270311" → "1927-03-11" / "2026-5-1" → "2026-05-01"
+$ui.WbsGrid.Add_CellEditEnding({
+    param($s, $e)
+    if ($e.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
+    $col = $e.Column
+    if (-not $col -or -not $col.Binding) { return }
+    $path = [string]$col.Binding.Path.Path
+    if ($path -ne '[開始]' -and $path -ne '[終了]') { return }
+    $tb = $e.EditingElement -as [System.Windows.Controls.TextBox]
+    if (-not $tb) { return }
+    $orig = [string]$tb.Text
+    if ([string]::IsNullOrWhiteSpace($orig)) { return }
+    $t = $orig.Trim()
+    # 1) yyyyMMdd (8 桁数字)
+    if ($t -match '^(\d{4})(\d{2})(\d{2})$') {
+        $tb.Text = "$($matches[1])-$($matches[2])-$($matches[3])"
+        return
+    }
+    # 2) その他は DateTime.TryParse → yyyy-MM-dd
+    $d = [DateTime]::MinValue
+    if ([DateTime]::TryParse($t, [ref]$d)) {
+        $tb.Text = $d.ToString('yyyy-MM-dd')
+    }
 })
 
 # ---- 保存共通処理 ----
