@@ -23,6 +23,7 @@ function Show-AdminDialog {
                    'PatternsList','PatAddBtn','PatDelBtn',
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
                    'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
+                   'PatNodeUpBtn','PatNodeDownBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
                    'OtherMemberCombo','OtherYearCombo','OtherMonthCombo','OtherReloadBtn',
                    'OtherStatusText','OtherEntriesGrid','OtherAddBtn','OtherDelBtn',
@@ -346,6 +347,8 @@ function Show-AdminDialog {
         $u.PatNodeAddBtn.IsEnabled = $false
         $u.PatNodeAddSibBtn.IsEnabled = $false
         $u.PatNodeDelBtn.IsEnabled = $false
+        $u.PatNodeUpBtn.IsEnabled = $false
+        $u.PatNodeDownBtn.IsEnabled = $false
         $u.PatHint.Text = ''
     }
 
@@ -417,6 +420,8 @@ function Show-AdminDialog {
         $u.PatNodeDelBtn.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = ($info.kind -ne 'task')
         $u.PatNodeAddSibBtn.IsEnabled = $true
+        $u.PatNodeUpBtn.IsEnabled   = $true
+        $u.PatNodeDownBtn.IsEnabled = $true
         $u.PatHint.Text = switch ($info.kind) {
             'process'    { '直下に「タスク分類1」を追加 / 兄弟として別の「工程」を追加できます。' }
             'task_group' { '直下に「タスク分類2」を追加 / 兄弟として別の「タスク分類1」を追加できます。' }
@@ -533,6 +538,60 @@ function Show-AdminDialog {
         $u.PatNameBox.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = $true
     })
+
+    # ---- 順序入れ替え (▲ 上へ / ▼ 下へ) ----
+    # 親コレクション (processes / task_groups / tasks) を取得して、隣の要素と swap する
+    $moveNode = {
+        param([int]$Delta)   # -1=上へ, +1=下へ
+        if (-not $global:WT_CurrentPatNode) { return }
+        $info = $global:WT_CurrentPatNode.Tag
+        # 親コレクションを取得
+        $parentList = $null
+        switch ($info.kind) {
+            'process'    { $parentList = @($global:WT_CurrentPattern.processes) }
+            'task_group' { $parentList = @($info.parent.task_groups) }
+            'task'       { $parentList = @($info.parent.tasks) }
+        }
+        if (-not $parentList -or $parentList.Count -le 1) { return }
+        # 現在 index を探す
+        $idx = -1
+        for ($i = 0; $i -lt $parentList.Count; $i++) {
+            if ($parentList[$i] -eq $info.data) { $idx = $i; break }
+        }
+        if ($idx -lt 0) { return }
+        $newIdx = $idx + $Delta
+        if ($newIdx -lt 0 -or $newIdx -ge $parentList.Count) { return }   # 端は移動不可
+        # swap
+        $tmp = $parentList[$idx]
+        $parentList[$idx] = $parentList[$newIdx]
+        $parentList[$newIdx] = $tmp
+        # 親コレクションに書き戻し
+        switch ($info.kind) {
+            'process'    { $global:WT_CurrentPattern.processes = @($parentList) }
+            'task_group' { $info.parent.task_groups = @($parentList) }
+            'task'       { $info.parent.tasks      = @($parentList) }
+        }
+        # 再描画後、移動先のノードを選択
+        Render-PatternTree -Pattern $global:WT_CurrentPattern
+        # ツリーから対応ノードを再選択
+        $selectMoved = {
+            param($items, $target)
+            foreach ($it in $items) {
+                if ($it.Tag -and $it.Tag.data -eq $target) {
+                    $it.IsSelected = $true; $it.BringIntoView() | Out-Null
+                    return $true
+                }
+                if ($it.Items.Count -gt 0) {
+                    if (& $selectMoved $it.Items $target) { return $true }
+                }
+            }
+            return $false
+        }
+        [void](& $selectMoved $u.PatternTree.Items $parentList[$newIdx])
+    }.GetNewClosure()
+
+    $u.PatNodeUpBtn.Add_Click({   & $moveNode -1 })
+    $u.PatNodeDownBtn.Add_Click({ & $moveNode  1 })
 
     # ---- JSON 直接編集 ----
     # WPF イベントハンドラから内部 function が見えないことがあるので script: 変数として保持
