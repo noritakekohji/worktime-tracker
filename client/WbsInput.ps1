@@ -16,6 +16,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'AdminDialog.ps1')
 
 trap {
     $msg = "$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
@@ -54,7 +55,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $ui = @{}
-foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','MemberCombo','LoadBtn',
+foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','MemberCombo','LoadBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
@@ -111,6 +112,23 @@ $ui.MemberCombo.SelectedIndex = $selIdx
 
 # Gitlab モードなら送信ボタン表示
 if ($Script:Source.RemoteCtx) { $ui.PushBtn.Visibility = 'Visible' }
+
+# 管理者ロールなら管理者ボタン表示
+if ($currentMember -and $currentMember.role -eq 'admin') {
+    $ui.AdminBtn.Visibility = 'Visible'
+    $ui.AdminBtn.Add_Click({
+        try {
+            $changed = Show-AdminDialog -Source $Script:Source -Config $Script:Config
+            if ($changed) {
+                _LoadMasters
+                # 現在ロード中のデータを再描画
+                if ($null -ne $Script:DataTable) { Load-WbsData }
+            }
+        } catch {
+            [System.Windows.MessageBox]::Show("管理者画面エラー:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+        }
+    })
+}
 
 # ---- 状態変数 ----
 $Script:DataTable   = $null

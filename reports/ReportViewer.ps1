@@ -14,6 +14,7 @@ $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'AdminDialog.ps1')
 
 $Script:Config = Load-Config
 if (-not (Test-ConfigComplete -Config $Script:Config)) {
@@ -33,10 +34,29 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn',
+foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas') {
     $u[$n] = $win.FindName($n)
+}
+
+# 管理者ロールなら管理者ボタン表示
+$Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
+if ($Script:CurrentMember -and $Script:CurrentMember.role -eq 'admin' -and $u.AdminBtn) {
+    $u.AdminBtn.Visibility = 'Visible'
+    $u.AdminBtn.Add_Click({
+        try {
+            $changed = Show-AdminDialog -Source $Script:Source -Config $Script:Config
+            if ($changed) {
+                # マスタ再読込 + データ再読込
+                $Script:Members  = @(Get-MasterMembers  -Source $Script:Source)
+                $Script:Projects = @(Get-MasterProjects -Source $Script:Source)
+                Reload-Entries
+            }
+        } catch {
+            [System.Windows.MessageBox]::Show("管理者画面エラー:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+        }
+    })
 }
 
 # データソース表示 (フッタ)

@@ -103,7 +103,8 @@
                 <Label Content="担当者:"/>
                 <ComboBox x:Name="MemberCombo" Width="160" Margin="0,0,10,0"
                           DisplayMemberPath="display" Background="White"/>
-                <Button x:Name="LoadBtn" Content="📋 読込" Style="{StaticResource Primary}" Margin="0,0,0,0"/>
+                <Button x:Name="LoadBtn"  Content="📋 読込" Style="{StaticResource Primary}" Margin="0,0,0,0"/>
+                <Button x:Name="AdminBtn" Content="🔧 管理者" Margin="6,0,0,0" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
             </WrapPanel>
         </Border>
 

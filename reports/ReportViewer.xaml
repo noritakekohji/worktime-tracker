@@ -150,6 +150,7 @@
                     <Button x:Name="ReloadBtn" Content="🔄 全データ再取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
                     <Button x:Name="ApplyBtn"  Content="フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
                     <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="160"/>
+                    <Button x:Name="AdminBtn"  Content="🔧 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
             </DockPanel>
         </Border>
