@@ -61,6 +61,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
+. (Join-Path $libDir 'Bootstrap.ps1')
 
 trap {
     $msg = "$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
@@ -69,28 +70,26 @@ trap {
     exit 1
 }
 
-# ---- 設定読込 ----
-$cfg = Load-Config
-if (-not (Test-ConfigComplete -Config $cfg)) {
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show(
-        "設定が未完了です。`nWorkTimeTracker を起動して設定を完了させてから再度起動してください。",
-        '設定未完了', 'OK', 'Warning') | Out-Null
-    exit 1
-}
-$token = $null
-if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
-$Script:Source = New-DataSource -Config $cfg -Token $token
-$Script:Config = $cfg
+# ---- 初期化 (設定 + マスタ読込) ----
+$ctx = Initialize-DataContext -AppName 'WBS 入力'
+if (-not $ctx) { exit 1 }
+$Script:Config = $ctx.Config
+$Script:Source = $ctx.Source
+$cfg           = $ctx.Config
+# active なプロジェクトのみ ComboBox 用に持つ (Bootstrap は全件返すため絞り込み)
+$Script:Members      = @($ctx.Members)
+$Script:Projects     = @($ctx.Projects | Where-Object { $_.active })
+$Script:Categories   = @($ctx.Categories)
+$Script:TaskPatterns = @($ctx.TaskPatterns)
 
-# ---- マスタ読込 ----
+# マスタ再読込 (管理者画面後など)
 function _LoadMasters {
-    $Script:Members      = @(Get-MasterMembers      -Source $Script:Source)
-    $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source | Where-Object { $_.active })
-    $Script:Categories   = @(Get-MasterCategories   -Source $Script:Source)
-    $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
+    $r = Reload-MasterContext -Source $Script:Source
+    $Script:Members      = @($r.Members)
+    $Script:Projects     = @($r.Projects | Where-Object { $_.active })
+    $Script:Categories   = @($r.Categories)
+    $Script:TaskPatterns = @($r.TaskPatterns)
 }
-_LoadMasters
 
 # ---- XAML 読込 ----
 $xamlPath = Join-Path $PSScriptRoot 'WbsInput.xaml'

@@ -15,18 +15,17 @@ $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
+. (Join-Path $libDir 'Bootstrap.ps1')
 
-$Script:Config = Load-Config
-if (-not (Test-ConfigComplete -Config $Script:Config)) {
-    [System.Windows.MessageBox]::Show('クライアントの初回設定が完了していません。WorkTimeTracker.ps1 を先に起動して設定してください。', 'ReportViewer', 'OK', 'Warning') | Out-Null
-    return
-}
-$Script:Token = if ($Script:Config.mode -eq 'gitlab') { Get-GitLabToken } else { $null }
-$Script:Source = New-DataSource -Config $Script:Config -Token $Script:Token
-
-$Script:Members = @(Get-MasterMembers -Source $Script:Source)
-$Script:Projects = @(Get-MasterProjects -Source $Script:Source)
-$Script:AllEntries = @()
+$ctx = Initialize-DataContext -AppName 'ReportViewer'
+if (-not $ctx) { return }
+$Script:Config        = $ctx.Config
+$Script:Token         = $ctx.Token
+$Script:Source        = $ctx.Source
+$Script:Members       = $ctx.Members
+$Script:Projects      = $ctx.Projects
+$Script:CurrentMember = $ctx.CurrentMember
+$Script:AllEntries    = @()
 
 # ---- XAML ----
 $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
@@ -40,8 +39,7 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
     $u[$n] = $win.FindName($n)
 }
 
-# 管理者ロールなら管理者ボタン表示
-$Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $Script:Config.member_id -and $_.active } | Select-Object -First 1
+# 管理者ロールなら管理者ボタン表示 (CurrentMember は Bootstrap で解決済み)
 if ($Script:CurrentMember -and $Script:CurrentMember.role -eq 'admin' -and $u.AdminBtn) {
     $u.AdminBtn.Visibility = 'Visible'
     $u.AdminBtn.Add_Click({
