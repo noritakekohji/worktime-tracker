@@ -46,7 +46,9 @@ if ($Script:CurrentMember -and $Script:CurrentMember.role -eq 'admin' -and $u.Ad
     $u.AdminBtn.Visibility = 'Visible'
     $u.AdminBtn.Add_Click({
         try {
-            $changed = Show-AdminDialog -Source $Script:Source -Config $Script:Config
+            $mid  = [string]$Script:CurrentMember.id
+            $mnm  = [string]$Script:CurrentMember.name
+            $changed = Show-AdminDialog -Source $Script:Source -MemberId $mid -MemberName $mnm
             if ($changed) {
                 # マスタ再読込 + データ再読込
                 $Script:Members  = @(Get-MasterMembers  -Source $Script:Source)

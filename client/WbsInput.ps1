@@ -162,7 +162,9 @@ if ($currentMember -and $currentMember.role -eq 'admin') {
     $ui.AdminBtn.Visibility = 'Visible'
     $ui.AdminBtn.Add_Click({
         try {
-            $changed = Show-AdminDialog -Source $Script:Source -Config $Script:Config
+            $mid  = [string]$currentMember.id
+            $mnm  = [string]$currentMember.name
+            $changed = Show-AdminDialog -Source $Script:Source -MemberId $mid -MemberName $mnm
             if ($changed) {
                 _LoadMasters
                 # 現在ロード中のデータを再描画
