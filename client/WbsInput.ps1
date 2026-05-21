@@ -11,6 +11,50 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
+# ---- ガントチャート用セル背景コンバータ (C# 動的コンパイル) ----
+# パラメータ = 列の日付 ('yyyy-MM-dd')
+# Values[0] = 行の 開始,  Values[1] = 行の 終了,  Values[2] = セル値 (工数)
+if (-not ([System.Management.Automation.PSTypeName]'WT.GanttCellBgConverter').Type) {
+    Add-Type -ReferencedAssemblies PresentationFramework, PresentationCore, WindowsBase, System.Xaml -TypeDefinition @"
+using System;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Data;
+using System.Windows.Media;
+namespace WT {
+    public class GanttCellBgConverter : IMultiValueConverter {
+        static readonly SolidColorBrush BrushActual  = new SolidColorBrush(Color.FromRgb(0xa7,0xf3,0xd0)); // 緑
+        static readonly SolidColorBrush BrushPlan    = new SolidColorBrush(Color.FromRgb(0xdb,0xea,0xfe)); // 水色
+        static readonly SolidColorBrush BrushWeekend = new SolidColorBrush(Color.FromRgb(0xfe,0xf3,0xc7)); // 薄茶
+        static GanttCellBgConverter() {
+            BrushActual.Freeze(); BrushPlan.Freeze(); BrushWeekend.Freeze();
+        }
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) {
+            try {
+                string dateStr = parameter as string;
+                if (string.IsNullOrEmpty(dateStr)) return Brushes.Transparent;
+                DateTime cellDate;
+                if (!DateTime.TryParse(dateStr, out cellDate)) return Brushes.Transparent;
+                string startStr = (values != null && values.Length > 0) ? values[0] as string : null;
+                string endStr   = (values != null && values.Length > 1) ? values[1] as string : null;
+                string valueStr = (values != null && values.Length > 2) ? values[2] as string : null;
+                if (!string.IsNullOrWhiteSpace(valueStr)) { return BrushActual; }
+                DateTime st, en;
+                bool hasSt = DateTime.TryParse(startStr, out st);
+                bool hasEn = DateTime.TryParse(endStr, out en);
+                if (hasSt && hasEn && cellDate >= st && cellDate <= en) { return BrushPlan; }
+                if (cellDate.DayOfWeek == DayOfWeek.Saturday || cellDate.DayOfWeek == DayOfWeek.Sunday) { return BrushWeekend; }
+                return Brushes.Transparent;
+            } catch { return Brushes.Transparent; }
+        }
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) {
+            throw new NotImplementedException();
+        }
+    }
+}
+"@
+}
+
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Config.ps1')
 . (Join-Path $libDir 'Credential.ps1')
@@ -290,21 +334,47 @@ function Build-GridColumns {
     }
     $Grid.FrozenColumnCount = $fixedDef.Count
 
-    # ---- 日付列 ----
+    # ---- 日付列 (ガントチャート風セル背景) ----
     $dayNames = @('日','月','火','水','木','金','土')
     $days = [DateTime]::DaysInMonth($Year, $Month)
+    $todayStr = (Get-Date).ToString('yyyy-MM-dd')
+    $converter = New-Object WT.GanttCellBgConverter
     for ($d = 1; $d -le $days; $d++) {
         $dtObj = [DateTime]::new($Year, $Month, $d)
         $key   = "{0:D4}-{1:D2}-{2:D2}" -f $Year, $Month, $d
-        $dow   = [int]$dtObj.DayOfWeek    # Sunday=0, Saturday=6
+        $dow   = [int]$dtObj.DayOfWeek
         $dn    = $dayNames[$dow]
+        $isToday = ($key -eq $todayStr)
 
         $col = New-Object System.Windows.Controls.DataGridTextColumn
-        $col.Header      = "$d`n$dn"      # 2行表示 (改行)
+        $col.Header      = "$d`n$dn" + $(if ($isToday) { ' ▼' } else { '' })
         $col.Binding     = New-Object System.Windows.Data.Binding "[$key]"
         $col.Width       = 42
         $col.IsReadOnly  = $false
         $col.CanUserSort = $false
+
+        # セル背景: MultiBinding で (開始,終了,セル値) → 色 を計算
+        $cellStyle = New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell])
+        $mb = New-Object System.Windows.Data.MultiBinding
+        $mb.Mode = [System.Windows.Data.BindingMode]::OneWay
+        $mb.Converter = $converter
+        $mb.ConverterParameter = $key
+        [void]$mb.Bindings.Add((New-Object System.Windows.Data.Binding '[開始]'))
+        [void]$mb.Bindings.Add((New-Object System.Windows.Data.Binding '[終了]'))
+        [void]$mb.Bindings.Add((New-Object System.Windows.Data.Binding "[$key]"))
+        $bgSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::BackgroundProperty), $mb
+        [void]$cellStyle.Setters.Add($bgSetter)
+        # 今日の列は左端に赤い太線
+        if ($isToday) {
+            $brd = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString('#ef4444'))
+            $borderSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::BorderBrushProperty), $brd
+            $thickness = New-Object System.Windows.Thickness 2, 0, 0, 0
+            $thickSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::BorderThicknessProperty), $thickness
+            [void]$cellStyle.Setters.Add($borderSetter)
+            [void]$cellStyle.Setters.Add($thickSetter)
+        }
+        $col.CellStyle = $cellStyle
+
         $Grid.Columns.Add($col)
     }
 }
