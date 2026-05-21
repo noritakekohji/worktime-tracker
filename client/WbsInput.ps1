@@ -80,6 +80,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'UserPrefs.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'Bootstrap.ps1')
 
@@ -329,6 +330,13 @@ function Build-GridColumns {
     param($Grid, [int]$Year, [int]$Month)
     $Grid.Columns.Clear()
 
+    # B5: 列幅を user_prefs.json から復元
+    $savedWidths = $null
+    try {
+        $prefs = Get-UserPrefs -MemberId $Script:Config.member_id
+        if ($prefs -and $prefs.wbs_column_widths) { $savedWidths = $prefs.wbs_column_widths }
+    } catch { }
+
     # ---- 固定列 (左ペイン: WBS 階層情報 + 計画情報) ----
     $fixedDef = @(
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
@@ -352,6 +360,14 @@ function Build-GridColumns {
         $col.IsReadOnly  = $fd.RO
         # WBS は階層順を保ちたいのでソート無効化 (DataView の [列名] 構文エラーも回避)
         $col.CanUserSort = $false
+        # B5: 保存された列幅を適用 (ヘッダ名で照合)
+        if ($savedWidths -and ($savedWidths.PSObject.Properties.Match($fd.H).Count -gt 0 -or ($savedWidths -is [hashtable] -and $savedWidths.ContainsKey($fd.H)))) {
+            try {
+                $w = if ($savedWidths -is [hashtable]) { $savedWidths[$fd.H] } else { $savedWidths.($fd.H) }
+                $wN = 0.0
+                if ([double]::TryParse([string]$w, [ref]$wN) -and $wN -gt 10) { $col.Width = $wN }
+            } catch { }
+        }
         # B4: 進捗 列で 100% 超なら背景を赤に
         if ($fd.H -eq '進捗') {
             $cellStyle = New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell])
@@ -742,6 +758,32 @@ $ui.WbsGrid.Add_CurrentCellChanged({
     if ($Script:DataTable) { Update-AllTotals }
 })
 
+# A5: 数値セル (日付列 / 計画 列) で + キーで +0.5、- キーで -0.5
+$ui.WbsGrid.Add_PreviewKeyDown({
+    param($s, $e)
+    if (-not $Script:DataTable) { return }
+    if ($e.Key -ne 'Add' -and $e.Key -ne 'Subtract' -and $e.Key -ne 'OemPlus' -and $e.Key -ne 'OemMinus') { return }
+    $cell = $ui.WbsGrid.CurrentCell
+    if (-not $cell.IsValid) { return }
+    $col = $cell.Column
+    if (-not $col -or -not $col.Binding) { return }
+    $path = [string]$col.Binding.Path.Path
+    $isDate = $path -match '^\[\d{4}-\d{2}-\d{2}\]$'
+    $isPlan = ($path -eq '[計画]')
+    if (-not ($isDate -or $isPlan)) { return }
+    $drv = $cell.Item -as [System.Data.DataRowView]
+    if (-not $drv) { return }
+    $colKey = $path -replace '[\[\]]', ''
+    $cur = [string]$drv.Row[$colKey]
+    $d = 0.0; [void][double]::TryParse($cur, [ref]$d)
+    $delta = 0.5
+    if ($e.Key -eq 'Subtract' -or $e.Key -eq 'OemMinus') { $delta = -0.5 }
+    $newVal = [Math]::Max(0.0, $d + $delta)
+    $drv.Row[$colKey] = if ($newVal -le 0) { '' } else { $newVal.ToString('N1') }
+    Update-AllTotals
+    $e.Handled = $true
+})
+
 # 開始/終了 列の編集確定時に yyyy-MM-dd に正規化
 # 例: "19270311" → "1927-03-11" / "2026-5-1" → "2026-05-01"
 $ui.WbsGrid.Add_CellEditEnding({
@@ -907,6 +949,25 @@ $Script:Window.Add_PreviewKeyDown({
         $ui.LoadBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
         $e.Handled = $true
     }
+})
+
+# B5: 列幅永続化 — Closing で現在の列幅を user_prefs.json へ保存
+$Script:Window.Add_Closing({
+    try {
+        if (-not $Script:Config -or -not $Script:Config.member_id) { return }
+        $widths = @{}
+        foreach ($col in $ui.WbsGrid.Columns) {
+            $h = [string]$col.Header
+            if (-not [string]::IsNullOrWhiteSpace($h)) {
+                $widths[$h] = [double]$col.ActualWidth
+            }
+        }
+        if ($widths.Count -gt 0) {
+            $prefs = Get-UserPrefs -MemberId $Script:Config.member_id
+            $prefs['wbs_column_widths'] = $widths
+            Set-UserPrefs -MemberId $Script:Config.member_id -Prefs $prefs
+        }
+    } catch { }
 })
 
 [void]$Script:Window.ShowDialog()

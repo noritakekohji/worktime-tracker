@@ -94,8 +94,12 @@
                 <TextBlock Text="📊 WBS 実績入力" FontSize="17" FontWeight="Bold"
                            Foreground="White" VerticalAlignment="Center" Margin="0,0,18,0"/>
                 <Label Content="プロジェクト:"/>
+                <!-- A3: IsEditable で型入れ検索可能 (TextSearch でマッチした項目へジャンプ) -->
                 <ComboBox x:Name="ProjectCombo" Width="280" Margin="0,0,12,0"
-                          DisplayMemberPath="display" Background="White"/>
+                          DisplayMemberPath="display" Background="White"
+                          IsEditable="True" IsTextSearchEnabled="True"
+                          StaysOpenOnEdit="True"
+                          TextSearch.TextPath="display"/>
                 <Label Content="年:"/>
                 <ComboBox x:Name="YearCombo" Width="68" Margin="0,0,4,0" Background="White"/>
                 <Label Content="月:"/>
