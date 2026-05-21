@@ -51,6 +51,26 @@ namespace WT {
             throw new NotImplementedException();
         }
     }
+    // 進捗 % が 100 超なら赤背景 (過進捗ハイライト)
+    public class OverdueBgConverter : IValueConverter {
+        static readonly SolidColorBrush BrushOver = new SolidColorBrush(Color.FromRgb(0xfc,0xa5,0xa5)); // 赤
+        static OverdueBgConverter() { BrushOver.Freeze(); }
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) {
+            try {
+                if (value == null) return Brushes.Transparent;
+                string s = value.ToString().TrimEnd('%').Trim();
+                if (string.IsNullOrEmpty(s)) return Brushes.Transparent;
+                double d;
+                if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out d) && d > 100.0) {
+                    return BrushOver;
+                }
+                return Brushes.Transparent;
+            } catch { return Brushes.Transparent; }
+        }
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) {
+            throw new NotImplementedException();
+        }
+    }
 }
 "@
 }
@@ -323,6 +343,7 @@ function Build-GridColumns {
         @{H="開始";           B="[開始]";           W=80;  RO=$false },
         @{H="終了";           B="[終了]";           W=80;  RO=$false }
     )
+    $overdueConv = New-Object WT.OverdueBgConverter
     foreach ($fd in $fixedDef) {
         $col = New-Object System.Windows.Controls.DataGridTextColumn
         $col.Header      = $fd.H
@@ -331,6 +352,16 @@ function Build-GridColumns {
         $col.IsReadOnly  = $fd.RO
         # WBS は階層順を保ちたいのでソート無効化 (DataView の [列名] 構文エラーも回避)
         $col.CanUserSort = $false
+        # B4: 進捗 列で 100% 超なら背景を赤に
+        if ($fd.H -eq '進捗') {
+            $cellStyle = New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell])
+            $bn = New-Object System.Windows.Data.Binding '[進捗]'
+            $bn.Converter = $overdueConv
+            $bn.Mode = [System.Windows.Data.BindingMode]::OneWay
+            $bgSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::BackgroundProperty), $bn
+            [void]$cellStyle.Setters.Add($bgSetter)
+            $col.CellStyle = $cellStyle
+        }
         $Grid.Columns.Add($col)
     }
     $Grid.FrozenColumnCount = $fixedDef.Count
@@ -585,18 +616,27 @@ function Load-WbsData {
 
         Build-WbsTree
 
-        # サマリ計算 (実績合計とタスク数)
+        # サマリ計算 (実績合計・計画合計・進捗%・タスク数)
         $dateColsForSum = @($dt.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
         $totalHrs = 0.0
+        $totalPlan = 0.0
         foreach ($r in $dt.Rows) {
             foreach ($c in $dateColsForSum) {
                 $v = $r[$c.ColumnName]; $h = 0.0
                 if (-not [string]::IsNullOrWhiteSpace($v) -and [double]::TryParse([string]$v, [ref]$h)) { $totalHrs += $h }
             }
+            $pv = [string]$r["計画"]; $pn = 0.0
+            if (-not [string]::IsNullOrWhiteSpace($pv) -and [double]::TryParse($pv, [ref]$pn)) { $totalPlan += $pn }
         }
-        $ui.GridTitle.Text = ("📊 {0}  /  {1:D4}年{2:D2}月  /  {3}行  /  実績合計 {4:N1}h" -f `
-            $projItem.project_name, $year, $month, $dt.Rows.Count, $totalHrs)
-        Set-Status ("読込完了: {0} 行 / 実績 {1:N1}h" -f $dt.Rows.Count, $totalHrs) '#10b981'
+        $progressPct = if ($totalPlan -gt 0) { [Math]::Round(($totalHrs / $totalPlan) * 100.0, 0) } else { 0 }
+        $bar = ''
+        if ($totalPlan -gt 0) {
+            $filled = [Math]::Min(20, [Math]::Floor(($totalHrs / $totalPlan) * 20))
+            $bar = ' [' + ('█' * $filled) + ('░' * (20 - $filled)) + "] $progressPct%"
+        }
+        $ui.GridTitle.Text = ("📊 {0}  /  {1:D4}年{2:D2}月  /  {3}行  /  実績 {4:N1}h / 計画 {5:N1}h{6}" -f `
+            $projItem.project_name, $year, $month, $dt.Rows.Count, $totalHrs, $totalPlan, $bar)
+        Set-Status ("読込完了: {0} 行 / 実績 {1:N1}h / 計画 {2:N1}h" -f $dt.Rows.Count, $totalHrs, $totalPlan) '#10b981'
     } catch {
         $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
         Set-Status "読込失敗: $($_.Exception.Message)" '#ef4444'
@@ -852,6 +892,20 @@ $ui.PushBtn.Add_Click({
         [System.Windows.MessageBox]::Show("送信に失敗しました:`n$_", '送信失敗', 'OK', 'Error') | Out-Null
     } finally {
         $Script:Window.Cursor = $null
+    }
+})
+
+# ---- キーボードショートカット (A2) ----
+# Ctrl+S = 保存 / Ctrl+R = 再読込 / F5 = 再読込
+$Script:Window.Add_PreviewKeyDown({
+    param($s, $e)
+    $ctrl = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+    if ($ctrl -and $e.Key -eq 'S') {
+        $ui.SaveBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    } elseif (($ctrl -and $e.Key -eq 'R') -or $e.Key -eq 'F5') {
+        $ui.LoadBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
     }
 })
 
