@@ -186,9 +186,28 @@
                                   HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Auto">
                             <DataGrid.Resources>
+                                <!-- セル: 個別フォーカス枠を消して、選択時も行全体と同じ色で統一 -->
                                 <Style TargetType="DataGridCell">
                                     <Setter Property="VerticalAlignment" Value="Center"/>
                                     <Setter Property="Padding" Value="4,2"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#bbf7d0"/>
+                                            <Setter Property="Foreground" Value="#064e3b"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                                <!-- 行全体の選択色も統一 -->
+                                <Style TargetType="DataGridRow">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#bbf7d0"/>
+                                        </Trigger>
+                                    </Style.Triggers>
                                 </Style>
                             </DataGrid.Resources>
                         </DataGrid>
@@ -207,22 +226,18 @@
                                    FontWeight="Bold" Foreground="{StaticResource EmeraldD}"
                                    Margin="0,0,0,6"/>
 
-                        <!-- 入力フォーム -->
+                        <!-- 入力フォーム (担当・コメントはリスト側で編集) -->
                         <Border DockPanel.Dock="Top" Background="White"
                                 BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,6">
                             <WrapPanel Orientation="Horizontal">
                                 <Label Content="日付:" VerticalAlignment="Center"/>
                                 <DatePicker x:Name="TaskEntryDate" Width="130" Margin="0,0,8,0"/>
                                 <Label Content="カテゴリ:" VerticalAlignment="Center"/>
-                                <ComboBox x:Name="TaskEntryCategory" Width="120" Margin="0,0,8,0"
+                                <ComboBox x:Name="TaskEntryCategory" Width="160" Margin="0,0,8,0"
                                           DisplayMemberPath="name" SelectedValuePath="code"
                                           IsEditable="True" IsTextSearchEnabled="True" TextSearch.TextPath="name"/>
-                                <Label Content="担当:" VerticalAlignment="Center"/>
-                                <ComboBox x:Name="TaskEntryAssignee" Width="80" Margin="0,0,8,0" IsEditable="True"/>
                                 <Label Content="工数:" VerticalAlignment="Center"/>
                                 <TextBox x:Name="TaskEntryHours" Width="55" Margin="0,0,8,0" TextAlignment="Right" Text="1.0"/>
-                                <Label Content="コメント:" VerticalAlignment="Center"/>
-                                <TextBox x:Name="TaskEntryComment" Width="200" Margin="0,0,8,0"/>
                                 <Button x:Name="TaskEntryAddBtn" Content="＋ 追加" Style="{StaticResource Primary}" MinWidth="80"/>
                                 <Button x:Name="TaskEntryDelBtn" Content="🗑 削除" Margin="6,0,0,0" IsEnabled="False"/>
                             </WrapPanel>
@@ -241,6 +256,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="日付"     Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
                                 <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="160" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="担当"     Binding="{Binding assignee, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
                                 <DataGridTextColumn Header="工数"     Binding="{Binding hours, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=N1}" Width="60"/>
                                 <DataGridTextColumn Header="コメント" Binding="{Binding comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                             </DataGrid.Columns>

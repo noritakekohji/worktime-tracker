@@ -146,8 +146,8 @@ $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','MemberCombo','LoadBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
                   # タスクビュー (右下)
-                  'TaskViewHeader','TaskEntryDate','TaskEntryCategory','TaskEntryAssignee',
-                  'TaskEntryHours','TaskEntryComment','TaskEntryAddBtn','TaskEntryDelBtn',
+                  'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
+                  'TaskEntryHours','TaskEntryAddBtn','TaskEntryDelBtn',
                   'TaskEntriesGrid')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
@@ -988,16 +988,6 @@ $Script:Window.Add_PreviewKeyDown({
 $ui.TaskEntryCategory.ItemsSource = @($Script:Categories | ForEach-Object {
     [pscustomobject]@{ code = [string]$_.code; name = "$($_.code)  $($_.name)" }
 })
-
-# 担当者候補は メンバーマスタの 2文字短縮 + 空白
-$asgList = New-Object 'System.Collections.Generic.List[string]'
-[void]$asgList.Add('')
-foreach ($m in $Script:Members) {
-    if (-not $m -or -not $m.active) { continue }
-    $abbr = Get-MemberAbbrev -MemberId ([string]$m.id)
-    if ($abbr -and -not $asgList.Contains($abbr)) { [void]$asgList.Add($abbr) }
-}
-$ui.TaskEntryAssignee.ItemsSource = $asgList
 $ui.TaskEntryDate.SelectedDate = [datetime]::Today
 
 # タスクビューに表示中のエントリ (フィルタ済)
@@ -1020,12 +1010,6 @@ function Refresh-TaskView {
     foreach ($e in $matches) { $Script:TaskViewEntries.Add($e) }
     $ui.TaskEntryAddBtn.IsEnabled = $true
     $ui.TaskEntryDelBtn.IsEnabled = ($matches.Count -gt 0)
-    # 既定の担当: そのタスクの行の「担当」または現在ユーザ
-    if (-not [string]::IsNullOrWhiteSpace($t.assignee)) {
-        $ui.TaskEntryAssignee.Text = [string]$t.assignee
-    } elseif ($Script:Config -and $Script:Config.member_id) {
-        $ui.TaskEntryAssignee.Text = Get-MemberAbbrev -MemberId $Script:Config.member_id
-    }
 }
 
 # WBS グリッドの行選択 → タスクビュー更新
@@ -1078,7 +1062,7 @@ function Recompute-TaskRow {
     Update-AllTotals
 }
 
-# タスクビュー: ＋ 追加
+# タスクビュー: ＋ 追加 (担当・コメントはリスト側で編集)
 $ui.TaskEntryAddBtn.Add_Click({
     if (-not $Script:CurrentTask) { return }
     $d = $ui.TaskEntryDate.SelectedDate
@@ -1092,8 +1076,9 @@ $ui.TaskEntryAddBtn.Add_Click({
     $catItem = $ui.TaskEntryCategory.SelectedItem
     $catCode = if ($catItem) { [string]$catItem.code } else { '' }
     $catDisp = if ($catItem) { [string]$catItem.name } else { '' }
-    $assn = [string]$ui.TaskEntryAssignee.Text
+    # 担当はタスク行の担当を継承。空ならログインユーザの 2 文字
     $t = $Script:CurrentTask
+    $assn = if ($t.assignee) { [string]$t.assignee } else { Get-MemberAbbrev -MemberId $Script:Config.member_id }
     $newEntry = [pscustomobject]@{
         date             = $d.ToString('yyyy-MM-dd')
         project_code     = [string]$ui.ProjectCombo.SelectedItem.unit_code
@@ -1104,14 +1089,12 @@ $ui.TaskEntryAddBtn.Add_Click({
         category_display = $catDisp
         assignee         = $assn
         hours            = $hours
-        comment          = [string]$ui.TaskEntryComment.Text
+        comment          = ''
     }
     $Script:AllEntries.Add($newEntry)
     Refresh-TaskView
     Recompute-TaskRow $t.pc $t.tgc $t.tc
-    # 入力欄をクリア (日付・担当は維持)
-    $ui.TaskEntryHours.Text   = '1.0'
-    $ui.TaskEntryComment.Text = ''
+    $ui.TaskEntryHours.Text = '1.0'
 })
 
 # タスクビュー: 🗑 削除
