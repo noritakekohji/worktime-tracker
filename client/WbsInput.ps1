@@ -381,6 +381,7 @@ function Build-GridColumns {
     } catch { }
 
     # ---- 固定列 (タスクレベル 1 行集約) ----
+    # H = 表示ヘッダ, B = DataRowView バインディングパス (DataTable 列名)
     $fixedDef = @(
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
         @{H="工程";           B="[工程]";           W=75;  RO=$true  },
@@ -388,7 +389,7 @@ function Build-GridColumns {
         @{H="タスク";         B="[タスク]";         W=120; RO=$true  },
         @{H="担当";           B="[担当]";           W=70;  RO=$false },
         @{H="計画";           B="[計画]";           W=50;  RO=$false },
-        @{H="合計";           B="[合計]";           W=50;  RO=$true  },
+        @{H="実績";           B="[合計]";           W=50;  RO=$true  },
         @{H="進捗";           B="[進捗]";           W=55;  RO=$true  },
         @{H="開始";           B="[開始]";           W=80;  RO=$false },
         @{H="終了";           B="[終了]";           W=80;  RO=$false }
@@ -410,8 +411,14 @@ function Build-GridColumns {
             } catch { }
         }
         # B4: 進捗 列で 100% 超なら背景を赤に
+        # DataGrid.Resources 内の DataGridCell スタイル (Template 上書き済) を BasedOn にして枠線が出ないようにする
         if ($fd.H -eq '進捗') {
-            $cellStyle = New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell])
+            $baseStyle = $Grid.TryFindResource([System.Windows.Controls.DataGridCell])
+            $cellStyle = if ($baseStyle) {
+                New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell]), $baseStyle
+            } else {
+                New-Object System.Windows.Style ([System.Windows.Controls.DataGridCell])
+            }
             $bn = New-Object System.Windows.Data.Binding '[進捗]'
             $bn.Converter = $overdueConv
             $bn.Mode = [System.Windows.Data.BindingMode]::OneWay
