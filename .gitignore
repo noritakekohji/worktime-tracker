@@ -25,3 +25,5 @@ client/local.config.json
 
 # Excel lock files
 ~$*
+tests/results/
+.claude/
