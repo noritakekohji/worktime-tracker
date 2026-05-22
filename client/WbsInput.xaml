@@ -240,8 +240,7 @@
                                   SelectionMode="Single">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="日付"     Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                                <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="120" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="担当"     Binding="{Binding assignee, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                                <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="160" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="工数"     Binding="{Binding hours, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=N1}" Width="60"/>
                                 <DataGridTextColumn Header="コメント" Binding="{Binding comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                             </DataGrid.Columns>

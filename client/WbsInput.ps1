@@ -780,8 +780,21 @@ $ui.AddRowBtn.Add_Click({
 })
 
 # セル編集後に合計を更新 (CurrentCellChanged は編集確定後に発火)
+# また、日付列が選択されたらタスクビューの「日付」を該当日にセットする
 $ui.WbsGrid.Add_CurrentCellChanged({
     if ($Script:DataTable) { Update-AllTotals }
+    $cell = $ui.WbsGrid.CurrentCell
+    if (-not $cell.IsValid) { return }
+    $col = $cell.Column
+    if (-not $col -or -not $col.Binding) { return }
+    $path = [string]$col.Binding.Path.Path
+    if ($path -match '^\[(\d{4}-\d{2}-\d{2})\]$') {
+        $dStr = $matches[1]
+        $d = [datetime]::MinValue
+        if ([datetime]::TryParse($dStr, [ref]$d) -and $ui.TaskEntryDate) {
+            $ui.TaskEntryDate.SelectedDate = $d
+        }
+    }
 })
 
 # A5: 数値セル (日付列 / 計画 列) で + キーで +0.5、- キーで -0.5
