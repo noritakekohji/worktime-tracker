@@ -23,11 +23,22 @@ using System.Windows.Data;
 using System.Windows.Media;
 namespace WT {
     public class GanttCellBgConverter : IMultiValueConverter {
-        static readonly SolidColorBrush BrushActual  = new SolidColorBrush(Color.FromRgb(0xa7,0xf3,0xd0)); // 緑
-        static readonly SolidColorBrush BrushPlan    = new SolidColorBrush(Color.FromRgb(0xdb,0xea,0xfe)); // 水色
-        static readonly SolidColorBrush BrushWeekend = new SolidColorBrush(Color.FromRgb(0xfe,0xf3,0xc7)); // 薄茶
+        static readonly SolidColorBrush BrushActual  = new SolidColorBrush(Color.FromRgb(0xa7,0xf3,0xd0)); // 緑 = 実績
+        static readonly SolidColorBrush BrushPlan    = new SolidColorBrush(Color.FromRgb(0xdb,0xea,0xfe)); // 水色 = 計画期間
+        static readonly SolidColorBrush BrushHoliday = new SolidColorBrush(Color.FromRgb(0xd1,0xd5,0xdb)); // 灰 = 休業日 (土日 + 社内休業)
+        // 静的: 社内休業日マスタを yyyy-MM-dd 文字列のセットとして保持
+        public static System.Collections.Generic.HashSet<string> CompanyHolidays =
+            new System.Collections.Generic.HashSet<string>();
         static GanttCellBgConverter() {
-            BrushActual.Freeze(); BrushPlan.Freeze(); BrushWeekend.Freeze();
+            BrushActual.Freeze(); BrushPlan.Freeze(); BrushHoliday.Freeze();
+        }
+        public static void SetCompanyHolidays(System.Collections.Generic.IEnumerable<string> dates) {
+            CompanyHolidays = new System.Collections.Generic.HashSet<string>();
+            if (dates != null) {
+                foreach (var d in dates) {
+                    if (!string.IsNullOrEmpty(d)) CompanyHolidays.Add(d);
+                }
+            }
         }
         public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) {
             try {
@@ -43,7 +54,9 @@ namespace WT {
                 bool hasSt = DateTime.TryParse(startStr, out st);
                 bool hasEn = DateTime.TryParse(endStr, out en);
                 if (hasSt && hasEn && cellDate >= st && cellDate <= en) { return BrushPlan; }
-                if (cellDate.DayOfWeek == DayOfWeek.Saturday || cellDate.DayOfWeek == DayOfWeek.Sunday) { return BrushWeekend; }
+                // 休業日: 土日 OR 会社マスタ登録日
+                if (cellDate.DayOfWeek == DayOfWeek.Saturday || cellDate.DayOfWeek == DayOfWeek.Sunday) { return BrushHoliday; }
+                if (CompanyHolidays.Contains(dateStr)) { return BrushHoliday; }
                 return Brushes.Transparent;
             } catch { return Brushes.Transparent; }
         }
@@ -102,6 +115,14 @@ $Script:Members      = @($ctx.Members)
 $Script:Projects     = @($ctx.Projects | Where-Object { $_.active })
 $Script:Categories   = @($ctx.Categories)
 $Script:TaskPatterns = @($ctx.TaskPatterns)
+$Script:Holidays     = @($ctx.Holidays)
+
+# 休業日リストを Converter の静的フィールドに反映 (ガントセル背景判定に使用)
+function _ApplyHolidaysToConverter {
+    $dates = @($Script:Holidays | Where-Object { $_ -and $_.date } | ForEach-Object { [string]$_.date })
+    [WT.GanttCellBgConverter]::SetCompanyHolidays($dates)
+}
+_ApplyHolidaysToConverter
 
 # マスタ再読込 (管理者画面後など)
 function _LoadMasters {
@@ -110,6 +131,8 @@ function _LoadMasters {
     $Script:Projects     = @($r.Projects | Where-Object { $_.active })
     $Script:Categories   = @($r.Categories)
     $Script:TaskPatterns = @($r.TaskPatterns)
+    $Script:Holidays     = @($r.Holidays)
+    _ApplyHolidaysToConverter
 }
 
 # ---- XAML 読込 ----

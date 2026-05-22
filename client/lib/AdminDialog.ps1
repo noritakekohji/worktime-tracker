@@ -25,6 +25,7 @@ function Show-AdminDialog {
                    'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
                    'PatNodeUpBtn','PatNodeDownBtn','PatCopyBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
+                   'HolidaysGrid','HolAddBtn','HolDelBtn',
                    'OtherMemberCombo','OtherYearCombo','OtherMonthCombo','OtherReloadBtn',
                    'OtherStatusText','OtherEntriesGrid','OtherAddBtn','OtherDelBtn',
                    'OtherSaveBtn','OtherPushBtn',
@@ -35,6 +36,7 @@ function Show-AdminDialog {
     $members      = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $projects     = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $categories   = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+    $holidays     = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $patterns     = New-Object 'System.Collections.Generic.List[object]'   # hashtable list
 
     function _Status { param([string]$Text,[string]$Color='#6b7280')
@@ -102,7 +104,12 @@ function Show-AdminDialog {
             foreach ($c in (Get-MasterCategories -Source $Source)) {
                 $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
             }
-            _Status ("メンバー={0} / プロジェクト={1} / パターン={2} / カテゴリ={3}" -f $members.Count, $projects.Count, $patterns.Count, $categories.Count) '#059669'
+            $holidays.Clear()
+            foreach ($h in (Get-MasterHolidays -Source $Source)) {
+                if (-not $h) { continue }
+                $holidays.Add([pscustomobject]@{ date=[string]$h.date; name=[string]$h.name })
+            }
+            _Status ("メンバー={0} / プロジェクト={1} / パターン={2} / カテゴリ={3} / 休業日={4}" -f $members.Count, $projects.Count, $patterns.Count, $categories.Count, $holidays.Count) '#059669'
             # 他者データ編集タブのメンバーリストも更新
             if ($global:WT_OtherRefreshMembers) { & $global:WT_OtherRefreshMembers }
         } catch {
@@ -113,6 +120,7 @@ function Show-AdminDialog {
     $u.MembersGrid.ItemsSource    = $members
     $u.ProjectsGrid.ItemsSource   = $projects
     $u.CategoriesGrid.ItemsSource = $categories
+    $u.HolidaysGrid.ItemsSource   = $holidays
 
     # ---- メンバー ----
     $u.MemAddBtn.Add_Click({
@@ -152,6 +160,17 @@ function Show-AdminDialog {
         $sel = $u.CategoriesGrid.SelectedItem
         if ($null -eq $sel) { return }
         [void]$categories.Remove($sel)
+    })
+
+    # ---- 休業日 ----
+    $u.HolAddBtn.Add_Click({
+        $today = (Get-Date).ToString('yyyy-MM-dd')
+        $holidays.Add([pscustomobject]@{ date = $today; name = '' })
+    })
+    $u.HolDelBtn.Add_Click({
+        $sel = $u.HolidaysGrid.SelectedItem
+        if ($null -eq $sel) { return }
+        [void]$holidays.Remove($sel)
     })
 
     # ---- 他者データ編集 ----
@@ -763,6 +782,13 @@ function Show-AdminDialog {
             })
             $where = 'Save-MasterCategories'
             Save-MasterCategories -Source $Source -Data $catsOut -AuthorName $authorName -AuthorEmail $authorEmail
+
+            $where = 'holidays serialize'
+            $holsOut = @($holidays | Where-Object { $_.date } | ForEach-Object {
+                [ordered]@{ date = [string]$_.date; name = [string]$_.name }
+            })
+            $where = 'Save-MasterHolidays'
+            Save-MasterHolidays -Source $Source -Data $holsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
             # Step 2: リモート モードならリモートへも push
             if ($Source.RemoteCtx) {

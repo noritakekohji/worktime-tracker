@@ -114,6 +114,7 @@ function Get-MasterMembers      { param($Source) _ReadJsonArray -Source $Source 
 function Get-MasterProjects     { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/projects.json' }
 function Get-MasterCategories   { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/categories.json' }
 function Get-MasterTaskPatterns { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/task_patterns.json' }
+function Get-MasterHolidays     { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/holidays.json' }
 
 function _ToPSObjectDeep {
     # 再帰的に Hashtable / OrderedDictionary / PSCustomObject / 配列 を
@@ -179,6 +180,7 @@ function Save-MasterMembers      { param($Source, $Data, $AuthorName, $AuthorEma
 function Save-MasterProjects     { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/projects.json'      -CommitMessage 'update master: projects'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/categories.json'    -CommitMessage 'update master: categories'    -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
+function Save-MasterHolidays     { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/holidays.json'      -CommitMessage 'update master: holidays'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 
 # ---- 実績データ (ローカル) ----
 
@@ -325,7 +327,7 @@ function Sync-Pull-Masters {
         return [pscustomobject]@{ Pulled = 0; Missing = 0; Errors = @() }
     }
     $pulled = 0; $missing = 0; $errors = @()
-    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
         try {
             $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
             if (-not $raw) { $missing++; continue }
@@ -348,7 +350,7 @@ function Sync-Push-Masters {
         return [pscustomobject]@{ Pushed = 0; Errors = @() }
     }
     $pushed = 0; $errors = @()
-    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
         $local = Join-Path $Source.LocalRoot "master/$name"
         if (-not (Test-Path -LiteralPath $local)) { continue }
         try {
@@ -455,7 +457,7 @@ function Sync-Push-MyData {
 
 function Test-LocalMastersComplete {
     param([Parameter(Mandatory)]$Source)
-    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $Source.LocalRoot "master/$name"))) { return $false }
     }
     return $true

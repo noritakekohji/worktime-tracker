@@ -50,6 +50,7 @@ function Initialize-DataContext {
         Projects      = $null
         Categories    = $null
         TaskPatterns  = $null
+        Holidays      = $null
         CurrentMember = $null
     }
 
@@ -59,6 +60,7 @@ function Initialize-DataContext {
             $result.Projects     = @(Get-MasterProjects     -Source $source)
             $result.Categories   = @(Get-MasterCategories   -Source $source)
             $result.TaskPatterns = @(Get-MasterTaskPatterns -Source $source)
+            $result.Holidays     = @(Get-MasterHolidays     -Source $source)
         } catch {
             try {
                 [System.Windows.MessageBox]::Show("マスタ読込失敗:`n$_", $AppName, 'OK', 'Error') | Out-Null
@@ -83,5 +85,6 @@ function Reload-MasterContext {
         Projects     = @(Get-MasterProjects     -Source $Source)
         Categories   = @(Get-MasterCategories   -Source $Source)
         TaskPatterns = @(Get-MasterTaskPatterns -Source $Source)
+        Holidays     = @(Get-MasterHolidays     -Source $Source)
     }
 }

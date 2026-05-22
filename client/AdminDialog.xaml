@@ -329,6 +329,38 @@
                     </DockPanel>
                 </TabItem>
 
+                <!-- ===== 休業日 ===== -->
+                <TabItem Header="🗓 休業日">
+                    <DockPanel Margin="6">
+                        <TextBlock DockPanel.Dock="Top" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6"
+                                   Text="社内休業日を登録します。WBS ガントチャートで土日と同じ灰色で表示されます。日付は yyyy-MM-dd 形式。"/>
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="HolAddBtn" Content="＋ 追加" Style="{StaticResource Primary}"/>
+                            <Button x:Name="HolDelBtn" Content="🗑 選択行を削除" Style="{StaticResource Danger}"/>
+                        </StackPanel>
+                        <DataGrid x:Name="HolidaysGrid"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                                  AlternatingRowBackground="#fff1f7" GridLinesVisibility="None"
+                                  BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                  RowHeight="34" ColumnHeaderHeight="38" FontSize="13">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Padding" Value="10,4"/>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="日付 (yyyy-MM-dd)" Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
+                                <DataGridTextColumn Header="名称"               Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
                 <!-- ===== 他者データ編集 ===== -->
                 <TabItem Header="📝 他者データ編集">
                     <DockPanel Margin="6">

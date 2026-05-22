@@ -65,7 +65,7 @@ function Push-BundledMasters {
     # 同梱の master サンプルを local_store に展開 (初回 bootstrap)
     param([Parameter(Mandatory)]$Source, [Parameter(Mandatory)]$Config)
     $bundle = Join-Path (Split-Path $PSScriptRoot -Parent) 'master'
-    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json')) {
+    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
         $local = Join-Path $bundle $name
         if (-not (Test-Path -LiteralPath $local)) {
             throw "同梱の $name が見つかりません: $local"
