@@ -120,7 +120,8 @@ $Script:Holidays     = @($ctx.Holidays)
 # 休業日リストを Converter の静的フィールドに反映 (ガントセル背景判定に使用)
 function _ApplyHolidaysToConverter {
     $dates = @($Script:Holidays | Where-Object { $_ -and $_.date } | ForEach-Object { [string]$_.date })
-    [WT.GanttCellBgConverter]::SetCompanyHolidays($dates)
+    # PS 5.1: Object[] から IEnumerable<string> への変換は失敗するため string[] へ明示キャスト
+    [WT.GanttCellBgConverter]::SetCompanyHolidays([string[]]$dates)
 }
 _ApplyHolidaysToConverter
 
