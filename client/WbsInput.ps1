@@ -446,7 +446,8 @@ function Build-GridColumns {
         $col.Header      = "$d`n$dn" + $(if ($isToday) { ' ▼' } else { '' })
         $col.Binding     = New-Object System.Windows.Data.Binding "[$key]"
         $col.Width       = 42
-        $col.IsReadOnly  = $false
+        # 仕様: 日付セルは読取専用 (入力はタスクビュー経由)
+        $col.IsReadOnly  = $true
         $col.CanUserSort = $false
 
         # セル背景: MultiBinding で (開始,終了,セル値) → 色 を計算
@@ -557,8 +558,9 @@ function Load-WbsData {
             }
         }
 
-        # WBS 階層情報 + タスク列挙 (パターン順)
-        $taskList = New-Object 'System.Collections.Generic.List[object]'   # 各要素: @{pc,pn,tgc,tgn,tc,tn,procIdx,wbsNo,sortKey}
+        # WBS 階層情報を構築 (wbsMap は AddRowBtn の WBS 番号採番のために使用)
+        # 注: 仕様により、グリッドへの自動表示はしない。「＋ 選択タスクに行を追加」で追加されたタスク
+        #     と、既存プラン/エントリに含まれるタスクのみグリッド行を作成する。
         $wbsMap   = @{}
         if ($Script:CurrentPtn -and $Script:CurrentPtn.processes) {
             $procIdx = 0
@@ -582,31 +584,37 @@ function Load-WbsData {
                             wbsNo    = "$procIdx.$tgIdx.$tkIdx"
                             sortKey  = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx
                         }
-                        $taskList.Add($info)
                         $wbsMap["$($info.pc)|$($info.tgc)|$($info.tc)"] = $info
                     }
                 }
             }
         }
 
-        # パターン外のタスク (エントリやプランにあるが pattern にない) も追加
-        $extraKeys = New-Object 'System.Collections.Generic.HashSet[string]'
-        foreach ($e in $projEntries) {
-            $k = "$([string]$e.process_code)|$([string]$e.task_group_code)|$([string]$e.task_code)"
-            if (-not $wbsMap.ContainsKey($k)) { [void]$extraKeys.Add($k) }
-        }
-        foreach ($pk in $planMap.Keys) {
-            if (-not $wbsMap.ContainsKey($pk)) { [void]$extraKeys.Add($pk) }
-        }
-        foreach ($k in $extraKeys) {
-            $parts = $k.Split('|')
-            if ($parts.Count -lt 3) { continue }
-            $info = @{
-                pc = $parts[0]; pn = ''; tgc = $parts[1]; tgn = ''; tc = $parts[2]; tn = ''
-                procIdx = 0; wbsNo = ''; sortKey = '9999.9999.9999'
+        # グリッドに表示するタスクを決定:
+        #   1. プランファイルに登録されているタスク (チーム共有)
+        #   2. 既存エントリがあるタスク (個人の実績データから自動復元)
+        # 重複は (pc, tgc, tc) で排除
+        $taskList = New-Object 'System.Collections.Generic.List[object]'
+        $seenTasks = New-Object 'System.Collections.Generic.HashSet[string]'
+
+        function _AddTaskByKey {
+            param([string]$Key)
+            if (-not $Key -or $seenTasks.Contains($Key)) { return }
+            [void]$seenTasks.Add($Key)
+            $info = if ($wbsMap.ContainsKey($Key)) { $wbsMap[$Key] } else {
+                $parts = $Key.Split('|')
+                if ($parts.Count -lt 3) { return }
+                @{ pc=$parts[0]; pn=''; tgc=$parts[1]; tgn=''; tc=$parts[2]; tn=''
+                   procIdx=0; wbsNo=''; sortKey='9999.9999.9999' }
             }
             $taskList.Add($info)
-            $wbsMap[$k] = $info
+        }
+        # プラン定義タスク
+        foreach ($pk in $planMap.Keys) { _AddTaskByKey $pk }
+        # 既存実績エントリのタスク
+        foreach ($e in $projEntries) {
+            $k = "$([string]$e.process_code)|$([string]$e.task_group_code)|$([string]$e.task_code)"
+            _AddTaskByKey $k
         }
 
         # タスク 1 行ずつ DataTable に追加
@@ -804,7 +812,7 @@ $ui.WbsGrid.Add_CurrentCellChanged({
     }
 })
 
-# A5: 数値セル (日付列 / 計画 列) で + キーで +0.5、- キーで -0.5
+# A5: 計画 列のみ + キーで +0.5、- キーで -0.5 (日付セルは読取専用のため対象外)
 $ui.WbsGrid.Add_PreviewKeyDown({
     param($s, $e)
     if (-not $Script:DataTable) { return }
@@ -814,9 +822,7 @@ $ui.WbsGrid.Add_PreviewKeyDown({
     $col = $cell.Column
     if (-not $col -or -not $col.Binding) { return }
     $path = [string]$col.Binding.Path.Path
-    $isDate = $path -match '^\[\d{4}-\d{2}-\d{2}\]$'
-    $isPlan = ($path -eq '[計画]')
-    if (-not ($isDate -or $isPlan)) { return }
+    if ($path -ne '[計画]') { return }
     $drv = $cell.Item -as [System.Data.DataRowView]
     if (-not $drv) { return }
     $colKey = $path -replace '[\[\]]', ''
