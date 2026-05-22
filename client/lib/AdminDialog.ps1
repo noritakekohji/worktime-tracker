@@ -152,6 +152,32 @@ function Show-AdminDialog {
         [void]$projects.Remove($sel)
     })
 
+    # プロジェクトの期間 FROM/TO セル編集後に yyyy-MM-dd に正規化
+    # 例: "19270311" → "1927-03-11" / "2026-5-1" → "2026-05-01"
+    $u.ProjectsGrid.Add_CellEditEnding({
+        param($s, $e)
+        if ($e.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
+        $col = $e.Column
+        if (-not $col -or -not $col.Binding) { return }
+        $path = [string]$col.Binding.Path.Path
+        if ($path -ne 'period_from' -and $path -ne 'period_to') { return }
+        $tb = $e.EditingElement -as [System.Windows.Controls.TextBox]
+        if (-not $tb) { return }
+        $orig = [string]$tb.Text
+        if ([string]::IsNullOrWhiteSpace($orig)) { return }
+        $t = $orig.Trim()
+        # yyyyMMdd (8 桁数字)
+        if ($t -match '^(\d{4})(\d{2})(\d{2})$') {
+            $tb.Text = "$($matches[1])-$($matches[2])-$($matches[3])"
+            return
+        }
+        # その他は DateTime.TryParse → yyyy-MM-dd
+        $d = [DateTime]::MinValue
+        if ([DateTime]::TryParse($t, [ref]$d)) {
+            $tb.Text = $d.ToString('yyyy-MM-dd')
+        }
+    })
+
     # ---- カテゴリ ----
     $u.CatAddBtn.Add_Click({
         $categories.Add([pscustomobject]@{ code=''; name='' })
