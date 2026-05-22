@@ -879,18 +879,38 @@ function Reload-Masters {
     }
 }
 
+# 必ず書ける場所に診断ログを出す (Desktop に固定)
+$Script:DiagLogPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'report_trace.log'
+function _Diag {
+    param([string]$Msg)
+    try {
+        Add-Content -LiteralPath $Script:DiagLogPath -Value ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Msg) -Encoding UTF8
+    } catch { }
+}
+_Diag "===== ReportViewer start ====="
+
 function _SafeApplyFilters {
-    try { Apply-Filters }
+    _Diag "_SafeApplyFilters called"
+    try { Apply-Filters; _Diag "_SafeApplyFilters done" }
     catch {
+        _Diag "_SafeApplyFilters CAUGHT: $($_.Exception.Message) / $($_.ScriptStackTrace)"
         $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
         [System.Windows.MessageBox]::Show($detail, 'フィルタ適用エラー', 'OK', 'Error') | Out-Null
     }
 }
 
-$u.ReloadBtn.Add_Click({ Reload-Masters; Reload-Entries })
-$u.ApplyBtn.Add_Click({ _SafeApplyFilters })
-$u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
-$u.ProjectFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.ReloadBtn.Add_Click({ _Diag "ReloadBtn click"; Reload-Masters; Reload-Entries })
+$u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
+$u.MemberFilter.Add_SelectionChanged({
+    $val = if ($Script:AllEntries) { "entries=$($Script:AllEntries.Count)" } else { "no entries" }
+    _Diag "MemberFilter changed sel=$($u.MemberFilter.SelectedValue) $val"
+    if ($Script:AllEntries) { _SafeApplyFilters }
+})
+$u.ProjectFilter.Add_SelectionChanged({
+    $val = if ($Script:AllEntries) { "entries=$($Script:AllEntries.Count)" } else { "no entries" }
+    _Diag "ProjectFilter changed sel=$($u.ProjectFilter.SelectedValue) $val"
+    if ($Script:AllEntries) { _SafeApplyFilters }
+})
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
