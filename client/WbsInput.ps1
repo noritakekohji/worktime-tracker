@@ -174,8 +174,11 @@ for ($i = 0; $i -lt $memberItems.Count; $i++) {
 }
 $ui.MemberCombo.SelectedIndex = $selIdx
 
-# Gitlab モードなら送信ボタン表示
-if ($Script:Source.RemoteCtx) { $ui.PushBtn.Visibility = 'Visible' }
+# 送信ボタンはモードに関わらず常時表示。standalone なら IsEnabled=False で誤操作防止
+if (-not $Script:Source.RemoteCtx) {
+    $ui.PushBtn.IsEnabled = $false
+    $ui.PushBtn.ToolTip = 'standalone モードでは送信できません (Gitlabモード時のみ)'
+}
 
 # 管理者ロールなら管理者ボタン表示
 if ($currentMember -and $currentMember.role -eq 'admin') {
@@ -228,8 +231,9 @@ function Build-DataTable {
 
     $stringType = [System.String]
     # 内部 + 表示列。順番が DataGrid 列順に対応
+    # _sort_key: WBS 番号を 0-padding した文字列 ("001.001.001" 等)。ソート用
     $allCols = @(
-        '_pc','_tgc','_tc','_proc_idx',                                            # 内部用
+        '_pc','_tgc','_tc','_proc_idx','_sort_key',                                # 内部用
         'WBS','工程','タスクグループ','タスク',                                    # 階層
         '担当','カテゴリ','計画','合計','進捗','開始','終了'                        # 編集/集計
     )
@@ -487,6 +491,7 @@ function Load-WbsData {
 
         # プランファイル読込 + ルックアップマップ構築 (key = "pc|tgc|tc|cat")
         # プロジェクト全体で共有されるため ProjectCode で読み込む
+        # planItems の生リスト (孤立行復元用) も保持
         $planItems = @(Load-WbsPlanItems -Source $Script:Source -ProjectCode $projCode -Year $year -Month $month)
         $planMap = @{}
         foreach ($p in $planItems) {
@@ -494,6 +499,8 @@ function Load-WbsData {
             $k = "{0}|{1}|{2}|{3}" -f [string]$p.process_code, [string]$p.task_group_code, [string]$p.task_code, [string]$p.category
             $planMap[$k] = $p
         }
+        # WBS 階層番号マップ: (pc, tgc, tc) → @{ wbsNo, pn, tgn, tn, procIdx }
+        $wbsMap = @{}
 
         # デフォルト担当者 = 未アサイン (空文字)。必要なら手入力で設定
         $defaultAbbrev = ''
@@ -517,9 +524,11 @@ function Load-WbsData {
                         if (-not $tk) { continue }
                         $tkIdx++
                         $wbsNo = "$procIdx.$tgIdx.$tkIdx"
+                        $sortKey = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx
                         $pc = [string]$proc.code; $pn = [string]$proc.name
                         $tgc = [string]$tg.code;  $tgn = [string]$tg.name
                         $tc  = [string]$tk.code;  $tn  = [string]$tk.name
+                        $wbsMap["$pc|$tgc|$tc"] = @{ wbsNo=$wbsNo; sortKey=$sortKey; pn=$pn; tgn=$tgn; tn=$tn; procIdx=$procIdx }
 
                         # このタスクの既存エントリをカテゴリ別に集約
                         $taskEntries = @($projEntries | Where-Object {
@@ -565,6 +574,7 @@ function Load-WbsData {
                                 $row = $dt.NewRow()
                                 $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
                                 $row["_proc_idx"] = "$procIdx"
+                                $row["_sort_key"] = $sortKey
                                 $row["WBS"] = $wbsNo
                                 $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
                                 $row["担当"] = $assn
@@ -585,6 +595,7 @@ function Load-WbsData {
                             $row = $dt.NewRow()
                             $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
                             $row["_proc_idx"] = "$procIdx"
+                            $row["_sort_key"] = $sortKey
                             $row["WBS"] = $wbsNo
                             $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
                             $row["担当"] = $defaultAbbrev
@@ -620,9 +631,19 @@ function Load-WbsData {
             $g = $orphanGroup[$key]
             $row = $dt.NewRow()
             $row["_pc"] = $g.pc; $row["_tgc"] = $g.tgc; $row["_tc"] = $g.tc
-            $row["_proc_idx"] = '0'
-            $row["WBS"] = ''
-            $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
+            # パターン側に存在するタスクなら WBS/工程名/_proc_idx を復元
+            $wbsInfo = $wbsMap["$($g.pc)|$($g.tgc)|$($g.tc)"]
+            if ($wbsInfo) {
+                $row["_proc_idx"] = "$($wbsInfo.procIdx)"
+                $row["_sort_key"] = $wbsInfo.sortKey
+                $row["WBS"] = $wbsInfo.wbsNo
+                $row["工程"] = $wbsInfo.pn; $row["タスクグループ"] = $wbsInfo.tgn; $row["タスク"] = $wbsInfo.tn
+            } else {
+                $row["_proc_idx"] = '0'
+                $row["_sort_key"] = '9999.9999.9999'   # パターン外は末尾へ
+                $row["WBS"] = ''
+                $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
+            }
             $row["担当"] = $g.assn
             $row["カテゴリ"] = $g.cat
             $planKey = "$($g.pc)|$($g.tgc)|$($g.tc)|$($g.cat)"
@@ -643,8 +664,47 @@ function Load-WbsData {
             [void]$addedKeys.Add($key)
         }
 
+        # ★ プランにあるが行になっていない (pc, tgc, tc, cat) を行マーカーとして復元
+        #   = ユーザが追加した空行や、保存済の独自カテゴリ行の維持
+        $coveredPrefixes = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($k in $addedKeys) {
+            $parts = $k.Split('|')
+            if ($parts.Count -ge 4) {
+                [void]$coveredPrefixes.Add("$($parts[0])|$($parts[1])|$($parts[2])|$($parts[3])")
+            }
+        }
+        foreach ($planKey in @($planMap.Keys)) {
+            if ($coveredPrefixes.Contains($planKey)) { continue }
+            $p = $planMap[$planKey]
+            $parts = $planKey.Split('|')
+            if ($parts.Count -lt 4) { continue }
+            $pc2 = $parts[0]; $tgc2 = $parts[1]; $tc2 = $parts[2]; $cat2 = $parts[3]
+            $row = $dt.NewRow()
+            $row["_pc"] = $pc2; $row["_tgc"] = $tgc2; $row["_tc"] = $tc2
+            $wbsInfo = $wbsMap["$pc2|$tgc2|$tc2"]
+            if ($wbsInfo) {
+                $row["_proc_idx"] = "$($wbsInfo.procIdx)"
+                $row["_sort_key"] = $wbsInfo.sortKey
+                $row["WBS"] = $wbsInfo.wbsNo
+                $row["工程"] = $wbsInfo.pn; $row["タスクグループ"] = $wbsInfo.tgn; $row["タスク"] = $wbsInfo.tn
+            } else {
+                $row["_proc_idx"] = '0'; $row["_sort_key"] = '9999.9999.9999'; $row["WBS"] = ''
+                $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
+            }
+            $row["カテゴリ"] = $cat2
+            if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
+            if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
+            if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
+            if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
+            [void]$dt.Rows.Add($row)
+            [void]$addedKeys.Add("$planKey|$($p.assignee)")
+        }
+
         $Script:DataTable = $dt
         Update-AllTotals
+
+        # WBS 番号(_sort_key) → 開始予定日 の順でソート
+        $dt.DefaultView.Sort = '_sort_key ASC, 開始 ASC'
 
         Build-GridColumns -Grid $ui.WbsGrid -Year $year -Month $month
         $ui.WbsGrid.ItemsSource = $dt.DefaultView
@@ -692,21 +752,30 @@ function Build-WbsTree {
         [void]$ui.WbsTree.Items.Add($ti)
         return
     }
+    $procIdx = 0
     foreach ($proc in @($Script:CurrentPtn.processes)) {
         if (-not $proc) { continue }
+        $procIdx++
         $pi = New-Object System.Windows.Controls.TreeViewItem
         $pi.Header = "⚙ $([string]$proc.name)"; $pi.IsExpanded = $true
+        $tgIdx = 0
         foreach ($tg in @($proc.task_groups)) {
             if (-not $tg) { continue }
+            $tgIdx++
             $ti = New-Object System.Windows.Controls.TreeViewItem
             $ti.Header = "🗂 $([string]$tg.name)"; $ti.IsExpanded = $true
+            $tkIdx = 0
             foreach ($tk in @($tg.tasks)) {
                 if (-not $tk) { continue }
+                $tkIdx++
                 $ki = New-Object System.Windows.Controls.TreeViewItem
                 $ki.Header = "• $([string]$tk.name)"
                 $ki.Tag = [pscustomobject]@{
                     pc=$proc.code; pn=$proc.name
                     tgc=$tg.code;  tgn=$tg.name
+                    procIdx=$procIdx; tgIdx=$tgIdx; tkIdx=$tkIdx
+                    wbsNo=("$procIdx.$tgIdx.$tkIdx")
+                    sortKey=('{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx)
                     tc=$tk.code;   tn=$tk.name
                 }
                 [void]$ti.Items.Add($ki)
@@ -758,17 +827,18 @@ $ui.AddRowBtn.Add_Click({
     $sel = $ui.WbsTree.SelectedItem
     if (-not $sel -or -not $sel.Tag -or -not $Script:DataTable) { return }
     $info = $sel.Tag
-    # インラインで行作成 (担当は未アサイン)
+    # インラインで行作成 (担当は未アサイン)。WBS番号/工程インデックス/ソートキーをツリーから取得
     $row = $Script:DataTable.NewRow()
     $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
-    $row["_proc_idx"] = '0'
-    $row["WBS"] = ''
+    $row["_proc_idx"] = if ($info.procIdx) { "$($info.procIdx)" } else { '0' }
+    $row["_sort_key"] = if ($info.sortKey) { [string]$info.sortKey } else { '9999.9999.9999' }
+    $row["WBS"] = if ($info.wbsNo) { [string]$info.wbsNo } else { '' }
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = [string]$info.tn
     $row["担当"] = ''
     $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
-    # 追加行へスクロール
+    # ソートが効いているため、追加行は自動で WBS 番号順に挿入される。スクロール位置は気にしない
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
 })
 
@@ -869,7 +939,8 @@ function _BuildEntries {
 
 function _BuildPlanItems {
     param([string]$ProjCode)
-    # 各行から計画情報 (担当/計画工数/期間) を抽出
+    # 全ての行のメタデータ (タスク + カテゴリ + 担当 + 計画 + 期間) をプランファイルに保存。
+    # 追加した空行も「行マーカー」として保存することで、保存後の再読込で消えないようにする。
     $items = New-Object 'System.Collections.Generic.List[object]'
     foreach ($drv in $Script:DataTable.DefaultView) {
         $row = $drv.Row
@@ -877,9 +948,9 @@ function _BuildPlanItems {
         $tc  = [string]$row["_tc"];  $cat = [string]$row["カテゴリ"]
         $plan = [string]$row["計画"]; $assn = [string]$row["担当"]
         $st = [string]$row["開始"];   $en = [string]$row["終了"]
-        # 全て空ならスキップ
-        if ([string]::IsNullOrWhiteSpace($plan) -and [string]::IsNullOrWhiteSpace($assn) `
-            -and [string]::IsNullOrWhiteSpace($st) -and [string]::IsNullOrWhiteSpace($en)) { continue }
+        # 完全に空 (タスクコードすら無し) ならスキップ
+        if ([string]::IsNullOrWhiteSpace($pc) -and [string]::IsNullOrWhiteSpace($tgc) `
+            -and [string]::IsNullOrWhiteSpace($tc)) { continue }
         $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
         $items.Add([pscustomobject]@{
             project_code    = $ProjCode

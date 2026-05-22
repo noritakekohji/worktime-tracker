@@ -119,7 +119,8 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"/>
                     <Button x:Name="PushBtn" Content="📤 送信" Style="{StaticResource Primary}"
-                            MinWidth="100" Margin="6,3,3,3" Visibility="Collapsed"/>
+                            MinWidth="100" Margin="6,3,3,3"
+                            ToolTip="ローカル保存 + Gitlabへ送信 (gitlabモードのみ有効)"/>
                 </StackPanel>
                 <TextBlock x:Name="StatusText"
                            Text="プロジェクトと月を選択して「読込」を押してください"
