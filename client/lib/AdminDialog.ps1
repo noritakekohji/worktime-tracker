@@ -497,6 +497,47 @@ function Show-AdminDialog {
     $u.PatCodeBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
     $u.PatNameBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
 
+    # フォーカス離脱時にパターン一覧の表示文字列を更新
+    # (TextChanged 中は再描画しないため、編集確定 = フォーカスを失ったタイミングで反映)
+    # ノード編集中 (WT_CurrentPatNode != null) はツリーを再描画してノード見出しを更新
+    $u.PatCodeBox.Add_LostFocus({
+        if ($global:WT_CurrentPatNode) {
+            # ノード編集中 → ツリーを再描画してノードのヘッダを反映
+            Render-PatternTree -Pattern $global:WT_CurrentPattern
+            return
+        }
+        if (-not $global:WT_CurrentPattern) { return }
+        $cur = $global:WT_CurrentPattern
+        Render-PatternsList
+        $global:WT_SuppressPatEdit = $true
+        try {
+            foreach ($it in $u.PatternsList.Items) {
+                if ($it.data -eq $cur) { $u.PatternsList.SelectedItem = $it; break }
+            }
+        } finally {
+            $global:WT_SuppressPatEdit = $false
+        }
+        $u.PatHeader.Text = ("階層: {0}  ({1})" -f [string]$cur.id, [string]$cur.name)
+    })
+    $u.PatNameBox.Add_LostFocus({
+        if ($global:WT_CurrentPatNode) {
+            Render-PatternTree -Pattern $global:WT_CurrentPattern
+            return
+        }
+        if (-not $global:WT_CurrentPattern) { return }
+        $cur = $global:WT_CurrentPattern
+        Render-PatternsList
+        $global:WT_SuppressPatEdit = $true
+        try {
+            foreach ($it in $u.PatternsList.Items) {
+                if ($it.data -eq $cur) { $u.PatternsList.SelectedItem = $it; break }
+            }
+        } finally {
+            $global:WT_SuppressPatEdit = $false
+        }
+        $u.PatHeader.Text = ("階層: {0}  ({1})" -f [string]$cur.id, [string]$cur.name)
+    })
+
     $u.PatAddBtn.Add_Click({
         $new = @{ id = 'NEW_PAT'; name = '新規パターン'; processes = @() }
         $patterns.Add($new)
