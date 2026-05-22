@@ -186,23 +186,37 @@
                                   HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Auto">
                             <DataGrid.Resources>
-                                <!-- セル: 個別フォーカス枠を消して、選択時も行全体と同じ色で統一 -->
+                                <!-- セル: Template 自体を上書きして CurrentCell 枠線を完全除去 -->
                                 <Style TargetType="DataGridCell">
                                     <Setter Property="VerticalAlignment" Value="Center"/>
                                     <Setter Property="Padding" Value="4,2"/>
                                     <Setter Property="BorderThickness" Value="0"/>
                                     <Setter Property="BorderBrush" Value="Transparent"/>
                                     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Setter Property="Foreground" Value="#1f2937"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="DataGridCell">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderThickness="0"
+                                                        Padding="{TemplateBinding Padding}"
+                                                        SnapsToDevicePixels="True">
+                                                    <ContentPresenter VerticalAlignment="Center"
+                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
                                     <Style.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter Property="Background" Value="#bbf7d0"/>
+                                            <Setter Property="Background" Value="Transparent"/>
                                             <Setter Property="Foreground" Value="#064e3b"/>
-                                            <Setter Property="BorderThickness" Value="0"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
-                                <!-- 行全体の選択色も統一 -->
+                                <!-- 行全体: 選択時のみ薄緑背景。フォーカス枠は出さない -->
                                 <Style TargetType="DataGridRow">
+                                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
                                             <Setter Property="Background" Value="#bbf7d0"/>
@@ -255,8 +269,7 @@
                                   SelectionMode="Single">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="日付"     Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                                <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="160" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="担当"     Binding="{Binding assignee, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                                <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="180" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="工数"     Binding="{Binding hours, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=N1}" Width="60"/>
                                 <DataGridTextColumn Header="コメント" Binding="{Binding comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                             </DataGrid.Columns>
