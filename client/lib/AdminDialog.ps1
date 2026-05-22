@@ -873,8 +873,10 @@ function Show-AdminDialog {
                 }
             } else {
                 _Status 'ローカル保存完了 (local モードのためリモート送信なし)' '#059669'
-                [System.Windows.MessageBox]::Show('ローカルに保存しました。`n(リモート設定がないため送信なし)', '完了', 'OK', 'Information') | Out-Null
+                [System.Windows.MessageBox]::Show("ローカルに保存しました。`n(リモート設定がないため送信なし)", '完了', 'OK', 'Information') | Out-Null
             }
+            # 保存後にマスタを再読込して一覧表示を最新化 (タスクパターン名などの編集を反映)
+            Load-All
         } catch {
             $detail = "場所: $where`n`n$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
             _Status "保存失敗 (詳細はダイアログ)" '#dc2626'
