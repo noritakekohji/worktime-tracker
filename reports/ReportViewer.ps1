@@ -164,12 +164,32 @@ function Apply-Filters {
     } | Sort-Object -Property hours -Descending
     $u.CategorySummaryGrid.ItemsSource = @($byCat)
 
-    Build-Analysis -Rows $rows
-    $Script:ChartRows = $rows
-    Build-Chart
-    Build-Heatmap -Rows $rows
-    Build-Anomalies -Rows $rows
-    Build-Dashboard -Rows $rows
+    # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
+    function _Trace {
+        param([string]$Tag, [string]$Msg)
+        try {
+            $logDir = Join-Path $env:APPDATA 'worktime-tracker'
+            if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+            Add-Content -LiteralPath (Join-Path $logDir 'report_trace.log') `
+                -Value ("[{0}] {1} {2}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Tag, $Msg) -Encoding UTF8
+        } catch { }
+    }
+    _Trace 'apply' ("rows=$($rows.Count)")
+    foreach ($step in @(
+        @{N='Analysis';  S={ Build-Analysis -Rows $rows; $Script:ChartRows = $rows; Build-Chart }},
+        @{N='Heatmap';   S={ Build-Heatmap -Rows $rows }},
+        @{N='Anomalies'; S={ Build-Anomalies -Rows $rows }},
+        @{N='Dashboard'; S={ Build-Dashboard -Rows $rows }}
+    )) {
+        _Trace $step.N 'begin'
+        try { & $step.S; _Trace $step.N 'ok' }
+        catch {
+            _Trace $step.N ("ERROR: $($_.Exception.Message) / $($_.ScriptStackTrace)")
+            [System.Windows.MessageBox]::Show(
+                "$($step.N) でエラー:`n$($_.Exception.Message)`n`n$($_.InvocationInfo.PositionMessage)`n`n$($_.ScriptStackTrace)",
+                "$($step.N) エラー", 'OK', 'Error') | Out-Null
+        }
+    }
 }
 
 # ---- C3: ダッシュボード (KPI カード + Top 一覧) ----
