@@ -144,7 +144,11 @@ $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','MemberCombo','LoadBtn','AdminBtn',
-                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText')) {
+                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
+                  # タスクビュー (右下)
+                  'TaskViewHeader','TaskEntryDate','TaskEntryCategory','TaskEntryAssignee',
+                  'TaskEntryHours','TaskEntryComment','TaskEntryAddBtn','TaskEntryDelBtn',
+                  'TaskEntriesGrid')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
 
@@ -227,6 +231,18 @@ if ($currentMember -and $currentMember.role -eq 'admin') {
 $Script:DataTable   = $null
 $Script:CurrentProj = $null
 $Script:CurrentPtn  = $null
+# タスクビュー用の全エントリ詳細リスト (カテゴリ・担当・コメント込み)
+$Script:AllEntries = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+# 現在 TaskView に表示中のタスク (pc, tgc, tc, displayName)
+$Script:CurrentTask = $null
+
+function _ParseNum {
+    param($v)
+    if ($null -eq $v) { return 0.0 }
+    $s = [string]$v
+    $d = 0.0; [void][double]::TryParse($s, [ref]$d)
+    return $d
+}
 
 # ---- ヘルパ関数 ----
 function Get-TaskPatternFor {
@@ -254,12 +270,11 @@ function Build-DataTable {
     if ($null -eq $tbl) { throw 'New-Object System.Data.DataTable returned null' }
 
     $stringType = [System.String]
-    # 内部 + 表示列。順番が DataGrid 列順に対応
-    # _sort_key: WBS 番号を 0-padding した文字列 ("001.001.001" 等)。ソート用
+    # 内部 + 表示列。タスクレベル 1 行集約。カテゴリ/担当の詳細はタスクビュー側で扱う
     $allCols = @(
-        '_pc','_tgc','_tc','_proc_idx','_sort_key',                                # 内部用
-        'WBS','工程','タスクグループ','タスク',                                    # 階層
-        '担当','カテゴリ','計画','合計','進捗','開始','終了'                        # 編集/集計
+        '_pc','_tgc','_tc','_proc_idx','_sort_key',           # 内部用
+        'WBS','工程','タスクグループ','タスク',                # 階層
+        '担当','計画','合計','進捗','開始','終了'              # タスク計画情報
     )
     foreach ($name in $allCols) {
         $dc = New-Object 'System.Data.DataColumn' -ArgumentList $name, $stringType
@@ -365,14 +380,13 @@ function Build-GridColumns {
         if ($prefs -and $prefs.wbs_column_widths) { $savedWidths = $prefs.wbs_column_widths }
     } catch { }
 
-    # ---- 固定列 (左ペイン: WBS 階層情報 + 計画情報) ----
+    # ---- 固定列 (タスクレベル 1 行集約) ----
     $fixedDef = @(
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
         @{H="工程";           B="[工程]";           W=75;  RO=$true  },
         @{H="タスクグループ"; B="[タスクグループ]"; W=100; RO=$true  },
-        @{H="タスク";         B="[タスク]";         W=100; RO=$true  },
+        @{H="タスク";         B="[タスク]";         W=120; RO=$true  },
         @{H="担当";           B="[担当]";           W=70;  RO=$false },
-        @{H="カテゴリ";       B="[カテゴリ]";       W=70;  RO=$false },
         @{H="計画";           B="[計画]";           W=50;  RO=$false },
         @{H="合計";           B="[合計]";           W=50;  RO=$true  },
         @{H="進捗";           B="[進捗]";           W=55;  RO=$true  },
@@ -380,32 +394,12 @@ function Build-GridColumns {
         @{H="終了";           B="[終了]";           W=80;  RO=$false }
     )
     $overdueConv = New-Object WT.OverdueBgConverter
-    # E4: 担当列用に「全メンバー 2文字短縮 + メンバーID + 空」リストを作成
-    $assigneeItems = New-Object 'System.Collections.Generic.List[string]'
-    [void]$assigneeItems.Add('')
-    foreach ($m in $Script:Members) {
-        if (-not $m -or -not $m.active) { continue }
-        $abbr = Get-MemberAbbrev -MemberId ([string]$m.id)
-        if ($abbr -and -not $assigneeItems.Contains($abbr)) { [void]$assigneeItems.Add($abbr) }
-    }
     foreach ($fd in $fixedDef) {
-        # 担当列のみ DataGridComboBoxColumn (IsEditable=True で自由文字列も可)
-        if ($fd.H -eq '担当') {
-            $col = New-Object System.Windows.Controls.DataGridComboBoxColumn
-            $col.ItemsSource = $assigneeItems
-            $col.SelectedValueBinding = New-Object System.Windows.Data.Binding $fd.B
-            # 編集用テンプレートの ComboBox を IsEditable に
-            $col.EditingElementStyle = (New-Object System.Windows.Style ([System.Windows.Controls.ComboBox]))
-            $isEdSetter = New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.ComboBox]::IsEditableProperty), $true
-            [void]$col.EditingElementStyle.Setters.Add($isEdSetter)
-        } else {
-            $col = New-Object System.Windows.Controls.DataGridTextColumn
-            $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
-        }
+        $col = New-Object System.Windows.Controls.DataGridTextColumn
         $col.Header      = $fd.H
+        $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
         $col.Width       = $fd.W
         $col.IsReadOnly  = $fd.RO
-        # WBS は階層順を保ちたいのでソート無効化 (DataView の [列名] 構文エラーも回避)
         $col.CanUserSort = $false
         # B5: 保存された列幅を適用 (ヘッダ名で照合)
         if ($savedWidths -and ($savedWidths.PSObject.Properties.Match($fd.H).Count -gt 0 -or ($savedWidths -is [hashtable] -and $savedWidths.ContainsKey($fd.H)))) {
@@ -475,12 +469,12 @@ function Build-GridColumns {
 }
 
 function _MakeRow {
-    # PS 5.1: パラメータ名を $dt にすると、呼び出し元ローカル $dt とバインディング衝突する事象があるため $Table に改名
+    # 旧 API 互換のため残置 (現在は Load-WbsData 内でインライン作成しているため未使用)
     param($Table, [string]$pc, [string]$pn, [string]$tgc, [string]$tgn, [string]$tc, [string]$tn, [string]$cat)
     if ($null -eq $Table) { throw "_MakeRow: Table パラメータが null" }
     $row = $Table.NewRow()
     $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
-    $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn; $row["カテゴリ"] = $cat
+    $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
     return $row
 }
 
@@ -509,219 +503,139 @@ function Load-WbsData {
                 $dt.Count, ($dt[0].GetType().FullName), $PSVersionTable.PSVersion)
         }
 
-        # 既存エントリ読込
+        # 既存エントリ読込 → 詳細リスト Script:AllEntries に保存 (TaskView で個別表示するため)
         $loaded      = @(Load-MonthEntries -Source $Script:Source -MemberId $memberId -Year $year -Month $month)
         $projEntries = @($loaded | Where-Object { $null -ne $_ -and ([string]$_.project_code) -eq $projCode })
+        $Script:AllEntries.Clear()
+        foreach ($e in $projEntries) {
+            if (-not $e) { continue }
+            $catCode = [string]$e.category
+            $catName = $catCode
+            $catObj = $Script:Categories | Where-Object { [string]$_.code -eq $catCode } | Select-Object -First 1
+            if ($catObj -and $catObj.name) { $catName = "$catCode  $($catObj.name)" }
+            $Script:AllEntries.Add([pscustomobject]@{
+                date             = [string]$e.date
+                project_code     = [string]$e.project_code
+                process_code     = [string]$e.process_code
+                task_group_code  = [string]$e.task_group_code
+                task_code        = [string]$e.task_code
+                category         = $catCode
+                category_display = $catName
+                assignee         = if ($e.assignee) { [string]$e.assignee } else { '' }
+                hours            = [double]([math]::Round([double](_ParseNum $e.hours), 2))
+                comment          = [string]$e.comment
+            })
+        }
 
-        # プランファイル読込 + ルックアップマップ構築 (key = "pc|tgc|tc|cat")
-        # プロジェクト全体で共有されるため ProjectCode で読み込む
-        # planItems の生リスト (孤立行復元用) も保持
+        # プランファイル読込 — タスクレベル集約 (key = "pc|tgc|tc")。category 入りの旧フォーマットも吸収
         $planItems = @(Load-WbsPlanItems -Source $Script:Source -ProjectCode $projCode -Year $year -Month $month)
         $planMap = @{}
         foreach ($p in $planItems) {
             if (-not $p) { continue }
-            $k = "{0}|{1}|{2}|{3}" -f [string]$p.process_code, [string]$p.task_group_code, [string]$p.task_code, [string]$p.category
-            $planMap[$k] = $p
+            $k = "{0}|{1}|{2}" -f [string]$p.process_code, [string]$p.task_group_code, [string]$p.task_code
+            if (-not $planMap.ContainsKey($k)) {
+                $planMap[$k] = @{
+                    planned_hours = $p.planned_hours
+                    assignee      = if ($p.assignee) { [string]$p.assignee } else { '' }
+                    planned_start = if ($p.planned_start) { [string]$p.planned_start } else { '' }
+                    planned_end   = if ($p.planned_end)   { [string]$p.planned_end }   else { '' }
+                }
+            } else {
+                # 既にあるなら空欄を埋める (最初の非空を優先)
+                $cur = $planMap[$k]
+                if (-not $cur.planned_hours -and $p.planned_hours) { $cur.planned_hours = $p.planned_hours }
+                if (-not $cur.assignee      -and $p.assignee)      { $cur.assignee      = [string]$p.assignee }
+                if (-not $cur.planned_start -and $p.planned_start) { $cur.planned_start = [string]$p.planned_start }
+                if (-not $cur.planned_end   -and $p.planned_end)   { $cur.planned_end   = [string]$p.planned_end }
+            }
         }
-        # WBS 階層番号マップ: (pc, tgc, tc) → @{ wbsNo, pn, tgn, tn, procIdx }
-        $wbsMap = @{}
 
-        # デフォルト担当者 = 未アサイン (空文字)。必要なら手入力で設定
-        $defaultAbbrev = ''
-
-        # 行作成のヘルパスクリプトブロック (プラン値の埋め込み)
-        # 注: scriptblock 化せず inline で参照する
-        $addedKeys = New-Object 'System.Collections.Generic.HashSet[string]'
-
-        # タスクパターンから全タスクを展開 + WBS 階層番号を採番
+        # WBS 階層情報 + タスク列挙 (パターン順)
+        $taskList = New-Object 'System.Collections.Generic.List[object]'   # 各要素: @{pc,pn,tgc,tgn,tc,tn,procIdx,wbsNo,sortKey}
+        $wbsMap   = @{}
         if ($Script:CurrentPtn -and $Script:CurrentPtn.processes) {
             $procIdx = 0
             foreach ($proc in @($Script:CurrentPtn.processes)) {
                 if (-not $proc) { continue }
-                $procIdx++
-                $tgIdx = 0
+                $procIdx++; $tgIdx = 0
                 foreach ($tg in @($proc.task_groups)) {
                     if (-not $tg) { continue }
-                    $tgIdx++
-                    $tkIdx = 0
+                    $tgIdx++; $tkIdx = 0
                     foreach ($tk in @($tg.tasks)) {
                         if (-not $tk) { continue }
                         $tkIdx++
-                        $wbsNo = "$procIdx.$tgIdx.$tkIdx"
-                        $sortKey = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx
-                        $pc = [string]$proc.code; $pn = [string]$proc.name
-                        $tgc = [string]$tg.code;  $tgn = [string]$tg.name
-                        $tc  = [string]$tk.code;  $tn  = [string]$tk.name
-                        $wbsMap["$pc|$tgc|$tc"] = @{ wbsNo=$wbsNo; sortKey=$sortKey; pn=$pn; tgn=$tgn; tn=$tn; procIdx=$procIdx }
-
-                        # このタスクの既存エントリをカテゴリ別に集約
-                        $taskEntries = @($projEntries | Where-Object {
-                            $null -ne $_ -and
-                            ([string]$_.process_code) -eq $pc -and
-                            ([string]$_.task_group_code) -eq $tgc -and
-                            ([string]$_.task_code) -eq $tc
-                        })
-                        # 既存エントリを (カテゴリ, 担当者) で集約 — 担当が異なれば別行
-                        $rowMap = @{}
-                        foreach ($e in $taskEntries) {
-                            if (-not $e) { continue }
-                            $cat = [string]$e.category
-                            $assn = if ($e.assignee) { [string]$e.assignee } else { $defaultAbbrev }
-                            $rk = "$cat||$assn"
-                            if (-not $rowMap.ContainsKey($rk)) {
-                                $rowMap[$rk] = @{
-                                    cat = $cat; assignee = $assn
-                                    entries = (New-Object 'System.Collections.Generic.List[object]')
-                                }
-                            }
-                            [void]$rowMap[$rk].entries.Add($e)
+                        $info = @{
+                            pc       = [string]$proc.code
+                            pn       = [string]$proc.name
+                            tgc      = [string]$tg.code
+                            tgn      = [string]$tg.name
+                            tc       = [string]$tk.code
+                            tn       = [string]$tk.name
+                            procIdx  = $procIdx
+                            wbsNo    = "$procIdx.$tgIdx.$tkIdx"
+                            sortKey  = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx
                         }
-
-                        # 共通: プラン値マージ関数
-                        $applyPlan = {
-                            param($r, $key)
-                            if ($planMap.ContainsKey($key)) {
-                                $p = $planMap[$key]
-                                if ($p.planned_hours) { $r["計画"] = [string]$p.planned_hours }
-                                if ($p.assignee -and [string]::IsNullOrWhiteSpace($r["担当"])) {
-                                    $r["担当"] = [string]$p.assignee
-                                }
-                                if ($p.planned_start) { $r["開始"] = [string]$p.planned_start }
-                                if ($p.planned_end)   { $r["終了"] = [string]$p.planned_end }
-                            }
-                        }
-
-                        if ($rowMap.Count -gt 0) {
-                            foreach ($rk in $rowMap.Keys) {
-                                $grp = $rowMap[$rk]
-                                $cat = $grp.cat; $assn = $grp.assignee
-                                $row = $dt.NewRow()
-                                $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
-                                $row["_proc_idx"] = "$procIdx"
-                                $row["_sort_key"] = $sortKey
-                                $row["WBS"] = $wbsNo
-                                $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
-                                $row["担当"] = $assn
-                                $row["カテゴリ"] = $cat
-                                & $applyPlan $row "$pc|$tgc|$tc|$cat"
-                                foreach ($e in $grp.entries) {
-                                    $dk = [string]$e.date
-                                    if ($dt.Columns.Contains($dk)) {
-                                        $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
-                                        if ($h -gt 0) { $row[$dk] = $h.ToString("N1") }
-                                    }
-                                }
-                                [void]$dt.Rows.Add($row)
-                                [void]$addedKeys.Add("$pc|$tgc|$tc|$cat|$assn")
-                            }
-                        } else {
-                            # 実績なし → カテゴリ空白行 (担当はデフォルト)
-                            $row = $dt.NewRow()
-                            $row["_pc"] = $pc; $row["_tgc"] = $tgc; $row["_tc"] = $tc
-                            $row["_proc_idx"] = "$procIdx"
-                            $row["_sort_key"] = $sortKey
-                            $row["WBS"] = $wbsNo
-                            $row["工程"] = $pn; $row["タスクグループ"] = $tgn; $row["タスク"] = $tn
-                            $row["担当"] = $defaultAbbrev
-                            $row["カテゴリ"] = ''
-                            & $applyPlan $row "$pc|$tgc|$tc|"
-                            [void]$dt.Rows.Add($row)
-                        }
+                        $taskList.Add($info)
+                        $wbsMap["$($info.pc)|$($info.tgc)|$($info.tc)"] = $info
                     }
                 }
             }
         }
 
-        # タスクパターンに含まれないエントリ (旧データ / パターンなしプロジェクト)
-        # こちらも (cat, assignee) 単位で集約
-        $orphanGroup = @{}
+        # パターン外のタスク (エントリやプランにあるが pattern にない) も追加
+        $extraKeys = New-Object 'System.Collections.Generic.HashSet[string]'
         foreach ($e in $projEntries) {
-            if (-not $e) { continue }
-            $pc = [string]$e.process_code; $tgc = [string]$e.task_group_code
-            $tc = [string]$e.task_code;    $cat = [string]$e.category
-            $assn = if ($e.assignee) { [string]$e.assignee } else { $defaultAbbrev }
-            $key = "$pc|$tgc|$tc|$cat|$assn"
-            # パターン側で既に追加済みのキーはスキップ
-            if ($addedKeys.Contains($key)) { continue }
-            if (-not $orphanGroup.ContainsKey($key)) {
-                $orphanGroup[$key] = @{
-                    pc=$pc; tgc=$tgc; tc=$tc; cat=$cat; assn=$assn
-                    entries = (New-Object 'System.Collections.Generic.List[object]')
-                }
-            }
-            [void]$orphanGroup[$key].entries.Add($e)
+            $k = "$([string]$e.process_code)|$([string]$e.task_group_code)|$([string]$e.task_code)"
+            if (-not $wbsMap.ContainsKey($k)) { [void]$extraKeys.Add($k) }
         }
-        foreach ($key in $orphanGroup.Keys) {
-            $g = $orphanGroup[$key]
-            $row = $dt.NewRow()
-            $row["_pc"] = $g.pc; $row["_tgc"] = $g.tgc; $row["_tc"] = $g.tc
-            # パターン側に存在するタスクなら WBS/工程名/_proc_idx を復元
-            $wbsInfo = $wbsMap["$($g.pc)|$($g.tgc)|$($g.tc)"]
-            if ($wbsInfo) {
-                $row["_proc_idx"] = "$($wbsInfo.procIdx)"
-                $row["_sort_key"] = $wbsInfo.sortKey
-                $row["WBS"] = $wbsInfo.wbsNo
-                $row["工程"] = $wbsInfo.pn; $row["タスクグループ"] = $wbsInfo.tgn; $row["タスク"] = $wbsInfo.tn
-            } else {
-                $row["_proc_idx"] = '0'
-                $row["_sort_key"] = '9999.9999.9999'   # パターン外は末尾へ
-                $row["WBS"] = ''
-                $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
+        foreach ($pk in $planMap.Keys) {
+            if (-not $wbsMap.ContainsKey($pk)) { [void]$extraKeys.Add($pk) }
+        }
+        foreach ($k in $extraKeys) {
+            $parts = $k.Split('|')
+            if ($parts.Count -lt 3) { continue }
+            $info = @{
+                pc = $parts[0]; pn = ''; tgc = $parts[1]; tgn = ''; tc = $parts[2]; tn = ''
+                procIdx = 0; wbsNo = ''; sortKey = '9999.9999.9999'
             }
-            $row["担当"] = $g.assn
-            $row["カテゴリ"] = $g.cat
-            $planKey = "$($g.pc)|$($g.tgc)|$($g.tc)|$($g.cat)"
-            if ($planMap.ContainsKey($planKey)) {
-                $p = $planMap[$planKey]
+            $taskList.Add($info)
+            $wbsMap[$k] = $info
+        }
+
+        # タスク 1 行ずつ DataTable に追加
+        foreach ($info in $taskList) {
+            $row = $dt.NewRow()
+            $row["_pc"]  = $info.pc;  $row["_tgc"] = $info.tgc; $row["_tc"] = $info.tc
+            $row["_proc_idx"] = "$($info.procIdx)"
+            $row["_sort_key"] = $info.sortKey
+            $row["WBS"]  = $info.wbsNo
+            $row["工程"] = $info.pn; $row["タスクグループ"] = $info.tgn; $row["タスク"] = $info.tn
+            # プラン値
+            $pkey = "$($info.pc)|$($info.tgc)|$($info.tc)"
+            if ($planMap.ContainsKey($pkey)) {
+                $p = $planMap[$pkey]
+                if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
                 if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
                 if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
                 if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
             }
-            foreach ($e in $g.entries) {
+            # 日付セル: そのタスクの全エントリ (全カテゴリ・全担当) を合算
+            $taskEntries = @($Script:AllEntries | Where-Object {
+                $_.process_code -eq $info.pc -and $_.task_group_code -eq $info.tgc -and $_.task_code -eq $info.tc
+            })
+            $byDate = @{}
+            foreach ($e in $taskEntries) {
                 $dk = [string]$e.date
+                if (-not $byDate.ContainsKey($dk)) { $byDate[$dk] = 0.0 }
+                $byDate[$dk] += [double]$e.hours
+            }
+            foreach ($dk in $byDate.Keys) {
                 if ($dt.Columns.Contains($dk)) {
-                    $h = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$h)
+                    $h = [double]$byDate[$dk]
                     if ($h -gt 0) { $row[$dk] = $h.ToString("N1") }
                 }
             }
             [void]$dt.Rows.Add($row)
-            [void]$addedKeys.Add($key)
-        }
-
-        # ★ プランにあるが行になっていない (pc, tgc, tc, cat) を行マーカーとして復元
-        #   = ユーザが追加した空行や、保存済の独自カテゴリ行の維持
-        $coveredPrefixes = New-Object 'System.Collections.Generic.HashSet[string]'
-        foreach ($k in $addedKeys) {
-            $parts = $k.Split('|')
-            if ($parts.Count -ge 4) {
-                [void]$coveredPrefixes.Add("$($parts[0])|$($parts[1])|$($parts[2])|$($parts[3])")
-            }
-        }
-        foreach ($planKey in @($planMap.Keys)) {
-            if ($coveredPrefixes.Contains($planKey)) { continue }
-            $p = $planMap[$planKey]
-            $parts = $planKey.Split('|')
-            if ($parts.Count -lt 4) { continue }
-            $pc2 = $parts[0]; $tgc2 = $parts[1]; $tc2 = $parts[2]; $cat2 = $parts[3]
-            $row = $dt.NewRow()
-            $row["_pc"] = $pc2; $row["_tgc"] = $tgc2; $row["_tc"] = $tc2
-            $wbsInfo = $wbsMap["$pc2|$tgc2|$tc2"]
-            if ($wbsInfo) {
-                $row["_proc_idx"] = "$($wbsInfo.procIdx)"
-                $row["_sort_key"] = $wbsInfo.sortKey
-                $row["WBS"] = $wbsInfo.wbsNo
-                $row["工程"] = $wbsInfo.pn; $row["タスクグループ"] = $wbsInfo.tgn; $row["タスク"] = $wbsInfo.tn
-            } else {
-                $row["_proc_idx"] = '0'; $row["_sort_key"] = '9999.9999.9999'; $row["WBS"] = ''
-                $row["工程"] = ''; $row["タスクグループ"] = ''; $row["タスク"] = ''
-            }
-            $row["カテゴリ"] = $cat2
-            if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
-            if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
-            if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
-            if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
-            [void]$dt.Rows.Add($row)
-            [void]$addedKeys.Add("$planKey|$($p.assignee)")
         }
 
         $Script:DataTable = $dt
@@ -860,7 +774,6 @@ $ui.AddRowBtn.Add_Click({
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = [string]$info.tn
     $row["担当"] = ''
-    $row["カテゴリ"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     # ソートが効いているため、追加行は自動で WBS 番号順に挿入される。スクロール位置は気にしない
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
@@ -926,28 +839,23 @@ $ui.WbsGrid.Add_CellEditEnding({
 # ---- 保存共通処理 ----
 function _BuildEntries {
     param([string]$ProjCode, [int]$Year, [int]$Month, [string]$MemberId)
-    $dateCols = @($Script:DataTable.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
+    # タスクビューで管理している詳細リスト $Script:AllEntries から、当該プロジェクトのエントリを抽出
     $entries  = New-Object System.Collections.Generic.List[object]
-    foreach ($drv in $Script:DataTable.DefaultView) {
-        $row = $drv.Row
-        $pc  = [string]$row["_pc"];  $tgc = [string]$row["_tgc"]
-        $tc  = [string]$row["_tc"];  $cat = [string]$row["カテゴリ"]
-        $assn = [string]$row["担当"]
-        foreach ($col in $dateCols) {
-            $v = [string]$row[$col.ColumnName]; $h = 0.0
-            if ([string]::IsNullOrWhiteSpace($v) -or -not [double]::TryParse($v, [ref]$h) -or $h -le 0) { continue }
-            $entries.Add([pscustomobject]@{
-                date            = $col.ColumnName
-                project_code    = $ProjCode
-                process_code    = $pc
-                task_group_code = $tgc
-                task_code       = $tc
-                category        = $cat
-                assignee        = $assn
-                hours           = $h
-                comment         = ''
-            })
-        }
+    foreach ($e in $Script:AllEntries) {
+        if (-not $e) { continue }
+        if ([string]$e.project_code -ne $ProjCode) { continue }
+        if (-not $e.date -or [double]$e.hours -le 0) { continue }
+        $entries.Add([pscustomobject]@{
+            date            = [string]$e.date
+            project_code    = $ProjCode
+            process_code    = [string]$e.process_code
+            task_group_code = [string]$e.task_group_code
+            task_code       = [string]$e.task_code
+            category        = [string]$e.category
+            assignee        = [string]$e.assignee
+            hours           = [double]$e.hours
+            comment         = [string]$e.comment
+        })
     }
     # 他プロジェクト分を保持してマージ
     $allOld = @(Load-MonthEntries -Source $Script:Source -MemberId $MemberId -Year $Year -Month $Month)
@@ -963,16 +871,13 @@ function _BuildEntries {
 
 function _BuildPlanItems {
     param([string]$ProjCode)
-    # 全ての行のメタデータ (タスク + カテゴリ + 担当 + 計画 + 期間) をプランファイルに保存。
-    # 追加した空行も「行マーカー」として保存することで、保存後の再読込で消えないようにする。
+    # タスクレベルのプラン情報 (1 行 = 1 タスク) を抽出
     $items = New-Object 'System.Collections.Generic.List[object]'
     foreach ($drv in $Script:DataTable.DefaultView) {
         $row = $drv.Row
-        $pc  = [string]$row["_pc"];  $tgc = [string]$row["_tgc"]
-        $tc  = [string]$row["_tc"];  $cat = [string]$row["カテゴリ"]
+        $pc  = [string]$row["_pc"];  $tgc = [string]$row["_tgc"]; $tc = [string]$row["_tc"]
         $plan = [string]$row["計画"]; $assn = [string]$row["担当"]
         $st = [string]$row["開始"];   $en = [string]$row["終了"]
-        # 完全に空 (タスクコードすら無し) ならスキップ
         if ([string]::IsNullOrWhiteSpace($pc) -and [string]::IsNullOrWhiteSpace($tgc) `
             -and [string]::IsNullOrWhiteSpace($tc)) { continue }
         $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
@@ -981,7 +886,7 @@ function _BuildPlanItems {
             process_code    = $pc
             task_group_code = $tgc
             task_code       = $tc
-            category        = $cat
+            category        = ''
             planned_hours   = if ($planNum -gt 0) { $planNum } else { $null }
             assignee        = $assn
             planned_start   = $st
@@ -1063,6 +968,147 @@ $Script:Window.Add_PreviewKeyDown({
         $ui.LoadBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
         $e.Handled = $true
     }
+})
+
+# ---- タスクビュー (右下) ----
+# カテゴリ ComboBox の初期化
+$ui.TaskEntryCategory.ItemsSource = @($Script:Categories | ForEach-Object {
+    [pscustomobject]@{ code = [string]$_.code; name = "$($_.code)  $($_.name)" }
+})
+
+# 担当者候補は メンバーマスタの 2文字短縮 + 空白
+$asgList = New-Object 'System.Collections.Generic.List[string]'
+[void]$asgList.Add('')
+foreach ($m in $Script:Members) {
+    if (-not $m -or -not $m.active) { continue }
+    $abbr = Get-MemberAbbrev -MemberId ([string]$m.id)
+    if ($abbr -and -not $asgList.Contains($abbr)) { [void]$asgList.Add($abbr) }
+}
+$ui.TaskEntryAssignee.ItemsSource = $asgList
+$ui.TaskEntryDate.SelectedDate = [datetime]::Today
+
+# タスクビューに表示中のエントリ (フィルタ済)
+$Script:TaskViewEntries = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+$ui.TaskEntriesGrid.ItemsSource = $Script:TaskViewEntries
+
+function Refresh-TaskView {
+    $Script:TaskViewEntries.Clear()
+    $ui.TaskEntryAddBtn.IsEnabled = $false
+    $ui.TaskEntryDelBtn.IsEnabled = $false
+    if (-not $Script:CurrentTask) {
+        $ui.TaskViewHeader.Text = '📝 上のグリッドでタスクを選択してください'
+        return
+    }
+    $t = $Script:CurrentTask
+    $ui.TaskViewHeader.Text = ("📝 {0}.{1}.{2}  {3}  /  {4}  /  {5}" -f $t.pc, $t.tgc, $t.tc, $t.pn, $t.tgn, $t.tn)
+    $matches = @($Script:AllEntries | Where-Object {
+        $_.process_code -eq $t.pc -and $_.task_group_code -eq $t.tgc -and $_.task_code -eq $t.tc
+    })
+    foreach ($e in $matches) { $Script:TaskViewEntries.Add($e) }
+    $ui.TaskEntryAddBtn.IsEnabled = $true
+    $ui.TaskEntryDelBtn.IsEnabled = ($matches.Count -gt 0)
+    # 既定の担当: そのタスクの行の「担当」または現在ユーザ
+    if (-not [string]::IsNullOrWhiteSpace($t.assignee)) {
+        $ui.TaskEntryAssignee.Text = [string]$t.assignee
+    } elseif ($Script:Config -and $Script:Config.member_id) {
+        $ui.TaskEntryAssignee.Text = Get-MemberAbbrev -MemberId $Script:Config.member_id
+    }
+}
+
+# WBS グリッドの行選択 → タスクビュー更新
+$ui.WbsGrid.Add_SelectionChanged({
+    $sel = $ui.WbsGrid.SelectedItem
+    if ($null -eq $sel) { $Script:CurrentTask = $null; Refresh-TaskView; return }
+    $drv = $sel -as [System.Data.DataRowView]
+    if (-not $drv) { $Script:CurrentTask = $null; Refresh-TaskView; return }
+    $r = $drv.Row
+    $Script:CurrentTask = @{
+        pc       = [string]$r["_pc"]
+        tgc      = [string]$r["_tgc"]
+        tc       = [string]$r["_tc"]
+        pn       = [string]$r["工程"]
+        tgn      = [string]$r["タスクグループ"]
+        tn       = [string]$r["タスク"]
+        assignee = [string]$r["担当"]
+    }
+    Refresh-TaskView
+})
+
+# WBS グリッドのセルから合計を再計算してタスク行を更新
+function Recompute-TaskRow {
+    param($pc, $tgc, $tc)
+    if (-not $Script:DataTable) { return }
+    foreach ($row in $Script:DataTable.Rows) {
+        if (([string]$row["_pc"]) -ne $pc) { continue }
+        if (([string]$row["_tgc"]) -ne $tgc) { continue }
+        if (([string]$row["_tc"]) -ne $tc) { continue }
+        # 日付列をクリアして合算しなおし
+        $dateCols = @($Script:DataTable.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
+        foreach ($c in $dateCols) { $row[$c.ColumnName] = '' }
+        $matches = @($Script:AllEntries | Where-Object {
+            $_.process_code -eq $pc -and $_.task_group_code -eq $tgc -and $_.task_code -eq $tc
+        })
+        $byDate = @{}
+        foreach ($e in $matches) {
+            $dk = [string]$e.date
+            if (-not $byDate.ContainsKey($dk)) { $byDate[$dk] = 0.0 }
+            $byDate[$dk] += [double]$e.hours
+        }
+        foreach ($dk in $byDate.Keys) {
+            if ($Script:DataTable.Columns.Contains($dk)) {
+                $h = [double]$byDate[$dk]
+                $row[$dk] = if ($h -gt 0) { $h.ToString('N1') } else { '' }
+            }
+        }
+        break
+    }
+    Update-AllTotals
+}
+
+# タスクビュー: ＋ 追加
+$ui.TaskEntryAddBtn.Add_Click({
+    if (-not $Script:CurrentTask) { return }
+    $d = $ui.TaskEntryDate.SelectedDate
+    if (-not $d) {
+        [System.Windows.MessageBox]::Show('日付を選択してください', '入力エラー', 'OK', 'Warning') | Out-Null; return
+    }
+    $hours = 0.0
+    if (-not [double]::TryParse($ui.TaskEntryHours.Text, [ref]$hours) -or $hours -le 0) {
+        [System.Windows.MessageBox]::Show('工数は正の数値を入力してください', '入力エラー', 'OK', 'Warning') | Out-Null; return
+    }
+    $catItem = $ui.TaskEntryCategory.SelectedItem
+    $catCode = if ($catItem) { [string]$catItem.code } else { '' }
+    $catDisp = if ($catItem) { [string]$catItem.name } else { '' }
+    $assn = [string]$ui.TaskEntryAssignee.Text
+    $t = $Script:CurrentTask
+    $newEntry = [pscustomobject]@{
+        date             = $d.ToString('yyyy-MM-dd')
+        project_code     = [string]$ui.ProjectCombo.SelectedItem.unit_code
+        process_code     = $t.pc
+        task_group_code  = $t.tgc
+        task_code        = $t.tc
+        category         = $catCode
+        category_display = $catDisp
+        assignee         = $assn
+        hours            = $hours
+        comment          = [string]$ui.TaskEntryComment.Text
+    }
+    $Script:AllEntries.Add($newEntry)
+    Refresh-TaskView
+    Recompute-TaskRow $t.pc $t.tgc $t.tc
+    # 入力欄をクリア (日付・担当は維持)
+    $ui.TaskEntryHours.Text   = '1.0'
+    $ui.TaskEntryComment.Text = ''
+})
+
+# タスクビュー: 🗑 削除
+$ui.TaskEntryDelBtn.Add_Click({
+    $sel = $ui.TaskEntriesGrid.SelectedItem
+    if (-not $sel -or -not $Script:CurrentTask) { return }
+    [void]$Script:AllEntries.Remove($sel)
+    $t = $Script:CurrentTask
+    Refresh-TaskView
+    Recompute-TaskRow $t.pc $t.tgc $t.tc
 })
 
 # B5: 列幅永続化 — Closing で現在の列幅を user_prefs.json へ保存

@@ -155,37 +155,100 @@
             <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
                           Background="{StaticResource Border}" Cursor="SizeWE"/>
 
-            <!-- 右: DataGrid -->
-            <Border Grid.Column="2" Background="{StaticResource Surface}">
-                <DockPanel Margin="4">
-                    <TextBlock DockPanel.Dock="Top" x:Name="GridTitle"
-                               Text="プロジェクトを選択して「読込」を押してください"
-                               FontWeight="Bold" Foreground="{StaticResource EmeraldD}"
-                               Margin="6,6,6,8"/>
-                    <DataGrid x:Name="WbsGrid"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False" CanUserDeleteRows="False"
-                              CanUserResizeRows="False" CanUserReorderColumns="False"
-                              HeadersVisibility="Column"
-                              Background="White" RowBackground="White"
-                              AlternatingRowBackground="#f0fdf4"
-                              GridLinesVisibility="All" HorizontalGridLinesBrush="#d1fae5" VerticalGridLinesBrush="#d1fae5"
-                              BorderBrush="{StaticResource Border}" BorderThickness="1"
-                              RowHeight="28" ColumnHeaderHeight="34" FontSize="12"
-                              SelectionMode="Single" SelectionUnit="Cell"
-                              EnableColumnVirtualization="True"
-                              EnableRowVirtualization="True"
-                              HorizontalScrollBarVisibility="Auto"
-                              VerticalScrollBarVisibility="Auto">
-                        <DataGrid.Resources>
-                            <Style TargetType="DataGridCell">
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                                <Setter Property="Padding" Value="4,2"/>
-                            </Style>
-                        </DataGrid.Resources>
-                    </DataGrid>
-                </DockPanel>
-            </Border>
+            <!-- 右: 上=WBSグリッド+ガント / 下=タスクビュー -->
+            <Grid Grid.Column="2" Background="{StaticResource Surface}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="180"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="280" MinHeight="120"/>
+                </Grid.RowDefinitions>
+
+                <!-- 右上: WBSグリッド (タスクレベル 1 行 + 計画ガント) -->
+                <Border Grid.Row="0" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                    <DockPanel Margin="4">
+                        <TextBlock DockPanel.Dock="Top" x:Name="GridTitle"
+                                   Text="プロジェクトを選択して「読込」を押してください"
+                                   FontWeight="Bold" Foreground="{StaticResource EmeraldD}"
+                                   Margin="6,6,6,8"/>
+                        <DataGrid x:Name="WbsGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                  CanUserResizeRows="False" CanUserReorderColumns="False"
+                                  HeadersVisibility="Column"
+                                  Background="White" RowBackground="White"
+                                  AlternatingRowBackground="#f0fdf4"
+                                  GridLinesVisibility="All" HorizontalGridLinesBrush="#d1fae5" VerticalGridLinesBrush="#d1fae5"
+                                  BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                  RowHeight="28" ColumnHeaderHeight="34" FontSize="12"
+                                  SelectionMode="Single" SelectionUnit="FullRow"
+                                  EnableColumnVirtualization="True"
+                                  EnableRowVirtualization="True"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="Padding" Value="4,2"/>
+                                </Style>
+                            </DataGrid.Resources>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <!-- 縦スプリッター -->
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              Background="{StaticResource Border}" Cursor="SizeNS"/>
+
+                <!-- 右下: タスクビュー (選択タスクの実績入力) -->
+                <Border Grid.Row="2" Background="#fafefb">
+                    <DockPanel Margin="6">
+                        <TextBlock DockPanel.Dock="Top" x:Name="TaskViewHeader"
+                                   Text="📝 上のグリッドでタスクを選択してください"
+                                   FontWeight="Bold" Foreground="{StaticResource EmeraldD}"
+                                   Margin="0,0,0,6"/>
+
+                        <!-- 入力フォーム -->
+                        <Border DockPanel.Dock="Top" Background="White"
+                                BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,6">
+                            <WrapPanel Orientation="Horizontal">
+                                <Label Content="日付:" VerticalAlignment="Center"/>
+                                <DatePicker x:Name="TaskEntryDate" Width="130" Margin="0,0,8,0"/>
+                                <Label Content="カテゴリ:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="TaskEntryCategory" Width="120" Margin="0,0,8,0"
+                                          DisplayMemberPath="name" SelectedValuePath="code"
+                                          IsEditable="True" IsTextSearchEnabled="True" TextSearch.TextPath="name"/>
+                                <Label Content="担当:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="TaskEntryAssignee" Width="80" Margin="0,0,8,0" IsEditable="True"/>
+                                <Label Content="工数:" VerticalAlignment="Center"/>
+                                <TextBox x:Name="TaskEntryHours" Width="55" Margin="0,0,8,0" TextAlignment="Right" Text="1.0"/>
+                                <Label Content="コメント:" VerticalAlignment="Center"/>
+                                <TextBox x:Name="TaskEntryComment" Width="200" Margin="0,0,8,0"/>
+                                <Button x:Name="TaskEntryAddBtn" Content="＋ 追加" Style="{StaticResource Primary}" MinWidth="80"/>
+                                <Button x:Name="TaskEntryDelBtn" Content="🗑 削除" Margin="6,0,0,0" IsEnabled="False"/>
+                            </WrapPanel>
+                        </Border>
+
+                        <!-- 既存エントリ一覧 -->
+                        <DataGrid x:Name="TaskEntriesGrid"
+                                  AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  HeadersVisibility="Column"
+                                  Background="White" RowBackground="White"
+                                  AlternatingRowBackground="#f0fdf4"
+                                  GridLinesVisibility="All" HorizontalGridLinesBrush="#d1fae5" VerticalGridLinesBrush="#d1fae5"
+                                  BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                  RowHeight="28" ColumnHeaderHeight="32" FontSize="12"
+                                  SelectionMode="Single">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="日付"     Binding="{Binding date, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display, Mode=OneWay}" Width="120" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="担当"     Binding="{Binding assignee, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                                <DataGridTextColumn Header="工数"     Binding="{Binding hours, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=N1}" Width="60"/>
+                                <DataGridTextColumn Header="コメント" Binding="{Binding comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>
