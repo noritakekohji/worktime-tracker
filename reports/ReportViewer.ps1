@@ -859,10 +859,18 @@ function Reload-Masters {
     }
 }
 
+function _SafeApplyFilters {
+    try { Apply-Filters }
+    catch {
+        $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
+        [System.Windows.MessageBox]::Show($detail, 'フィルタ適用エラー', 'OK', 'Error') | Out-Null
+    }
+}
+
 $u.ReloadBtn.Add_Click({ Reload-Masters; Reload-Entries })
-$u.ApplyBtn.Add_Click({ Apply-Filters })
-$u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })
-$u.ProjectFilter.Add_SelectionChanged({ if ($Script:AllEntries) { Apply-Filters } })
+$u.ApplyBtn.Add_Click({ _SafeApplyFilters })
+$u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.ProjectFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
