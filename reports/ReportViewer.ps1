@@ -486,7 +486,8 @@ function Build-Anomalies {
         }
     }
 
-    $u.AnomalyGrid.ItemsSource = @($items)
+    # PS 5.1: List[object] of PSCustomObject に @(...) すると ArgumentException が出るため ToArray()
+    $u.AnomalyGrid.ItemsSource = $items.ToArray()
 }
 
 function _AnalysisRow {
