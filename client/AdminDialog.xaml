@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="🌸 管理者モード - マスタ編集"
@@ -236,7 +236,12 @@
                                 <DataGridTextColumn Header="業務種別 (案件対応/維持運用/その他)" Binding="{Binding work_type, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
                                 <DataGridTextColumn Header="期間 FROM (YYYY-MM-DD)" Binding="{Binding period_from, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                                 <DataGridTextColumn Header="期間 TO (YYYY-MM-DD)" Binding="{Binding period_to, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
-                                <DataGridTextColumn Header="タスクパターンID" Binding="{Binding task_pattern_id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="150"/>
+                                <DataGridComboBoxColumn x:Name="ProjPatternCol"
+                                                        Header="タスクパターン"
+                                                        SelectedValueBinding="{Binding task_pattern_id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                        SelectedValuePath="id"
+                                                        DisplayMemberPath="display"
+                                                        Width="200"/>
                                 <DataGridCheckBoxColumn Header="有効" Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                             </DataGrid.Columns>
                         </DataGrid>

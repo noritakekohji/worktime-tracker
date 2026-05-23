@@ -143,7 +143,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $ui = @{}
-foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','MemberCombo','LoadBtn','AdminBtn',
+foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
                   # タスクビュー (右下)
                   'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
@@ -183,24 +183,12 @@ $projItems = @($Script:Projects | ForEach-Object {
 })
 $ui.ProjectCombo.ItemsSource = $projItems
 
-# 担当者 ComboBox — 全メンバーを表示 (WBS は担当者を選んで閲覧するため)
-$currentMember = $Script:Members | Where-Object { $_.id -eq $cfg.member_id -and $_.active } | Select-Object -First 1
-$memberItems = @($Script:Members | Where-Object { $_.active } | ForEach-Object {
-    $mid = [string]$_.id; $mnm = [string]$_.name; $mdisp = $mid + '  ' + $mnm
-    [pscustomobject]@{ id=$mid; name=$mnm; display=$mdisp }
-})
-if ($memberItems.Count -eq 0) {
-    # マスタになければ設定値から自分だけ追加
-    $mid = $cfg.member_id; $mnm = '(自分)'
-    $memberItems = @([pscustomobject]@{ id=$mid; name=$mnm; display="$mid  $mnm" })
+# 現在ログインユーザ (実績は本人のファイルへ保存)
+$Script:CurrentMember = $Script:Members | Where-Object { $_.id -eq $cfg.member_id -and $_.active } | Select-Object -First 1
+if (-not $Script:CurrentMember) {
+    $Script:CurrentMember = [pscustomobject]@{ id=$cfg.member_id; name='(自分)'; role='member' }
 }
-$ui.MemberCombo.ItemsSource = $memberItems
-# 現在のメンバーを初期選択
-$selIdx = 0
-for ($i = 0; $i -lt $memberItems.Count; $i++) {
-    if ($memberItems[$i].id -eq $cfg.member_id) { $selIdx = $i; break }
-}
-$ui.MemberCombo.SelectedIndex = $selIdx
+$currentMember = $Script:CurrentMember
 
 # 送信ボタンはモードに関わらず常時表示。standalone なら IsEnabled=False で誤操作防止
 if (-not $Script:Source.RemoteCtx) {
@@ -250,7 +238,7 @@ function Get-TaskPatternFor {
     if (-not $Project) { return $null }
     $ptnId = [string]$Project.task_pattern_id
     if (-not $ptnId) { return $null }
-    return ($Script:TaskPatterns | Where-Object { $_.id -eq $ptnId } | Select-Object -First 1)
+    return ($Script:TaskPatterns | Where-Object { ([string]$_.id) -eq $ptnId } | Select-Object -First 1)
 }
 
 # メンバー ID から 2 文字短縮表記を生成
@@ -490,14 +478,12 @@ function _MakeRow {
 # ---- WBS データ読込 ----
 function Load-WbsData {
     $projItem   = $ui.ProjectCombo.SelectedItem
-    $memberItem = $ui.MemberCombo.SelectedItem
     if (-not $projItem)   { Set-Status 'プロジェクトを選択してください' '#f59e0b'; return }
-    if (-not $memberItem) { Set-Status '担当者を選択してください'       '#f59e0b'; return }
 
     $projCode  = [string]$projItem.unit_code
     $year      = [int]$ui.YearCombo.SelectedItem
     $month     = [int]$ui.MonthCombo.SelectedItem
-    $memberId  = [string]$memberItem.id
+    $memberId  = [string]$Script:CurrentMember.id
 
     Set-Status "読込中…" '#f9e2af'
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
@@ -703,7 +689,12 @@ function Build-WbsTree {
     $ui.AddRowBtn.IsEnabled = $false
     if (-not $Script:CurrentPtn -or -not $Script:CurrentPtn.processes) {
         $ti = New-Object System.Windows.Controls.TreeViewItem
-        $ti.Header = "(タスクパターンなし)"
+        $assignedId = if ($Script:CurrentProj) { [string]$Script:CurrentProj.task_pattern_id } else { '' }
+        if ([string]::IsNullOrWhiteSpace($assignedId)) {
+            $ti.Header = "(プロジェクトに task_pattern_id 未設定 — 管理画面で設定してください)"
+        } else {
+            $ti.Header = "(task_pattern_id='$assignedId' に一致するパターンなし)"
+        }
         $ti.IsEnabled = $false
         [void]$ui.WbsTree.Items.Add($ti)
         return
@@ -949,9 +940,8 @@ function _DoSave {
     $projCode   = [string]$ui.ProjectCombo.SelectedItem.unit_code
     $year       = [int]$ui.YearCombo.SelectedItem
     $month      = [int]$ui.MonthCombo.SelectedItem
-    $memberItem = $ui.MemberCombo.SelectedItem
-    $memberId   = [string]$memberItem.id
-    $memberName = [string]$memberItem.name
+    $memberId   = [string]$Script:CurrentMember.id
+    $memberName = [string]$Script:CurrentMember.name
 
     # 1. 実績エントリ保存 (他プロジェクトとマージ)
     $r = _BuildEntries -ProjCode $projCode -Year $year -Month $month -MemberId $memberId

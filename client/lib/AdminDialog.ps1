@@ -38,6 +38,8 @@ function Show-AdminDialog {
     $categories   = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $holidays     = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     $patterns     = New-Object 'System.Collections.Generic.List[object]'   # hashtable list
+    # プロジェクトの task_pattern_id 列で使う ComboBox の表示用リスト
+    $patternComboItems = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
 
     function _Status { param([string]$Text,[string]$Color='#6b7280')
         $u.StatusText.Text = $Text
@@ -100,6 +102,14 @@ function Show-AdminDialog {
                 $patterns.Add( (_ToHash $pt) )
             }
             Render-PatternsList
+            # task_pattern_id ComboBox 用リストを更新 (id + name の display 付き)
+            $patternComboItems.Clear()
+            $patternComboItems.Add([pscustomobject]@{ id=''; display='(未設定)' })
+            foreach ($pt in $patterns) {
+                $pid = [string]$pt.id
+                $pnm = if ($pt.name) { " — $([string]$pt.name)" } else { '' }
+                $patternComboItems.Add([pscustomobject]@{ id=$pid; display="$pid$pnm" })
+            }
             $categories.Clear()
             foreach ($c in (Get-MasterCategories -Source $Source)) {
                 $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
@@ -121,6 +131,13 @@ function Show-AdminDialog {
     $u.ProjectsGrid.ItemsSource   = $projects
     $u.CategoriesGrid.ItemsSource = $categories
     $u.HolidaysGrid.ItemsSource   = $holidays
+
+    # プロジェクトの「タスクパターン」列の ComboBox に items を注入
+    foreach ($col in $u.ProjectsGrid.Columns) {
+        if ($col -is [System.Windows.Controls.DataGridComboBoxColumn] -and ([string]$col.Header) -eq 'タスクパターン') {
+            $col.ItemsSource = $patternComboItems
+        }
+    }
 
     # ---- メンバー ----
     $u.MemAddBtn.Add_Click({

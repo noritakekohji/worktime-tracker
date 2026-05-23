@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="WBS 実績入力 - WorkTime Tracker"
@@ -104,9 +104,6 @@
                 <ComboBox x:Name="YearCombo" Width="68" Margin="0,0,4,0" Background="White"/>
                 <Label Content="月:"/>
                 <ComboBox x:Name="MonthCombo" Width="52" Margin="0,0,12,0" Background="White"/>
-                <Label Content="担当者:"/>
-                <ComboBox x:Name="MemberCombo" Width="160" Margin="0,0,10,0"
-                          DisplayMemberPath="display" Background="White"/>
                 <Button x:Name="LoadBtn"  Content="📋 読込" Style="{StaticResource Primary}" Margin="0,0,0,0"/>
                 <Button x:Name="AdminBtn" Content="🔧 管理者" Margin="6,0,0,0" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
             </WrapPanel>
