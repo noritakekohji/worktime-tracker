@@ -19,7 +19,7 @@ function Show-AdminDialog {
     $u = @{}
     foreach ($n in 'StatusText','ReloadBtn','CloseBtn','SaveBtn',
                    'MembersGrid','MemAddBtn','MemDelBtn',
-                   'ProjectsGrid','PrjAddBtn','PrjDelBtn',
+                   'ProjectsGrid','PrjAddBtn','PrjDelBtn','ProjPatternCol',
                    'PatternsList','PatAddBtn','PatDelBtn',
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
                    'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
@@ -110,6 +110,17 @@ function Show-AdminDialog {
                 $pnm = if ($pt.name) { " — $([string]$pt.name)" } else { '' }
                 $patternComboItems.Add([pscustomobject]@{ id=$pid; display="$pid$pnm" })
             }
+            # ProjectsGrid の DataGridComboBoxColumn にここで毎回 ItemsSource を貼り直す
+            # (起動時の最初のセル生成より前に確実に items を持たせる)
+            if ($u.ProjPatternCol) {
+                $u.ProjPatternCol.ItemsSource = $patternComboItems
+            } else {
+                foreach ($col in $u.ProjectsGrid.Columns) {
+                    if ($col -is [System.Windows.Controls.DataGridComboBoxColumn] -and ([string]$col.Header) -eq 'タスクパターン') {
+                        $col.ItemsSource = $patternComboItems
+                    }
+                }
+            }
             $categories.Clear()
             foreach ($c in (Get-MasterCategories -Source $Source)) {
                 $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
@@ -131,13 +142,6 @@ function Show-AdminDialog {
     $u.ProjectsGrid.ItemsSource   = $projects
     $u.CategoriesGrid.ItemsSource = $categories
     $u.HolidaysGrid.ItemsSource   = $holidays
-
-    # プロジェクトの「タスクパターン」列の ComboBox に items を注入
-    foreach ($col in $u.ProjectsGrid.Columns) {
-        if ($col -is [System.Windows.Controls.DataGridComboBoxColumn] -and ([string]$col.Header) -eq 'タスクパターン') {
-            $col.ItemsSource = $patternComboItems
-        }
-    }
 
     # ---- メンバー ----
     $u.MemAddBtn.Add_Click({
