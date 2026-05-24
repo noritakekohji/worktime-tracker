@@ -264,7 +264,7 @@ function Reload-Masters {
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         # UI 反映: プロジェクト / カテゴリ / 現在の作業者
         if ($ui -and $ui.ProjectCombo) {
-            $ui.ProjectCombo.ItemsSource = @(Build-ProjectComboItems)
+            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
         }
         if ($ui -and $ui.CategoryCombo) {
             $ui.CategoryCombo.ItemsSource = @($Script:Categories)
@@ -430,7 +430,7 @@ function Build-ProjectComboItems {
     $sorted = @($items | Sort-Object @{Expression='is_favorite'; Descending=$true}, @{Expression='unit_code'; Descending=$false})
     Write-Output -NoEnumerate $sorted
 }
-$ui.ProjectCombo.ItemsSource = @(Build-ProjectComboItems)
+$ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
 
 function Get-TaskPatternFor {
     param($Project)
@@ -868,7 +868,7 @@ $ui.UserPrefsBtn.Add_Click({
                                         -Projects $Script:Projects
         if ($changed) {
             # Project Combo を再構築 (お気に入りが上に来る)
-            $ui.ProjectCombo.ItemsSource = @(Build-ProjectComboItems)
+            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
             Set-Status '個人設定を保存しました。プロジェクト一覧を更新。' '#10b981'
         }
     } catch {
@@ -899,7 +899,7 @@ $ui.SettingsBtn.Add_Click({
         if (Has-Role -Member $Script:CurrentMember -Role 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
 
         $ui.CategoryCombo.ItemsSource = $Script:Categories
-        $ui.ProjectCombo.ItemsSource  = @(Build-ProjectComboItems)
+        $ui.ProjectCombo.ItemsSource  = Build-ProjectComboItems
         Load-ViewMonth
     }
 })
