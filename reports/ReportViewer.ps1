@@ -38,7 +38,8 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
-              'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid') {
+              'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid',
+              'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -1308,12 +1309,140 @@ function Build-WorkTypeMix {
     $u.WorkTypeByMemberGrid.ItemsSource = @($rowsOut)
 }
 
+# ---- 業務種別ドリルダウン共通ヘルパ ----
+# プロジェクトコードから work_type / project_name / target_system を解決
+function _ProjectAttr {
+    param([string]$ProjCode, [string]$Attr)
+    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $ProjCode } | Select-Object -First 1
+    if (-not $p) { return '' }
+    return [string]$p.$Attr
+}
+
+# 行ラベルの表示文字列
+function _RowLabelForCase {
+    param([string]$Code)
+    $n = _ProjectAttr -ProjCode $Code -Attr 'project_name'
+    if ($n) { return "$Code  $n" }
+    return $Code
+}
+function _RowLabelForOps {
+    param([string]$System)
+    if ([string]::IsNullOrWhiteSpace($System)) { return '(target_system 未設定)' }
+    return $System
+}
+
+# 業務種別 × 任意軸 (工程 or タスクグループ) のクロス集計を共通生成
+function _BuildWorkTypeDrillDown {
+    param(
+        $Rows,
+        [string]$WorkType,         # '案件対応' または '維持運用'
+        [string]$ColAxis,          # '工程' or 'タスクグループ'
+        [scriptblock]$RowKeyFn,    # entry → 行キー (code)
+        [scriptblock]$RowLabelFn,  # row key → 表示
+        $Grid
+    )
+    if (-not $Grid) { return }
+    $Grid.Columns.Clear()
+    $Grid.ItemsSource = $null
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    # 列キー: entries の process_code or task_group_code
+    $colKey = if ($ColAxis -eq 'タスクグループ') { 'task_group_code' } else { 'process_code' }
+
+    # フィルタ: 業務種別が一致するエントリのみ
+    $filtered = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $Rows) {
+        $wt = _ProjectWorkType ([string]$r.project_code)
+        if ($wt -eq $WorkType) { [void]$filtered.Add($r) }
+    }
+    if ($filtered.Count -eq 0) {
+        # ヘッダだけ出す
+        $Grid.ItemsSource = @([pscustomobject]@{ '行' = "($WorkType の実績なし)" })
+        return
+    }
+
+    $rowKeys = @($filtered | ForEach-Object { & $RowKeyFn $_ } | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Sort-Object -Unique)
+    $colKeys = @($filtered | ForEach-Object { [string]$_.$colKey } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($rowKeys.Count -eq 0 -or $colKeys.Count -eq 0) { return }
+
+    # 集計
+    $cell = @{}  # rowKey -> { colKey -> hours }
+    foreach ($r in $filtered) {
+        $rk = [string](& $RowKeyFn $r); $ck = [string]$r.$colKey
+        if (-not $rk -or -not $ck) { continue }
+        if (-not $cell.ContainsKey($rk)) { $cell[$rk] = @{} }
+        if (-not $cell[$rk].ContainsKey($ck)) { $cell[$rk][$ck] = 0.0 }
+        $cell[$rk][$ck] += [double]$r.hours
+    }
+
+    $rowLabel = if ($WorkType -eq '案件対応') { 'プロジェクト' } else { '対象システム' }
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($rk in $rowKeys) {
+        $row = [ordered]@{ $rowLabel = (& $RowLabelFn $rk) }
+        $tot = 0.0
+        foreach ($ck in $colKeys) {
+            $h = if ($cell[$rk] -and $cell[$rk].ContainsKey($ck)) { [double]$cell[$rk][$ck] } else { 0.0 }
+            $row[$ck] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
+            $tot += $h
+        }
+        $row['合計'] = "{0:N1}" -f $tot
+        $out.Add([pscustomobject]$row)
+    }
+    # フッタ: 列合計
+    $footer = [ordered]@{ $rowLabel = '◆ 列合計' }
+    $grand = 0.0
+    foreach ($ck in $colKeys) {
+        $sum = 0.0
+        foreach ($rk in $rowKeys) {
+            if ($cell[$rk] -and $cell[$rk].ContainsKey($ck)) { $sum += [double]$cell[$rk][$ck] }
+        }
+        $footer[$ck] = "{0:N1}" -f $sum
+        $grand += $sum
+    }
+    $footer['合計'] = "{0:N1}" -f $grand
+    $out.Add([pscustomobject]$footer)
+
+    $Grid.ItemsSource = @($out)
+}
+
+# 案件対応 (行=プロジェクト)
+function Build-CaseAnalysis {
+    param($Rows)
+    $axis = '工程'
+    if ($u.CaseAxisCombo -and $u.CaseAxisCombo.SelectedItem) {
+        $axis = [string]$u.CaseAxisCombo.SelectedItem.Content
+    }
+    _BuildWorkTypeDrillDown -Rows $Rows -WorkType '案件対応' -ColAxis $axis `
+        -RowKeyFn   { param($e) [string]$e.project_code } `
+        -RowLabelFn { param($k) _RowLabelForCase $k } `
+        -Grid $u.CaseAnalysisGrid
+}
+
+# 維持運用 (行=対象システム)
+function Build-OpsAnalysis {
+    param($Rows)
+    $axis = '工程'
+    if ($u.OpsAxisCombo -and $u.OpsAxisCombo.SelectedItem) {
+        $axis = [string]$u.OpsAxisCombo.SelectedItem.Content
+    }
+    _BuildWorkTypeDrillDown -Rows $Rows -WorkType '維持運用' -ColAxis $axis `
+        -RowKeyFn   { param($e) _ProjectAttr -ProjCode ([string]$e.project_code) -Attr 'target_system' } `
+        -RowLabelFn { param($k) _RowLabelForOps $k } `
+        -Grid $u.OpsAnalysisGrid
+}
+
 # ---- イベントフック ----
 if ($u.HeatmapAxisCombo) {
     $u.HeatmapAxisCombo.Add_SelectionChanged({ Build-Heatmap -Rows $Script:ChartRows })
 }
 if ($u.LoadRefreshBtn) {
     $u.LoadRefreshBtn.Add_Click({ Build-MemberLoad -Rows $Script:ChartRows })
+}
+if ($u.CaseAxisCombo) {
+    $u.CaseAxisCombo.Add_SelectionChanged({ Build-CaseAnalysis -Rows $Script:ChartRows })
+}
+if ($u.OpsAxisCombo) {
+    $u.OpsAxisCombo.Add_SelectionChanged({ Build-OpsAnalysis -Rows $Script:ChartRows })
 }
 
 # Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
@@ -1325,6 +1454,8 @@ function Apply-Filters {
     try { Build-MemberLoad           -Rows $Script:ChartRows } catch { }
     try { Build-MemberProjectMatrix  -Rows $Script:ChartRows } catch { }
     try { Build-WorkTypeMix          -Rows $Script:ChartRows } catch { }
+    try { Build-CaseAnalysis         -Rows $Script:ChartRows } catch { }
+    try { Build-OpsAnalysis          -Rows $Script:ChartRows } catch { }
 }
 
 Reload-Entries

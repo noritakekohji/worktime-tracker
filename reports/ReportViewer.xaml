@@ -364,22 +364,72 @@
                     <DockPanel Margin="10">
                         <TextBlock DockPanel.Dock="Top" Text="業務種別 (案件対応 / 維持運用 / その他) の稼働比率"
                                    FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
-                                <StackPanel x:Name="WorkTypeKpiPanel" Orientation="Horizontal"/>
-                            </Border>
-                            <DataGrid Grid.Row="1" x:Name="WorkTypeByMemberGrid" AutoGenerateColumns="True"
-                                      CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
-                                      HeadersVisibility="Column" RowHeight="26"
-                                      Background="White" RowBackground="White"
-                                      AlternatingRowBackground="#f0fdf4"
-                                      BorderBrush="{StaticResource Border}" BorderThickness="1"
-                                      HorizontalScrollBarVisibility="Auto"/>
-                        </Grid>
+                        <TabControl>
+                            <TabItem Header="📊 概要">
+                                <Grid Margin="6">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                        <StackPanel x:Name="WorkTypeKpiPanel" Orientation="Horizontal"/>
+                                    </Border>
+                                    <DataGrid Grid.Row="1" x:Name="WorkTypeByMemberGrid" AutoGenerateColumns="True"
+                                              CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                              HeadersVisibility="Column" RowHeight="26"
+                                              Background="White" RowBackground="White"
+                                              AlternatingRowBackground="#f0fdf4"
+                                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                              HorizontalScrollBarVisibility="Auto"/>
+                                </Grid>
+                            </TabItem>
+                            <TabItem Header="📁 案件対応 分析">
+                                <DockPanel Margin="6">
+                                    <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Label Content="集計軸:" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="CaseAxisCombo" MinWidth="160" Margin="6,0">
+                                                <ComboBoxItem Content="工程" IsSelected="True"/>
+                                                <ComboBoxItem Content="タスクグループ"/>
+                                            </ComboBox>
+                                            <TextBlock VerticalAlignment="Center" Margin="14,0,0,0"
+                                                       Foreground="Gray" FontSize="11"
+                                                       Text="行 = プロジェクト / 列 = 選択軸 (案件対応のみ)"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <DataGrid x:Name="CaseAnalysisGrid" AutoGenerateColumns="True"
+                                              CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                              HeadersVisibility="Column" RowHeight="26"
+                                              Background="White" RowBackground="White"
+                                              AlternatingRowBackground="#dbeafe"
+                                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                              HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"/>
+                                </DockPanel>
+                            </TabItem>
+                            <TabItem Header="🖥 維持運用 分析">
+                                <DockPanel Margin="6">
+                                    <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Label Content="集計軸:" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="OpsAxisCombo" MinWidth="160" Margin="6,0">
+                                                <ComboBoxItem Content="工程" IsSelected="True"/>
+                                                <ComboBoxItem Content="タスクグループ"/>
+                                            </ComboBox>
+                                            <TextBlock VerticalAlignment="Center" Margin="14,0,0,0"
+                                                       Foreground="Gray" FontSize="11"
+                                                       Text="行 = 対象システム / 列 = 選択軸 (維持運用のみ)"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <DataGrid x:Name="OpsAnalysisGrid" AutoGenerateColumns="True"
+                                              CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                              HeadersVisibility="Column" RowHeight="26"
+                                              Background="White" RowBackground="White"
+                                              AlternatingRowBackground="#dcfce7"
+                                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                              HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"/>
+                                </DockPanel>
+                            </TabItem>
+                        </TabControl>
                     </DockPanel>
                 </TabItem>
                 <TabItem Header="⚠ 異常検知">
