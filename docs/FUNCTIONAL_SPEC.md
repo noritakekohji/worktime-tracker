@@ -91,6 +91,7 @@
       "task_group_code": "DB",
       "task_code": "ERD",
       "alias": "ER図 - 顧客マスタ",
+      "status": "進行中",
       "planned_hours": 8.0,
       "assignee": "山田",
       "planned_start": "2026-05-01",
@@ -103,6 +104,7 @@
 - 同一パターン項目を **別名違いで複数行** 追加可能 → 行のユニークキーは `(process_code, task_group_code, task_code, alias)`
 - タスクグループレベルの実績は `task_code = "-"` で表現
 - 計画/期間/担当は **全月共通** (月ごとに設定する仕様ではなく、プロジェクト寿命中固定)
+- `status`: `進行中` / `完了` / `中止` — WbsInput の「完了も表示」OFF で `完了` 行を非表示にしてリストを整理可
 
 ### 3.4 ローカルストレージ
 

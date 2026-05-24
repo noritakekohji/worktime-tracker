@@ -145,6 +145,7 @@ $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
+                  'DelRowBtn','ShowDoneChk','FilterStatusText',
                   # タスクビュー (右下)
                   'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
                   'TaskEntryHours','TaskEntryAddBtn','TaskEntryDelBtn',
@@ -262,6 +263,7 @@ function Build-DataTable {
     $allCols = @(
         '_pc','_tgc','_tc','_proc_idx','_sort_key',           # 内部用
         'WBS','工程','タスクグループ','タスク','別名',         # 階層 + 別名
+        '状態',                                                # 進行中 / 完了 / 中止
         '担当','計画','合計','進捗','開始','終了'              # タスク計画情報
     )
     foreach ($name in $allCols) {
@@ -328,6 +330,7 @@ function Build-GridColumns {
         @{H="タスクグループ"; B="[タスクグループ]"; W=100; RO=$true  },
         # タスク列が alias を兼ねるため編集可。CellEditEnding で [別名] にも同期する
         @{H="タスク";         B="[タスク]";         W=180; RO=$false },
+        @{H="状態";           B="[状態]";           W=70;  RO=$false },
         @{H="担当";           B="[担当]";           W=70;  RO=$false },
         @{H="計画";           B="[計画]";           W=50;  RO=$false },
         @{H="実績";           B="[合計]";           W=50;  RO=$true  },
@@ -336,10 +339,22 @@ function Build-GridColumns {
         @{H="終了";           B="[終了]";           W=80;  RO=$false }
     )
     $overdueConv = New-Object WT.OverdueBgConverter
+    # 状態列で使う候補リスト (CLR string[] でも OK だが PowerShell の配列でも動く)
+    $statusOptions = [string[]]@('進行中', '完了', '中止')
     foreach ($fd in $fixedDef) {
-        $col = New-Object System.Windows.Controls.DataGridTextColumn
+        # 状態列は ComboBox 編集
+        if ($fd.H -eq '状態') {
+            $col = New-Object System.Windows.Controls.DataGridComboBoxColumn
+            $col.ItemsSource = $statusOptions
+            $sb = New-Object System.Windows.Data.Binding $fd.B
+            $sb.Mode = [System.Windows.Data.BindingMode]::TwoWay
+            $sb.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
+            $col.SelectedItemBinding = $sb
+        } else {
+            $col = New-Object System.Windows.Controls.DataGridTextColumn
+            $col.Binding = New-Object System.Windows.Data.Binding $fd.B
+        }
         $col.Header      = $fd.H
-        $col.Binding     = New-Object System.Windows.Data.Binding $fd.B
         $col.Width       = $fd.W
         $col.IsReadOnly  = $fd.RO
         $col.CanUserSort = $false
@@ -488,6 +503,7 @@ function Load-WbsData {
                 assignee      = if ($p.assignee) { [string]$p.assignee } else { '' }
                 planned_start = if ($p.planned_start) { [string]$p.planned_start } else { '' }
                 planned_end   = if ($p.planned_end)   { [string]$p.planned_end }   else { '' }
+                status        = if ($p.status)        { [string]$p.status }        else { '進行中' }
             }
         }
 
@@ -584,13 +600,16 @@ function Load-WbsData {
             $row["別名"] = $alias
             # プラン値 (alias 込みキーで参照)
             $pkey = "$($info.pc)|$($info.tgc)|$($info.tc)|$alias"
+            $status = '進行中'
             if ($planMap.ContainsKey($pkey)) {
                 $p = $planMap[$pkey]
                 if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
                 if ($p.planned_hours) { $row["計画"] = [string]$p.planned_hours }
                 if ($p.planned_start) { $row["開始"] = [string]$p.planned_start }
                 if ($p.planned_end)   { $row["終了"] = [string]$p.planned_end }
+                if ($p.status)        { $status   = [string]$p.status }
             }
+            $row["状態"] = $status
             # 日付セル: そのタスク+別名のエントリだけを合算
             $taskEntries = @($Script:AllEntries | Where-Object {
                 $_.process_code -eq $info.pc -and $_.task_group_code -eq $info.tgc -and $_.task_code -eq $info.tc `
@@ -621,6 +640,8 @@ function Load-WbsData {
         $ui.WbsGrid.ItemsSource = $dt.DefaultView
 
         Build-WbsTree
+        # 完了行フィルタを適用 (チェックボックス状態に従う)
+        Apply-DoneFilter
 
         # サマリ計算 (実績合計・計画合計・進捗%・タスク数)
         $dateColsForSum = @($dt.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
@@ -749,6 +770,53 @@ $ui.WbsTree.Add_SelectedItemChanged({
     $ui.AddRowBtn.IsEnabled = ($null -ne $sel -and $null -ne $sel.Tag -and $null -ne $Script:DataTable)
 })
 
+# 完了行のフィルタを適用 (チェックボックス OFF なら 状態='完了' を非表示)
+function Apply-DoneFilter {
+    if (-not $Script:DataTable) {
+        $ui.FilterStatusText.Text = ''
+        return
+    }
+    $showDone = [bool]$ui.ShowDoneChk.IsChecked
+    if ($showDone) {
+        $Script:DataTable.DefaultView.RowFilter = ''
+    } else {
+        # DataView の RowFilter — 状態 != '完了'
+        $Script:DataTable.DefaultView.RowFilter = "[状態] <> '完了' OR [状態] IS NULL"
+    }
+    $totalRows = $Script:DataTable.Rows.Count
+    $visibleRows = $Script:DataTable.DefaultView.Count
+    $hiddenRows = $totalRows - $visibleRows
+    if ($hiddenRows -gt 0 -and -not $showDone) {
+        $ui.FilterStatusText.Text = ("(完了 {0} 件 非表示)" -f $hiddenRows)
+    } else {
+        $ui.FilterStatusText.Text = ''
+    }
+}
+$ui.ShowDoneChk.Add_Checked({   Apply-DoneFilter })
+$ui.ShowDoneChk.Add_Unchecked({ Apply-DoneFilter })
+
+# 行削除ボタン
+$ui.WbsGrid.Add_SelectionChanged({
+    $ui.DelRowBtn.IsEnabled = ($null -ne $ui.WbsGrid.SelectedItem)
+})
+
+$ui.DelRowBtn.Add_Click({
+    $sel = $ui.WbsGrid.SelectedItem -as [System.Data.DataRowView]
+    if (-not $sel) { return }
+    $taskDisp = [string]$sel.Row["タスク"]
+    $r = [System.Windows.MessageBox]::Show(
+        ("『{0}』 を削除しますか?`n(この行の個人実績入力も TaskView から消えます)" -f $taskDisp),
+        '確認', 'OKCancel', 'Question')
+    if ($r -ne 'OK') { return }
+    try {
+        $Script:DataTable.Rows.Remove($sel.Row)
+        Apply-DoneFilter
+        Set-Status '行を削除しました (保存で確定)' '#f59e0b'
+    } catch {
+        [System.Windows.MessageBox]::Show("削除に失敗しました:`n$_", 'エラー', 'OK', 'Error') | Out-Null
+    }
+})
+
 # タスク列 (= 別名表示) を編集したら、内部の [別名] 列にも同期する
 # (alias は (pc,tgc,tc,alias) のキーの一部なので Recompute-TaskRow が正しく一致するように)
 $ui.WbsGrid.Add_CellEditEnding({
@@ -799,6 +867,7 @@ $ui.AddRowBtn.Add_Click({
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = $displayTask
     $row["別名"] = $newAlias
+    $row["状態"] = '進行中'
     $row["担当"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
@@ -920,11 +989,14 @@ function _BuildWbsItems {
         if ([string]::IsNullOrWhiteSpace($pc) -and [string]::IsNullOrWhiteSpace($tgc) `
             -and [string]::IsNullOrWhiteSpace($tc)) { continue }
         $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
+        $status = [string]$row["状態"]
+        if ([string]::IsNullOrWhiteSpace($status)) { $status = '進行中' }
         $items.Add([ordered]@{
             process_code    = $pc
             task_group_code = $tgc
             task_code       = $tc
             alias           = $alias
+            status          = $status
             planned_hours   = if ($planNum -gt 0) { $planNum } else { $null }
             assignee        = $assn
             planned_start   = $st
