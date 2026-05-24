@@ -878,7 +878,14 @@ $ui.SettingsBtn.Add_Click({
 
 $ui.AdminBtn.Add_Click({
     $m = Get-SelectedMember
-    if (-not $m -or $m.role -ne 'admin') { return }
+    # 旧 $m.role -ne 'admin' だと roles 配列スキーマで silent return していたため
+    # Has-Role に統一
+    if (-not $m -or -not (Has-Role -Member $m -Role 'admin')) {
+        Write-FatalLog ("AdminBtn click ignored: member=[{0}] roles=[{1}]" -f `
+            ($m | ConvertTo-Json -Compress -ErrorAction SilentlyContinue), `
+            ((Get-MemberRoles -Member $m) -join ','))
+        return
+    }
     try {
         Show-AdminDialog -Source $Script:Source -MemberId $m.id -MemberName $m.name
         Reload-Masters
