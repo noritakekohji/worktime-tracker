@@ -199,7 +199,9 @@
                                 <DataGridTextColumn Header="会社"   Binding="{Binding company, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
                                 <DataGridTextColumn Header="部署"   Binding="{Binding department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                                 <DataGridTextColumn Header="ランク" Binding="{Binding rank, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                                <DataGridTextColumn Header="役割 (member/admin)" Binding="{Binding role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridCheckBoxColumn Header="admin" Binding="{Binding is_admin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                                <DataGridCheckBoxColumn Header="leader" Binding="{Binding is_leader, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                                <DataGridCheckBoxColumn Header="member" Binding="{Binding is_member, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                                 <DataGridCheckBoxColumn Header="有効" Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                             </DataGrid.Columns>
                         </DataGrid>

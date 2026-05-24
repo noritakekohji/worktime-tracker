@@ -91,7 +91,7 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
 }
 
 # 管理者ロールなら管理者ボタン表示 (CurrentMember は Bootstrap で解決済み)
-if ($Script:CurrentMember -and $Script:CurrentMember.role -eq 'admin' -and $u.AdminBtn) {
+if ($Script:CurrentMember -and (Has-Role -Member $Script:CurrentMember -Role 'admin') -and $u.AdminBtn) {
     $u.AdminBtn.Visibility = 'Visible'
     $u.AdminBtn.Add_Click({
         try {

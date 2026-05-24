@@ -198,7 +198,7 @@ if (-not $Script:Source.RemoteCtx) {
 }
 
 # 管理者ロールなら管理者ボタン表示
-if ($currentMember -and $currentMember.role -eq 'admin') {
+if ($currentMember -and (Has-Role -Member $currentMember -Role 'admin')) {
     $ui.AdminBtn.Visibility = 'Visible'
     $ui.AdminBtn.Add_Click({
         try {
@@ -813,7 +813,10 @@ $ui.LoadBtn.Add_Click({ Load-WbsData })
 
 $ui.WbsTree.Add_SelectedItemChanged({
     $sel = $ui.WbsTree.SelectedItem
-    $ui.AddRowBtn.IsEnabled = ($null -ne $sel -and $null -ne $sel.Tag -and $null -ne $Script:DataTable)
+    # leader 権限がない場合は WBS 追加不可 (admin は leader を兼ねる扱い)
+    $canEdit = (Has-Role -Member $Script:CurrentMember -Role 'leader') -or `
+               (Has-Role -Member $Script:CurrentMember -Role 'admin')
+    $ui.AddRowBtn.IsEnabled = ($canEdit -and $null -ne $sel -and $null -ne $sel.Tag -and $null -ne $Script:DataTable)
 })
 
 # 完了行のフィルタを適用 (チェックボックス OFF なら 状態='完了' を非表示)
@@ -843,7 +846,10 @@ $ui.ShowDoneChk.Add_Unchecked({ Apply-DoneFilter })
 
 # 行削除ボタン
 $ui.WbsGrid.Add_SelectionChanged({
-    $ui.DelRowBtn.IsEnabled = ($null -ne $ui.WbsGrid.SelectedItem)
+    # leader/admin のみ削除可
+    $canEdit = (Has-Role -Member $Script:CurrentMember -Role 'leader') -or `
+               (Has-Role -Member $Script:CurrentMember -Role 'admin')
+    $ui.DelRowBtn.IsEnabled = ($canEdit -and $null -ne $ui.WbsGrid.SelectedItem)
 })
 
 $ui.DelRowBtn.Add_Click({

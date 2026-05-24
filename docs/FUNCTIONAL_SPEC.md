@@ -43,7 +43,7 @@
 
 | ファイル | 内容 | 主キー |
 |---|---|---|
-| `members.json` | メンバー (id, name, company, department, rank, role, active) | `id` |
+| `members.json` | メンバー (id, name, company, department, rank, **roles[]**, active) | `id` |
 | `projects.json` | プロジェクト (unit_code, project_name, unit_name, target_system, work_type, period_from, period_to, **task_pattern_id**, active) | `unit_code` |
 | `task_patterns.json` | WBS テンプレート (id, name, processes → task_groups → tasks) | `id` |
 | `categories.json` | 作業カテゴリ (code, name) | `code` |
@@ -185,7 +185,18 @@
 
 ---
 
-### 4.3 管理者モード (`AdminDialog.ps1`) — `role=admin` のみ表示
+### 4.3 管理者モード (`AdminDialog.ps1`) — `roles` に `admin` を含むメンバーのみ表示
+
+**ロール (複数選択可)**:
+| ロール | 権限 |
+|---|---|
+| `admin` | 管理者モード (マスタ編集 + 他者データ編集) |
+| `leader` | WBS でプロジェクトの WBS 項目を追加・削除 |
+| `member` | 作業実績を計上 (Tracker / WbsInput TaskView) |
+
+`members.json` 内では `"roles": ["admin","leader","member"]` 配列。旧スキーマの `"role": "admin"` 単一文字列も読込時に受理 (後方互換)。
+
+タブ構成:
 
 タブ構成:
 

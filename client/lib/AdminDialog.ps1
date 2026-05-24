@@ -86,13 +86,17 @@ function Show-AdminDialog {
             _Status '読込中...' '#db2777'
             $members.Clear()
             foreach ($m in (Get-MasterMembers -Source $Source)) {
+                # roles 配列 (新) / role 単一文字列 (旧) のどちらも受理
+                $roles = @(Get-MemberRoles -Member $m)
                 $members.Add([pscustomobject]@{
                     id         = [string]$m.id
                     name       = [string]$m.name
                     company    = [string]$m.company
                     department = [string]$m.department
                     rank       = [string]$m.rank
-                    role       = if ($m.role) { [string]$m.role } else { 'member' }
+                    is_admin   = ($roles -contains 'admin')
+                    is_leader  = ($roles -contains 'leader')
+                    is_member  = ($roles -contains 'member')
                     active     = if ($null -ne $m.active) { [bool]$m.active } else { $true }
                 })
             }
@@ -167,7 +171,12 @@ function Show-AdminDialog {
 
     # ---- メンバー ----
     $u.MemAddBtn.Add_Click({
-        $members.Add([pscustomobject]@{ id=''; name=''; company=''; department=''; rank=''; role='member'; active=$true })
+        # 新規追加: 既定で member のみ ON
+        $members.Add([pscustomobject]@{
+            id=''; name=''; company=''; department=''; rank=''
+            is_admin=$false; is_leader=$false; is_member=$true
+            active=$true
+        })
     })
     $u.MemDelBtn.Add_Click({
         $sel = $u.MembersGrid.SelectedItem
@@ -799,10 +808,13 @@ function Show-AdminDialog {
                 'members' {
                     $members.Clear()
                     foreach ($m in @($parsed)) {
+                        $roles = @(Get-MemberRoles -Member $m)
                         $members.Add([pscustomobject]@{
                             id=[string]$m.id; name=[string]$m.name; company=[string]$m.company
                             department=[string]$m.department; rank=[string]$m.rank
-                            role=if($m.role){[string]$m.role}else{'member'}
+                            is_admin=($roles -contains 'admin')
+                            is_leader=($roles -contains 'leader')
+                            is_member=($roles -contains 'member')
                             active=if($null -ne $m.active){[bool]$m.active}else{$true}
                         })
                     }
@@ -855,13 +867,20 @@ function Show-AdminDialog {
 
             $where = 'members serialize'
             $membersOut = @($members | ForEach-Object {
+                # is_admin/is_leader/is_member の3チェックを roles 配列にシリアライズ
+                # 1 つも ON でない場合は ['member'] (実績入力は最低限可能にしておく)
+                $roles = @()
+                if ($_.is_admin)  { $roles += 'admin'  }
+                if ($_.is_leader) { $roles += 'leader' }
+                if ($_.is_member) { $roles += 'member' }
+                if ($roles.Count -eq 0) { $roles = @('member') }
                 [ordered]@{
                     id         = [string]$_.id
                     name       = [string]$_.name
                     company    = [string]$_.company
                     department = [string]$_.department
                     rank       = [string]$_.rank
-                    role       = if ($_.role) { [string]$_.role } else { 'member' }
+                    roles      = $roles
                     active     = [bool]$_.active
                 }
             })

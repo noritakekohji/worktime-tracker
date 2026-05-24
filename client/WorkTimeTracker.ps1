@@ -277,7 +277,7 @@ function Reload-Masters {
                 $ui.CurrentMemberText.Text = ("{0}  {1}" -f $cur.id, $cur.name)
             }
             if ($ui -and $ui.AdminBtn) {
-                $ui.AdminBtn.Visibility = if ($cur.role -eq 'admin') { 'Visible' } else { 'Collapsed' }
+                $ui.AdminBtn.Visibility = if (Has-Role -Member $cur -Role 'admin') { 'Visible' } else { 'Collapsed' }
             }
         }
         if ($ui -and $ui.StatusText) {
@@ -355,7 +355,7 @@ if (-not $Script:CurrentMember) {
     $Script:CurrentMember = [pscustomobject]@{ id = $Script:Config.member_id; name = '(未登録)'; role = 'member' }
 }
 $ui.CurrentMemberText.Text = ("{0}  {1}" -f $Script:CurrentMember.id, $Script:CurrentMember.name)
-if ($Script:CurrentMember.role -eq 'admin') {
+if (Has-Role -Member $Script:CurrentMember -Role 'admin') {
     $ui.AdminBtn.Visibility = 'Visible'
 }
 
@@ -896,7 +896,7 @@ $ui.SettingsBtn.Add_Click({
             $Script:CurrentMember = [pscustomobject]@{ id = $Script:Config.member_id; name = '(未登録)'; role = 'member' }
         }
         $ui.CurrentMemberText.Text = ("{0}  {1}" -f $Script:CurrentMember.id, $Script:CurrentMember.name)
-        if ($Script:CurrentMember.role -eq 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
+        if (Has-Role -Member $Script:CurrentMember -Role 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
 
         $ui.CategoryCombo.ItemsSource = $Script:Categories
         $ui.ProjectCombo.ItemsSource  = @(Build-ProjectComboItems)
