@@ -1119,7 +1119,14 @@ function Set-PivotGrid {
     $Grid.Columns.Clear()
     $Grid.ItemsSource = $null
     if (-not $Rows) { _TraceMgr 'Set-PivotGrid' 'rows=null'; return }
-    $rowArr = @($Rows)
+    # PS 5.1: @() で List[object] of PSCustomObject を包むと
+    # "引数の型が一致しません" 例外。foreach で逐次コピーする。
+    $rowArr = New-Object System.Collections.Generic.List[object]
+    if ($Rows -is [System.Collections.IEnumerable] -and -not ($Rows -is [string])) {
+        foreach ($r in $Rows) { [void]$rowArr.Add($r) }
+    } else {
+        [void]$rowArr.Add($Rows)
+    }
     if ($rowArr.Count -eq 0) { _TraceMgr 'Set-PivotGrid' 'rows=0'; return }
     _TraceMgr 'Set-PivotGrid' ("rows=$($rowArr.Count)")
 
