@@ -156,7 +156,7 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -242,11 +242,12 @@ function _RefreshMemberFilter {
 _RefreshMemberFilter
 
 function Reload-Entries {
+    # 「📋 読込」: ローカルから読込のみ (Gitlab モードでも remote にアクセスしない)
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
-        $u.SummaryText.Text = ("読込中... ({0})" -f $Script:Source.Mode)
-        $Script:AllEntries = @(Load-AllEntries -Source $Script:Source)
-        $u.SummaryText.Text = "全データ読込: $($Script:AllEntries.Count) 件 (source=$($Script:Source.Mode))"
+        $u.SummaryText.Text = ("ローカルから読込中...")
+        $Script:AllEntries = @(Load-AllEntries-Local -Source $Script:Source)
+        $u.SummaryText.Text = "ローカル読込: $($Script:AllEntries.Count) 件"
         Apply-Filters
     } catch {
         $u.SummaryText.Text = "読込失敗: $_"
@@ -1079,7 +1080,35 @@ function _SafeApplyFilters {
     }
 }
 
-$u.ReloadBtn.Add_Click({ _Diag "ReloadBtn click"; Reload-Masters; Reload-Entries })
+$u.LoadAllBtn.Add_Click({
+    # 📋 読込 = ローカルから読込のみ
+    _Diag "LoadAllBtn click (local only)"
+    Reload-Masters
+    Reload-Entries
+})
+$u.ReloadBtn.Add_Click({
+    # 📥 取得 = リモートから全データ pull → ローカル読込
+    _Diag "ReloadBtn click (pull)"
+    if (-not $Script:Source.RemoteCtx) {
+        [System.Windows.MessageBox]::Show('スタンドアローンモードでは「取得」は使えません。「読込」を使ってください。', '取得', 'OK', 'Information') | Out-Null
+        return
+    }
+    $win.Cursor = [System.Windows.Input.Cursors]::Wait
+    try {
+        $u.SummaryText.Text = 'Gitlab から取得中...'
+        $pullM = Sync-Pull-Masters -Source $Script:Source
+        $pullD = Sync-Pull-AllData -Source $Script:Source
+        _Diag ("取得 master={0}/{1} data={2} errors_m={3} errors_d={4}" -f $pullM.Pulled, $pullM.Missing, $pullD.Pulled, $pullM.Errors.Count, $pullD.Errors.Count)
+        Reload-Masters
+        Reload-Entries
+        $u.SummaryText.Text = ("取得完了: master={0} / data={1} 件 → ローカル読込 ({2} 件)" -f $pullM.Pulled, $pullD.Pulled, $Script:AllEntries.Count)
+    } catch {
+        $u.SummaryText.Text = ("取得失敗: $($_.Exception.Message)")
+        [System.Windows.MessageBox]::Show("Gitlab からの取得に失敗:`n$($_.Exception.Message)", '取得エラー', 'OK', 'Error') | Out-Null
+    } finally {
+        $win.Cursor = $null
+    }
+})
 $u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
 
 # 期間クイック選択ボタン → 期間を設定して即フィルタ適用

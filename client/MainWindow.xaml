@@ -183,7 +183,10 @@
                     <ComboBox x:Name="YearCombo" Width="84"/>
                     <TextBlock Text="/" Margin="4,0" Foreground="#a7f3d0"/>
                     <ComboBox x:Name="MonthCombo" Width="64"/>
-                    <Button x:Name="ReloadBtn" Content="再読込" Margin="8,0,0,0" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"/>
+                    <Button x:Name="ReloadBtn" Content="📋 読込" Margin="8,0,0,0" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"
+                            ToolTip="ローカルから当月データを再読込"/>
+                    <Button x:Name="PullBtn" Content="📥 取得" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"
+                            ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Background="#ecfdf5" CornerRadius="20" Padding="14,6">

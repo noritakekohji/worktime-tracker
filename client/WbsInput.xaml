@@ -104,7 +104,10 @@
                 <ComboBox x:Name="YearCombo" Width="68" Margin="0,0,4,0" Background="White"/>
                 <Label Content="月:"/>
                 <ComboBox x:Name="MonthCombo" Width="52" Margin="0,0,12,0" Background="White"/>
-                <Button x:Name="LoadBtn"  Content="📋 読込" Style="{StaticResource Primary}" Margin="0,0,0,0"/>
+                <Button x:Name="LoadBtn"  Content="📋 読込" Style="{StaticResource Primary}" Margin="0,0,0,0"
+                        ToolTip="ローカルから読込のみ"/>
+                <Button x:Name="PullBtn"  Content="📥 取得" Style="{StaticResource Primary}" Margin="4,0,0,0"
+                        ToolTip="Gitlab からマスタ + 自分の当月実績を取得 → ローカルから読込"/>
                 <Button x:Name="AdminBtn" Content="🔧 管理者" Margin="6,0,0,0" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
             </WrapPanel>
         </Border>

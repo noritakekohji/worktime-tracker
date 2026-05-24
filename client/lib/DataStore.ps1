@@ -405,6 +405,61 @@ function Sync-Pull-Masters {
     return [pscustomobject]@{ Pulled = $pulled; Missing = $missing; Errors = $errors }
 }
 
+# ---- 同期: 自分の月次データ pull (リモート → local_store) ----
+# WbsInput / Tracker の「取得」ボタンから呼ばれ、対象月のファイル 1 つを更新。
+function Sync-Pull-MyData {
+    param(
+        [Parameter(Mandatory)]$Source,
+        [Parameter(Mandatory)][string]$MemberId,
+        [Parameter(Mandatory)][int]$Year,
+        [Parameter(Mandatory)][int]$Month
+    )
+    if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
+        return [pscustomobject]@{ Pulled = 0; Missing = 0; Errors = @() }
+    }
+    $rel = Get-MonthRelPath -MemberId $MemberId -Year $Year -Month $Month
+    try {
+        $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $rel
+        if (-not $raw) {
+            return [pscustomobject]@{ Pulled = 0; Missing = 1; Errors = @() }
+        }
+        $dst = Join-Path $Source.LocalRoot $rel
+        _EnsureDir (Split-Path -Parent $dst)
+        [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
+        return [pscustomobject]@{ Pulled = 1; Missing = 0; Errors = @() }
+    } catch {
+        return [pscustomobject]@{ Pulled = 0; Missing = 0; Errors = @("$rel : $($_.Exception.Message)") }
+    }
+}
+
+# ---- 同期: 全データ pull (Report の「取得」用) ----
+# data/ 配下の全 *.json をリモートから取って local_store に書き戻す。
+# 件数が多いと時間がかかるため呼出側で UI 表示を考慮すること。
+function Sync-Pull-AllData {
+    param([Parameter(Mandatory)]$Source)
+    if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
+        return [pscustomobject]@{ Pulled = 0; Errors = @() }
+    }
+    $pulled = 0; $errors = @()
+    try {
+        $tree = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
+        foreach ($item in $tree) {
+            if ($item.type -ne 'blob') { continue }
+            if (-not $item.path.EndsWith('.json')) { continue }
+            try {
+                $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $item.path
+                if ($raw) {
+                    $dst = Join-Path $Source.LocalRoot $item.path
+                    _EnsureDir (Split-Path -Parent $dst)
+                    [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
+                    $pulled++
+                }
+            } catch { $errors += "$($item.path) : $($_.Exception.Message)" }
+        }
+    } catch { $errors += "tree: $($_.Exception.Message)" }
+    return [pscustomobject]@{ Pulled = $pulled; Errors = $errors }
+}
+
 # ---- 同期: マスタ push (local_store → リモート) ----
 
 function Sync-Push-Masters {

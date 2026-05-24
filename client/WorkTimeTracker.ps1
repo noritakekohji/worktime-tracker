@@ -170,19 +170,24 @@ function Initialize-AppContext {
         if ($cfg.mode -eq 'gitlab') { $token = Get-GitLabToken }
         $source = New-DataSource -Config $cfg -Token $token
 
-        # リモートモードならまずマスタを pull (ローカルキャッシュ更新)
+        # Gitlab モードなら 「取得」/「読込」 を Yes/No で確認
+        # Yes: pull (リモート → ローカル) してから読込
+        # No : ローカルキャッシュのみで起動 (オフライン可)
         if ($source.RemoteCtx) {
-            try {
-                $pullResult = Sync-Pull-Masters -Source $source
-                Write-FatalLog ("Master pull: pulled={0} missing={1} errors={2}" -f $pullResult.Pulled, $pullResult.Missing, $pullResult.Errors.Count)
-            } catch {
-                Show-ErrorDialog -Title '接続エラー' `
-                                 -Message 'リモートマスタの取得に失敗しました。設定を見直してください。' `
-                                 -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
-                $confirm = [System.Windows.MessageBox]::Show('設定ダイアログを開きますか? (いいえで終了)', '確認', 'YesNo', 'Question')
-                if ($confirm -ne 'Yes') { return $null }
-                $ForceDialog = $true
-                continue
+            $pullChoice = [System.Windows.MessageBox]::Show(
+                "Gitlab からマスタを取得しますか?`n`n  [はい] リモートから取得 → ローカルから読込 (最新)`n  [いいえ] ローカルから読込 (オフラインキャッシュ)",
+                'WorkTime Tracker  起動', 'YesNo', 'Question')
+            if ($pullChoice -eq 'Yes') {
+                try {
+                    $pullResult = Sync-Pull-Masters -Source $source
+                    Write-FatalLog ("Master pull: pulled={0} missing={1} errors={2}" -f $pullResult.Pulled, $pullResult.Missing, $pullResult.Errors.Count)
+                } catch {
+                    Show-ErrorDialog -Title '接続エラー' `
+                                     -Message 'リモートマスタの取得に失敗しました。ローカルキャッシュで続行します。' `
+                                     -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
+                }
+            } else {
+                Write-FatalLog 'Master pull skipped (user chose local cache)'
             }
         }
 
@@ -252,11 +257,11 @@ $Script:TaskPatterns = @($ctx['TaskPatterns'])
 Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2} TaskPatterns={3}" -f $Script:Members.Count, $Script:Projects.Count, $Script:Categories.Count, $Script:TaskPatterns.Count)
 
 function Reload-Masters {
+    param([switch]$Pull)   # -Pull が指定された場合のみ remote → local pull
     try {
-        # リモートモードならまず pull (ローカルキャッシュを最新化)
-        if ($Script:Source.RemoteCtx) {
+        if ($Pull -and $Script:Source.RemoteCtx) {
             $pull = Sync-Pull-Masters -Source $Script:Source
-            Write-FatalLog ("Reload pull: pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count)
+            Write-FatalLog ("Master pull (Reload-Masters -Pull): pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count)
         }
         $Script:Members      = @(Get-MasterMembers      -Source $Script:Source)
         $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)
@@ -296,7 +301,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $names = @(
-    'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','StatusText',
+    'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText',
     'EntryDate','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
@@ -829,7 +834,35 @@ $ui.SaveBtn.Add_Click({
 })
 
 # ---- 再読込 / 設定 / 管理者 ----
-$ui.ReloadBtn.Add_Click({ Reload-Masters; Load-ViewMonth })
+$ui.ReloadBtn.Add_Click({
+    # 📋 読込 = ローカルから再読込のみ (pull なし)
+    Reload-Masters
+    Load-ViewMonth
+})
+$ui.PullBtn.Add_Click({
+    # 📥 取得 = リモート pull → ローカル読込
+    if (-not $Script:Source.RemoteCtx) {
+        [System.Windows.MessageBox]::Show('スタンドアローンモードでは「取得」は使えません。「読込」を使ってください。', '取得', 'OK', 'Information') | Out-Null
+        return
+    }
+    Set-Status 'リモートから取得中...' '#f9e2af'
+    try {
+        Reload-Masters -Pull
+        # 当月の自分のデータも pull
+        $mid = if ($Script:CurrentMember) { [string]$Script:CurrentMember.id } else { [string]$Script:Config.member_id }
+        $vy = [int]$ui.YearCombo.SelectedItem
+        $vm = [int]$ui.MonthCombo.SelectedItem
+        if ($mid -and $vy -gt 0 -and $vm -gt 0) {
+            $r = Sync-Pull-MyData -Source $Script:Source -MemberId $mid -Year $vy -Month $vm
+            Write-FatalLog ("My data pull: pulled={0} missing={1} errors={2}" -f $r.Pulled, $r.Missing, $r.Errors.Count)
+        }
+        Load-ViewMonth
+        Set-Status 'リモートから取得 → ローカル読込 完了' '#10b981'
+    } catch {
+        Set-Status ("取得失敗: $($_.Exception.Message)") '#ef4444'
+        Show-ErrorDialog -Title '取得エラー' -Message 'リモートからの取得に失敗しました。' -Detail "$($_.Exception.Message)`n`n$($_.ScriptStackTrace)"
+    }
+})
 
 # ---- 個人設定 (お気に入り) ----
 $ui.UserPrefsBtn.Add_Click({

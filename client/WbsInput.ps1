@@ -143,7 +143,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $ui = @{}
-foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','AdminBtn',
+foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
                   'DelRowBtn','ShowDoneChk','FilterStatusText',
                   # タスクビュー (右下)
@@ -814,6 +814,33 @@ $ui.WbsGrid.Add_LoadingRow({
 
 # ---- イベントハンドラ ----
 $ui.LoadBtn.Add_Click({ Load-WbsData })
+$ui.PullBtn.Add_Click({
+    # 📥 取得 = リモートから取得 → ローカル読込
+    if (-not $Script:Source.RemoteCtx) {
+        [System.Windows.MessageBox]::Show('スタンドアローンモードでは「取得」は使えません。「読込」を使ってください。', '取得', 'OK', 'Information') | Out-Null
+        return
+    }
+    Set-Status 'リモートから取得中...' '#f9e2af'
+    try {
+        # マスタ pull
+        $pull = Sync-Pull-Masters -Source $Script:Source
+        # 当月の自分のデータ pull (年/月を ComboBox から取得)
+        $mid = if ($Script:CurrentMember) { [string]$Script:CurrentMember.id } else { [string]$cfg.member_id }
+        $vy = [int]$ui.YearCombo.SelectedItem
+        $vm = [int]$ui.MonthCombo.SelectedItem
+        if ($mid -and $vy -gt 0 -and $vm -gt 0) {
+            [void](Sync-Pull-MyData -Source $Script:Source -MemberId $mid -Year $vy -Month $vm)
+        }
+        # ローカルからマスタを再読込
+        _LoadMasters
+        # ローカルから WBS データ表示
+        Load-WbsData
+        Set-Status ('リモートから取得 → ローカル読込 完了 (master pulled={0})' -f $pull.Pulled) '#10b981'
+    } catch {
+        Set-Status ("取得失敗: $($_.Exception.Message)") '#ef4444'
+        [System.Windows.MessageBox]::Show("リモートからの取得に失敗:`n$($_.Exception.Message)", '取得エラー', 'OK', 'Error') | Out-Null
+    }
+})
 
 $ui.WbsTree.Add_SelectedItemChanged({
     $sel = $ui.WbsTree.SelectedItem

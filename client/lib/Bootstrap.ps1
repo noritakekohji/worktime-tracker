@@ -16,7 +16,11 @@ function Initialize-DataContext {
         # 設定未完了時のメッセージ (画面名を入れると親切)
         [string]$AppName = 'WorkTime Tracker',
         # マスタ読込もここで行う (false ならスキップ)
-        [bool]$LoadMasters = $true
+        [bool]$LoadMasters = $true,
+        # Gitlab モード時にマスタの「取得」を確認するか
+        #   true (既定): Yes/No モーダルで聞く
+        #   false: 何も聞かずローカルキャッシュのみ
+        [bool]$PromptPull = $true
     )
 
     Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue
@@ -42,6 +46,25 @@ function Initialize-DataContext {
     }
 
     $source = New-DataSource -Config $cfg -Token $token
+
+    # Gitlab モードならマスタを「取得」(remote → local) するか確認
+    if ($PromptPull -and $source.RemoteCtx) {
+        $r = [System.Windows.MessageBox]::Show(
+            "$AppName を起動します。`n`nGitlab からマスタを取得しますか?`n  [はい] リモートから取得 → ローカルから読込 (最新)`n  [いいえ] ローカルキャッシュから読込 (オフライン可)",
+            "$AppName  起動オプション", 'YesNo', 'Question')
+        if ($r -eq 'Yes') {
+            try {
+                $pull = Sync-Pull-Masters -Source $source
+                [System.Windows.MessageBox]::Show(
+                    ("マスタ取得完了: pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count),
+                    $AppName, 'OK', 'Information') | Out-Null
+            } catch {
+                [System.Windows.MessageBox]::Show(
+                    "マスタ取得失敗 (ローカルキャッシュで続行):`n$($_.Exception.Message)",
+                    $AppName, 'OK', 'Warning') | Out-Null
+            }
+        }
+    }
 
     $result = @{
         Config        = $cfg

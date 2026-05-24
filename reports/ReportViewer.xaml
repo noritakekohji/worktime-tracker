@@ -147,8 +147,11 @@
             <DockPanel>
                 <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#bae6fd" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="ReloadBtn" Content="🔄 全データ再取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
-                    <Button x:Name="ApplyBtn"  Content="フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1"/>
+                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"
+                            ToolTip="ローカルから全データ再読込"/>
+                    <Button x:Name="ReloadBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"
+                            ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
+                    <Button x:Name="ApplyBtn"  Content="フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"/>
                     <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="160"/>
                     <Button x:Name="AdminBtn"  Content="🔧 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
