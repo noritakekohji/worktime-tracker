@@ -324,19 +324,23 @@ function Build-GridColumns {
 
     # ---- 固定列 (タスクレベル 1 行集約) ----
     # H = 表示ヘッダ, B = DataRowView バインディングパス (DataTable 列名)
+    # 編集可能列は leader / admin のみ。member は閲覧のみ (右下 TaskView で実績入力)。
+    $canEdit = (Has-Role -Member $Script:CurrentMember -Role 'leader') -or `
+               (Has-Role -Member $Script:CurrentMember -Role 'admin')
+    $editableRO = -not $canEdit   # canEdit=true → RO=false (編集可)
     $fixedDef = @(
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
         @{H="工程";           B="[工程]";           W=75;  RO=$true  },
         @{H="タスクグループ"; B="[タスクグループ]"; W=100; RO=$true  },
-        # タスク列が alias を兼ねるため編集可。CellEditEnding で [別名] にも同期する
-        @{H="タスク";         B="[タスク]";         W=180; RO=$false },
-        @{H="状態";           B="[状態]";           W=70;  RO=$false },
-        @{H="担当";           B="[担当]";           W=70;  RO=$false },
-        @{H="計画";           B="[計画]";           W=50;  RO=$false },
+        # タスク列が alias を兼ねるため leader/admin は編集可。CellEditEnding で [別名] にも同期する
+        @{H="タスク";         B="[タスク]";         W=180; RO=$editableRO },
+        @{H="状態";           B="[状態]";           W=70;  RO=$editableRO },
+        @{H="担当";           B="[担当]";           W=70;  RO=$editableRO },
+        @{H="計画";           B="[計画]";           W=50;  RO=$editableRO },
         @{H="実績";           B="[合計]";           W=50;  RO=$true  },
         @{H="進捗";           B="[進捗]";           W=55;  RO=$true  },
-        @{H="開始";           B="[開始]";           W=80;  RO=$false },
-        @{H="終了";           B="[終了]";           W=80;  RO=$false }
+        @{H="開始";           B="[開始]";           W=80;  RO=$editableRO },
+        @{H="終了";           B="[終了]";           W=80;  RO=$editableRO }
     )
     $overdueConv = New-Object WT.OverdueBgConverter
     # 状態列で使う候補リスト (CLR string[] でも OK だが PowerShell の配列でも動く)

@@ -193,8 +193,8 @@
 | ロール | 権限 |
 |---|---|
 | `admin` | 管理者モード (マスタ編集 + 他者データ編集) |
-| `leader` | WBS でプロジェクトの WBS 項目を追加・削除 |
-| `member` | 作業実績を計上 (Tracker / WbsInput TaskView) |
+| `leader` | WBS でプロジェクトの WBS 項目を追加・削除、行の編集 (別名/担当/計画/期間/状態) |
+| `member` | 作業実績を計上 (Tracker / WbsInput TaskView)。WBS の編集列は閲覧のみ |
 
 `members.json` 内では `"roles": ["admin","leader","member"]` 配列。旧スキーマの `"role": "admin"` 単一文字列も読込時に受理 (後方互換)。
 
