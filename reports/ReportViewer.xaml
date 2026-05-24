@@ -224,7 +224,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="👥 メンバー別">
-                    <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
@@ -241,7 +241,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="📁 プロジェクト別">
-                    <DataGrid x:Name="ProjectSummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    <DataGrid x:Name="ProjectSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
@@ -258,7 +258,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="🏷 カテゴリ別">
-                    <DataGrid x:Name="CategorySummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    <DataGrid x:Name="CategorySummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
