@@ -156,7 +156,7 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -218,6 +218,29 @@ function _SetPeriodThisFY {
 # 初期は当月
 _SetPeriodThisMonth
 
+# メンバーフィルタの items を構築 ((全メンバー) + active メンバー)
+function _RefreshMemberFilter {
+    $items = New-Object 'System.Collections.Generic.List[object]'
+    [void]$items.Add([pscustomobject]@{ id = ''; display = '(全メンバー)' })
+    foreach ($m in $Script:Members) {
+        if (-not $m) { continue }
+        if ($null -ne $m.active -and -not $m.active) { continue }
+        [void]$items.Add([pscustomobject]@{
+            id      = [string]$m.id
+            display = "$([string]$m.id)  $([string]$m.name)"
+        })
+    }
+    $cur = if ($u.MemberFilter) { $u.MemberFilter.SelectedValue } else { '' }
+    $u.MemberFilter.ItemsSource = $items
+    if ($cur) {
+        $u.MemberFilter.SelectedValue = $cur
+        if ($u.MemberFilter.SelectedIndex -lt 0) { $u.MemberFilter.SelectedIndex = 0 }
+    } else {
+        $u.MemberFilter.SelectedIndex = 0
+    }
+}
+_RefreshMemberFilter
+
 function Reload-Entries {
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
@@ -239,8 +262,9 @@ function _Num { param($v) $s = (_Sc $v); $d = 0.0; [void][double]::TryParse([str
 function Apply-Filters {
     $from = $u.FromDate.SelectedDate
     $to   = $u.ToDate.SelectedDate
-    # 期間のみで全データを絞り込む。メンバー/プロジェクトの絞り込みは
-    # 個別タブ側で必要に応じて実装する (ヘッダから global filter は除去)
+    # ヘッダのメンバーフィルタ ((全メンバー) = 空文字)
+    $mid  = if ($u.MemberFilter) { [string]$u.MemberFilter.SelectedValue } else { '' }
+
     $rows = $Script:AllEntries | ForEach-Object {
         $dStr = _Str $_.date
         if ([string]::IsNullOrWhiteSpace($dStr)) { return }
@@ -252,6 +276,7 @@ function Apply-Filters {
         $ok = $true
         if ($from -and $d -lt $from) { $ok = $false }
         if ($to   -and $d -gt $to)   { $ok = $false }
+        if ($mid  -and $memberId -ne $mid) { $ok = $false }
         if (-not $ok) { return }
 
         [pscustomobject]@{
@@ -1028,6 +1053,7 @@ function Reload-Masters {
         $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
+        _RefreshMemberFilter
     } catch {
         $u.SummaryText.Text = "マスタ再読込失敗: $_"
     }
@@ -1060,6 +1086,8 @@ $u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
 $u.PeriodThisMonthBtn.Add_Click({ _SetPeriodThisMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodPrevMonthBtn.Add_Click({ _SetPeriodPrevMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodThisFYBtn.Add_Click({    _SetPeriodThisFY;    if ($Script:AllEntries) { _SafeApplyFilters } })
+# メンバーフィルタ変更 → 即フィルタ適用
+$u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
