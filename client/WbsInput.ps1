@@ -277,7 +277,7 @@ function Build-DataTable {
         $null = $tbl.Columns.Add($dc)
     }
     # 戻り値の auto-unroll を防止
-    Write-Output -NoEnumerate $tbl
+    Write-Output -NoEnumerate -InputObject $tbl
 }
 
 function Update-AllTotals {
@@ -1160,13 +1160,14 @@ function Refresh-TaskView {
     }
     $t = $Script:CurrentTask
     $ui.TaskViewHeader.Text = ("📝 {0}.{1}.{2}  {3}  /  {4}  /  {5}" -f $t.pc, $t.tgc, $t.tc, $t.pn, $t.tgn, $t.tn)
-    $matches = @($Script:AllEntries | Where-Object {
+    # $matches は PowerShell 自動変数のため別名を使用
+    $hits = @($Script:AllEntries | Where-Object {
         $_.process_code -eq $t.pc -and $_.task_group_code -eq $t.tgc -and $_.task_code -eq $t.tc `
         -and ([string]$_.alias) -eq ([string]$t.alias)
     })
-    foreach ($e in $matches) { $Script:TaskViewEntries.Add($e) }
+    foreach ($e in $hits) { $Script:TaskViewEntries.Add($e) }
     $ui.TaskEntryAddBtn.IsEnabled = $true
-    $ui.TaskEntryDelBtn.IsEnabled = ($matches.Count -gt 0)
+    $ui.TaskEntryDelBtn.IsEnabled = ($hits.Count -gt 0)
 }
 
 # WBS グリッドの行選択 → タスクビュー更新
@@ -1200,12 +1201,13 @@ function Recompute-TaskRow {
         if (([string]$row["別名"]) -ne [string]$alias) { continue }
         $dateCols = @($Script:DataTable.Columns | Where-Object { $_.ColumnName -match '^\d{4}-\d{2}-\d{2}$' })
         foreach ($c in $dateCols) { $row[$c.ColumnName] = '' }
-        $matches = @($Script:AllEntries | Where-Object {
+        # $matches は PowerShell 自動変数のため別名を使用
+        $hits = @($Script:AllEntries | Where-Object {
             $_.process_code -eq $pc -and $_.task_group_code -eq $tgc -and $_.task_code -eq $tc `
             -and ([string]$_.alias) -eq [string]$alias
         })
         $byDate = @{}
-        foreach ($e in $matches) {
+        foreach ($e in $hits) {
             $dk = [string]$e.date
             if (-not $byDate.ContainsKey($dk)) { $byDate[$dk] = 0.0 }
             $byDate[$dk] += [double]$e.hours

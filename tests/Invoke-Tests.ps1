@@ -40,6 +40,18 @@ if (-not $existing) {
     }
 }
 
+# ---- PSScriptAnalyzer も自動インストール (静的解析テスト用) ----
+if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+    if (-not $NoInstall) {
+        Write-Host "PSScriptAnalyzer をインストール中... (CurrentUser スコープ)" -ForegroundColor Yellow
+        try {
+            Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber -ErrorAction Stop
+        } catch {
+            Write-Host "PSScriptAnalyzer インストール失敗 (静的解析テストはスキップされます): $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+}
+
 # ---- Import Pester ----
 Remove-Module Pester -Force -ErrorAction SilentlyContinue
 Import-Module Pester -MinimumVersion 5.0.0 -Force

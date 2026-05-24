@@ -419,34 +419,28 @@ function Build-Heatmap {
         '日付 × メンバー (個人別)' {
             $rowKey  = 'member_id'
             $colKey  = 'date'
-            $rowLbl  = '👤 メンバー'
-            $colLbl  = '日付'
             $rowDisp = { param($v) $m = $Script:Members | Where-Object { [string]$_.id -eq [string]$v } | Select-Object -First 1
                          if ($m) { "$($m.id)  $($m.name)" } else { [string]$v } }
             $colDisp = { param($v) $d = [datetime]::MinValue
                          if ([datetime]::TryParse([string]$v, [ref]$d)) { $d.ToString('M/d') } else { [string]$v } }
-            $colW = 22; $useDateGap = $true
+            $colW = 22
         }
         'メンバー × プロジェクト' {
             $rowKey  = 'member_id'
             $colKey  = 'project_code'
-            $rowLbl  = '👤 メンバー'
-            $colLbl  = '📁 プロジェクト'
             $rowDisp = { param($v) $m = $Script:Members | Where-Object { [string]$_.id -eq [string]$v } | Select-Object -First 1
                          if ($m) { "$($m.id)  $($m.name)" } else { [string]$v } }
             $colDisp = { param($v) $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq [string]$v } | Select-Object -First 1
                          if ($p) { [string]$p.unit_code } else { [string]$v } }
-            $colW = 80; $useDateGap = $false
+            $colW = 80
         }
         default {
             $rowKey  = 'project_code'
             $colKey  = 'date'
-            $rowLbl  = '📁 プロジェクト'
-            $colLbl  = '日付'
             $rowDisp = { param($v) [string]$v }
             $colDisp = { param($v) $d = [datetime]::MinValue
                          if ([datetime]::TryParse([string]$v, [ref]$d)) { $d.ToString('M/d') } else { [string]$v } }
-            $colW = 22; $useDateGap = $true
+            $colW = 22
         }
     }
 

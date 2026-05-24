@@ -397,14 +397,14 @@ function Load-UserPrefsFav {
     # PS 関数出力ストリームが IEnumerable を auto-unroll するため Write-Output -NoEnumerate で塊で返す
     $set = New-Object System.Collections.Generic.HashSet[string]
     if (-not $Script:CurrentMember) {
-        Write-Output -NoEnumerate $set
+        Write-Output -NoEnumerate -InputObject $set
         return
     }
     $prefs = Get-UserPrefs -MemberId ([string]$Script:CurrentMember.id)
     foreach ($p in @($prefs.favorite_projects)) {
         if ($p) { [void]$set.Add([string]$p) }
     }
-    Write-Output -NoEnumerate $set
+    Write-Output -NoEnumerate -InputObject $set
 }
 
 function Build-ProjectComboItems {
@@ -437,7 +437,7 @@ function Build-ProjectComboItems {
     # で配列を保持する (アクティブプロジェクトが 1 件のとき WPF が IEnumerable に
     # キャストできず起動エラーになる事故を防ぐ)
     $sorted = @($items | Sort-Object @{Expression='is_favorite'; Descending=$true}, @{Expression='unit_code'; Descending=$false})
-    Write-Output -NoEnumerate $sorted
+    Write-Output -NoEnumerate -InputObject $sorted
 }
 $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
 
