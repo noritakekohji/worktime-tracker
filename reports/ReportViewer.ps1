@@ -1104,6 +1104,78 @@ $u.ExportBtn.Add_Click({
 
 # ===== チームマネージャ向け 拡張集計 =====
 
+# WPF DataGrid に [ordered]@{ '日本語ヘッダ' = '値' ... } のリストを安全に流し込む。
+# プロパティ名に `/` `(` `)` ` ` `~` 等が含まれると AutoGenerateColumns の Binding
+# パス解析が失敗するため、内部プロパティ名は col0..colN にリネームし、ヘッダだけ
+# 元の日本語を保持する。
+function Set-PivotGrid {
+    param(
+        [System.Windows.Controls.DataGrid]$Grid,
+        $Rows,
+        [int]$FirstColWidth = 180
+    )
+    if (-not $Grid) { return }
+    $Grid.Columns.Clear()
+    $Grid.ItemsSource = $null
+    if (-not $Rows) { return }
+    $rowArr = @($Rows)
+    if ($rowArr.Count -eq 0) { return }
+
+    # 全行のキーをマージ (先頭行が代表だが、念のため union)
+    $orderedHeaders = New-Object System.Collections.Generic.List[string]
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($r in $rowArr) {
+        if ($null -eq $r) { continue }
+        $keys = if ($r -is [System.Collections.IDictionary]) {
+            @($r.Keys)
+        } else {
+            @($r.PSObject.Properties | ForEach-Object { $_.Name })
+        }
+        foreach ($k in $keys) {
+            $ks = [string]$k
+            if (-not $seen.Contains($ks)) { [void]$seen.Add($ks); $orderedHeaders.Add($ks) }
+        }
+    }
+    if ($orderedHeaders.Count -eq 0) { return }
+
+    # セーフ列名を生成
+    $headerToSafe = @{}
+    for ($i = 0; $i -lt $orderedHeaders.Count; $i++) {
+        $headerToSafe[$orderedHeaders[$i]] = "col$i"
+    }
+
+    # DataGrid 列を構築
+    for ($i = 0; $i -lt $orderedHeaders.Count; $i++) {
+        $col = New-Object System.Windows.Controls.DataGridTextColumn
+        $col.Header   = [string]$orderedHeaders[$i]
+        $col.Binding  = New-Object System.Windows.Data.Binding "col$i"
+        if ($i -eq 0) { $col.Width = $FirstColWidth }
+        $col.IsReadOnly = $true
+        $col.CanUserSort = $false
+        $Grid.Columns.Add($col) | Out-Null
+    }
+
+    # 行を PSCustomObject (col0..colN) に変換
+    $items = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $rowArr) {
+        if ($null -eq $r) { continue }
+        $obj = [ordered]@{}
+        foreach ($h in $orderedHeaders) {
+            $safe = $headerToSafe[$h]
+            $val = $null
+            if ($r -is [System.Collections.IDictionary]) {
+                if ($r.Contains($h)) { $val = $r[$h] }
+            } else {
+                $p = $r.PSObject.Properties[$h]
+                if ($p) { $val = $p.Value }
+            }
+            $obj[$safe] = if ($null -eq $val) { '' } else { [string]$val }
+        }
+        $items.Add([pscustomobject]$obj)
+    }
+    $Grid.ItemsSource = $items.ToArray()
+}
+
 # プロジェクトコード → 業務種別 (案件対応 / 維持運用 / その他) 解決ヘルパ
 function _ProjectWorkType {
     param([string]$ProjCode)
@@ -1180,7 +1252,7 @@ function Build-MemberLoad {
         $row['超過週']   = if ($overCnt -gt 0) { "$overCnt 週" } else { '' }
         $weeklyRows.Add([pscustomobject]$row)
     }
-    $u.LoadWeeklyGrid.ItemsSource = @($weeklyRows)
+    Set-PivotGrid -Grid $u.LoadWeeklyGrid -Rows $weeklyRows
 
     # ---- 未入力検知: 期間内の平日で 0h の日 (active メンバーのみ) ----
     $from = $u.FromDate.SelectedDate
@@ -1277,7 +1349,7 @@ function Build-MemberProjectMatrix {
     $footer['合計'] = "{0:N1}" -f $grand
     $out.Add([pscustomobject]$footer)
 
-    $u.MemberProjectGrid.ItemsSource = @($out)
+    Set-PivotGrid -Grid $u.MemberProjectGrid -Rows $out
 }
 
 # ---- 業務種別 (案件対応 / 維持運用 / その他) 稼働比率 ----
@@ -1353,7 +1425,7 @@ function Build-WorkTypeMix {
         $row['合計'] = "{0:N1}" -f $tot
         $rowsOut.Add([pscustomobject]$row)
     }
-    $u.WorkTypeByMemberGrid.ItemsSource = @($rowsOut)
+    Set-PivotGrid -Grid $u.WorkTypeByMemberGrid -Rows $rowsOut
 }
 
 # ---- 業務種別ドリルダウン共通ヘルパ ----
@@ -1403,8 +1475,7 @@ function _BuildWorkTypeDrillDown {
         if ($wt -eq $WorkType) { [void]$filtered.Add($r) }
     }
     if ($filtered.Count -eq 0) {
-        # ヘッダだけ出す
-        $Grid.ItemsSource = @([pscustomobject]@{ '行' = "($WorkType の実績なし)" })
+        Set-PivotGrid -Grid $Grid -Rows @([ordered]@{ '行' = "($WorkType の実績なし)" })
         return
     }
 
@@ -1449,7 +1520,7 @@ function _BuildWorkTypeDrillDown {
     $footer['合計'] = "{0:N1}" -f $grand
     $out.Add([pscustomobject]$footer)
 
-    $Grid.ItemsSource = @($out)
+    Set-PivotGrid -Grid $Grid -Rows $out
 }
 
 # 案件対応 (行=プロジェクト)

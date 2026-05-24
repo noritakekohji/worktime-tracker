@@ -224,7 +224,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="👥 メンバー別">
-                    <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                    <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
@@ -241,7 +241,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="📁 プロジェクト別">
-                    <DataGrid x:Name="ProjectSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                    <DataGrid x:Name="ProjectSummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
@@ -258,7 +258,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="🏷 カテゴリ別">
-                    <DataGrid x:Name="CategorySummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                    <DataGrid x:Name="CategorySummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
                               CanUserAddRows="False" HeadersVisibility="Column"
                               Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
                               AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
@@ -319,7 +319,7 @@
                             <DockPanel Grid.Row="0">
                                 <TextBlock DockPanel.Dock="Top" Text="▼ メンバー × 週 稼働マトリクス (赤=しきい値超 / 黄=未入力日あり)"
                                            FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <DataGrid x:Name="LoadWeeklyGrid" AutoGenerateColumns="True"
+                                <DataGrid x:Name="LoadWeeklyGrid" AutoGenerateColumns="False"
                                           CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                           HeadersVisibility="Column" RowHeight="26"
                                           Background="White" RowBackground="White"
@@ -351,7 +351,7 @@
                     <DockPanel Margin="10">
                         <TextBlock DockPanel.Dock="Top" Text="メンバー × プロジェクト 工数マトリクス (空セル = 関与なし)"
                                    FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
-                        <DataGrid x:Name="MemberProjectGrid" AutoGenerateColumns="True"
+                        <DataGrid x:Name="MemberProjectGrid" AutoGenerateColumns="False"
                                   CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                   HeadersVisibility="Column" RowHeight="26"
                                   Background="White" RowBackground="White"
@@ -374,7 +374,7 @@
                                     <Border Grid.Row="0" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                                         <StackPanel x:Name="WorkTypeKpiPanel" Orientation="Horizontal"/>
                                     </Border>
-                                    <DataGrid Grid.Row="1" x:Name="WorkTypeByMemberGrid" AutoGenerateColumns="True"
+                                    <DataGrid Grid.Row="1" x:Name="WorkTypeByMemberGrid" AutoGenerateColumns="False"
                                               CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                               HeadersVisibility="Column" RowHeight="26"
                                               Background="White" RowBackground="White"
@@ -397,7 +397,7 @@
                                                        Text="行 = プロジェクト / 列 = 選択軸 (案件対応のみ)"/>
                                         </StackPanel>
                                     </Border>
-                                    <DataGrid x:Name="CaseAnalysisGrid" AutoGenerateColumns="True"
+                                    <DataGrid x:Name="CaseAnalysisGrid" AutoGenerateColumns="False"
                                               CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                               HeadersVisibility="Column" RowHeight="26"
                                               Background="White" RowBackground="White"
@@ -420,7 +420,7 @@
                                                        Text="行 = 対象システム / 列 = 選択軸 (維持運用のみ)"/>
                                         </StackPanel>
                                     </Border>
-                                    <DataGrid x:Name="OpsAnalysisGrid" AutoGenerateColumns="True"
+                                    <DataGrid x:Name="OpsAnalysisGrid" AutoGenerateColumns="False"
                                               CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                               HeadersVisibility="Column" RowHeight="26"
                                               Background="White" RowBackground="White"
