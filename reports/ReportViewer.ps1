@@ -9,6 +9,53 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
 
+# ---- 致命エラーログ (Tracker と共用) ----
+$Script:LogDir = Join-Path $env:APPDATA 'worktime-tracker'
+if (-not (Test-Path -LiteralPath $Script:LogDir)) {
+    New-Item -ItemType Directory -Path $Script:LogDir -Force | Out-Null
+}
+$Script:LogPath = Join-Path $Script:LogDir 'last_error.log'
+
+function Write-FatalLog {
+    param([string]$Text)
+    try {
+        $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        Add-Content -LiteralPath $Script:LogPath -Value "[$stamp] [Report] $Text`r`n" -Encoding UTF8
+    } catch { }
+}
+
+trap {
+    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)`n`n--- 詳細: $Script:LogPath"
+    Write-FatalLog "FATAL: $($_.Exception.Message)`r`n$($_.ScriptStackTrace)`r`n$($_.Exception | Format-List * -Force | Out-String)"
+    try {
+        [System.Windows.MessageBox]::Show($msg, 'ReportViewer - 致命的エラー', 'OK', 'Error') | Out-Null
+    } catch {
+        Write-Host $msg -ForegroundColor Red
+    }
+    exit 1
+}
+
+# WPF Dispatcher の未捕捉例外も last_error.log へ
+# (UI イベントハンドラの例外は trap では拾えないため、別途フックを張る)
+# PowerShell から WPF を使う場合 Application.Current は null になることがあるため
+# Dispatcher.CurrentDispatcher を直接フックする
+try {
+    $Script:UiDispatcher = [System.Windows.Threading.Dispatcher]::CurrentDispatcher
+    $Script:UiDispatcher.add_UnhandledException({
+        param($s, $e)
+        try {
+            Write-FatalLog ("DispatcherUnhandled: {0}`r`n{1}" -f $e.Exception.Message, $e.Exception.StackTrace)
+        } catch { }
+        # 致命でない限りウインドウ存続 (UI 操作は継続可能)
+        $e.Handled = $true
+    })
+} catch {
+    Write-FatalLog ("Dispatcher hook failed: $($_.Exception.Message)")
+}
+
+Write-FatalLog ("==== START $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ====")
+Write-FatalLog ("PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScriptRoot")
+
 $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'Config.ps1')
 . (Join-Path $libDir 'Credential.ps1')
