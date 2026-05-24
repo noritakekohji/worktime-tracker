@@ -1115,11 +1115,13 @@ function Set-PivotGrid {
         [int]$FirstColWidth = 180
     )
     if (-not $Grid) { return }
+    try { _TraceMgr 'Set-PivotGrid' 'enter' } catch { }
     $Grid.Columns.Clear()
     $Grid.ItemsSource = $null
-    if (-not $Rows) { return }
+    if (-not $Rows) { _TraceMgr 'Set-PivotGrid' 'rows=null'; return }
     $rowArr = @($Rows)
-    if ($rowArr.Count -eq 0) { return }
+    if ($rowArr.Count -eq 0) { _TraceMgr 'Set-PivotGrid' 'rows=0'; return }
+    _TraceMgr 'Set-PivotGrid' ("rows=$($rowArr.Count)")
 
     # 全行のキーをマージ (先頭行が代表だが、念のため union)
     $orderedHeaders = New-Object System.Collections.Generic.List[string]
@@ -1136,7 +1138,8 @@ function Set-PivotGrid {
             if (-not $seen.Contains($ks)) { [void]$seen.Add($ks); $orderedHeaders.Add($ks) }
         }
     }
-    if ($orderedHeaders.Count -eq 0) { return }
+    if ($orderedHeaders.Count -eq 0) { _TraceMgr 'Set-PivotGrid' 'no headers'; return }
+    _TraceMgr 'Set-PivotGrid' ("headers=$($orderedHeaders.Count): " + (($orderedHeaders | Select-Object -First 6) -join ' | '))
 
     # セーフ列名を生成
     $headerToSafe = @{}
@@ -1146,14 +1149,24 @@ function Set-PivotGrid {
 
     # DataGrid 列を構築
     for ($i = 0; $i -lt $orderedHeaders.Count; $i++) {
-        $col = New-Object System.Windows.Controls.DataGridTextColumn
-        $col.Header   = [string]$orderedHeaders[$i]
-        $col.Binding  = New-Object System.Windows.Data.Binding "col$i"
-        if ($i -eq 0) { $col.Width = $FirstColWidth }
-        $col.IsReadOnly = $true
-        $col.CanUserSort = $false
-        $Grid.Columns.Add($col) | Out-Null
+        try {
+            $col = New-Object System.Windows.Controls.DataGridTextColumn
+            $col.Header   = [string]$orderedHeaders[$i]
+            # Binding は -ArgumentList で明示 (位置引数だと型推論で詰まる場合あり)
+            $col.Binding  = New-Object System.Windows.Data.Binding -ArgumentList ("col$i")
+            if ($i -eq 0) {
+                # DataGridLength は double から implicit conversion
+                $col.Width = New-Object System.Windows.Controls.DataGridLength -ArgumentList ([double]$FirstColWidth)
+            }
+            $col.IsReadOnly = $true
+            $col.CanUserSort = $false
+            [void]$Grid.Columns.Add($col)
+        } catch {
+            _TraceMgr 'Set-PivotGrid' ("col[$i] header='$($orderedHeaders[$i])' ERROR: $($_.Exception.Message)")
+            throw
+        }
     }
+    _TraceMgr 'Set-PivotGrid' 'columns built'
 
     # 行を PSCustomObject (col0..colN) に変換
     $items = New-Object System.Collections.Generic.List[object]
@@ -1173,7 +1186,13 @@ function Set-PivotGrid {
         }
         $items.Add([pscustomobject]$obj)
     }
-    $Grid.ItemsSource = $items.ToArray()
+    try {
+        $Grid.ItemsSource = $items.ToArray()
+        _TraceMgr 'Set-PivotGrid' ("items={0} ok" -f $items.Count)
+    } catch {
+        _TraceMgr 'Set-PivotGrid' ("ItemsSource ERROR: $($_.Exception.Message)")
+        throw
+    }
 }
 
 # プロジェクトコード → 業務種別 (案件対応 / 維持運用 / その他) 解決ヘルパ
