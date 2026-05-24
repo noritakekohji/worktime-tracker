@@ -155,29 +155,18 @@
             </DockPanel>
         </Border>
 
-        <!-- フィルタ -->
+        <!-- 期間フィルタ + クイック選択 -->
         <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Label Grid.Column="0" Content="期間:"/>
-                <DatePicker Grid.Column="1" x:Name="FromDate" Width="140"/>
-                <Label Grid.Column="2" Content="〜" Margin="6,0"/>
-                <DatePicker Grid.Column="3" x:Name="ToDate" Width="140"/>
-                <Label Grid.Column="4" Content="メンバー:" Margin="20,0,4,0"/>
-                <ComboBox Grid.Column="5" x:Name="MemberFilter" DisplayMemberPath="display" SelectedValuePath="id" MinWidth="160"/>
-                <Label Grid.Column="6" Content="プロジェクト:" Margin="12,0,4,0"/>
-                <ComboBox Grid.Column="7" x:Name="ProjectFilter" DisplayMemberPath="name" SelectedValuePath="code" MinWidth="160"/>
-            </Grid>
+            <StackPanel Orientation="Horizontal">
+                <Label Content="期間:" VerticalAlignment="Center"/>
+                <DatePicker x:Name="FromDate" Width="140" VerticalAlignment="Center"/>
+                <Label Content="〜" Margin="6,0" VerticalAlignment="Center"/>
+                <DatePicker x:Name="ToDate" Width="140" VerticalAlignment="Center"/>
+                <Border Width="1" Background="{StaticResource Border}" Margin="16,2"/>
+                <Button x:Name="PeriodThisMonthBtn" Content="📅 当月"  Padding="10,2" Margin="2,0" ToolTip="今月の 1 日 〜 月末"/>
+                <Button x:Name="PeriodPrevMonthBtn" Content="📅 前月"  Padding="10,2" Margin="2,0" ToolTip="先月の 1 日 〜 月末"/>
+                <Button x:Name="PeriodThisFYBtn"    Content="📅 今年度" Padding="10,2" Margin="2,0" ToolTip="4 月 1 日 〜 翌 3 月末 (会計年度)"/>
+            </StackPanel>
         </Border>
 
         <!-- 本体: タブ -->

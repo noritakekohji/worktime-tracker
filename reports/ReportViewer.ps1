@@ -156,7 +156,7 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -193,22 +193,28 @@ $u.StatusText.Text = "保存先: {0}  |  local={1}{2}" -f $Script:Config.mode, $
 })
 
 # 既定期間: 当月
-$today = [datetime]::Today
-$u.FromDate.SelectedDate = (Get-Date -Year $today.Year -Month $today.Month -Day 1)
-$u.ToDate.SelectedDate   = $today
-
-# フィルタ コンボ
-$memberItems = @([pscustomobject]@{ id = ''; display = '(全員)' }) + @($Script:Members | ForEach-Object {
-    [pscustomobject]@{ id = $_.id; display = "$($_.id) - $($_.name)" }
-})
-$u.MemberFilter.ItemsSource = $memberItems
-$u.MemberFilter.SelectedIndex = 0
-
-$projItems = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
-    [pscustomobject]@{ code = [string]$_.unit_code; name = [string]$_.project_name }
-})
-$u.ProjectFilter.ItemsSource = $projItems
-$u.ProjectFilter.SelectedIndex = 0
+# 期間クイック選択ヘルパ
+function _SetPeriodThisMonth {
+    $t = [datetime]::Today
+    $u.FromDate.SelectedDate = (Get-Date -Year $t.Year -Month $t.Month -Day 1)
+    $end = ((Get-Date -Year $t.Year -Month $t.Month -Day 1).AddMonths(1)).AddDays(-1)
+    $u.ToDate.SelectedDate = $end
+}
+function _SetPeriodPrevMonth {
+    $t = [datetime]::Today
+    $prev = (Get-Date -Year $t.Year -Month $t.Month -Day 1).AddMonths(-1)
+    $u.FromDate.SelectedDate = $prev
+    $u.ToDate.SelectedDate   = ($prev.AddMonths(1)).AddDays(-1)
+}
+function _SetPeriodThisFY {
+    # 会計年度: 4 月始まり〜翌 3 月末
+    $t = [datetime]::Today
+    $fyStartYear = if ($t.Month -ge 4) { $t.Year } else { $t.Year - 1 }
+    $u.FromDate.SelectedDate = (Get-Date -Year $fyStartYear      -Month 4 -Day 1)
+    $u.ToDate.SelectedDate   = (Get-Date -Year ($fyStartYear+1)  -Month 3 -Day 31)
+}
+# 初期は当月
+_SetPeriodThisMonth
 
 function Reload-Entries {
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
@@ -231,9 +237,8 @@ function _Num { param($v) $s = (_Sc $v); $d = 0.0; [void][double]::TryParse([str
 function Apply-Filters {
     $from = $u.FromDate.SelectedDate
     $to   = $u.ToDate.SelectedDate
-    $mid  = $u.MemberFilter.SelectedValue
-    $pjc  = $u.ProjectFilter.SelectedValue
-
+    # 期間のみで全データを絞り込む。メンバー/プロジェクトの絞り込みは
+    # 個別タブ側で必要に応じて実装する (ヘッダから global filter は除去)
     $rows = $Script:AllEntries | ForEach-Object {
         $dStr = _Str $_.date
         if ([string]::IsNullOrWhiteSpace($dStr)) { return }
@@ -245,8 +250,6 @@ function Apply-Filters {
         $ok = $true
         if ($from -and $d -lt $from) { $ok = $false }
         if ($to   -and $d -gt $to)   { $ok = $false }
-        if ($mid  -and $memberId    -ne $mid)  { $ok = $false }
-        if ($pjc  -and $projectCode -ne $pjc) { $ok = $false }
         if (-not $ok) { return }
 
         [pscustomobject]@{
@@ -1018,21 +1021,11 @@ $u.ChartTopCombo.Add_SelectionChanged({ Build-Chart })
 
 function Reload-Masters {
     try {
-        $Script:Members  = @(Get-MasterMembers  -Source $Script:Source)
-        $Script:Projects = @(Get-MasterProjects -Source $Script:Source)
-        # フィルタ コンボを再構築
-        $newMembers = @([pscustomobject]@{ id = ''; display = '(全員)' }) + @($Script:Members | ForEach-Object {
-            [pscustomobject]@{ id = [string]$_.id; display = "$($_.id) - $($_.name)" }
-        })
-        $selMid = $u.MemberFilter.SelectedValue
-        $u.MemberFilter.ItemsSource = $newMembers
-        if ($selMid) { $u.MemberFilter.SelectedValue = $selMid } else { $u.MemberFilter.SelectedIndex = 0 }
-        $newProjs = @([pscustomobject]@{ code = ''; name = '(全プロジェクト)' }) + @($Script:Projects | ForEach-Object {
-            [pscustomobject]@{ code = [string]$_.unit_code; name = [string]$_.project_name }
-        })
-        $selPid = $u.ProjectFilter.SelectedValue
-        $u.ProjectFilter.ItemsSource = $newProjs
-        if ($selPid) { $u.ProjectFilter.SelectedValue = $selPid } else { $u.ProjectFilter.SelectedIndex = 0 }
+        $Script:Members    = @(Get-MasterMembers    -Source $Script:Source)
+        $Script:Projects   = @(Get-MasterProjects   -Source $Script:Source)
+        $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
+        $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
+        $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
     } catch {
         $u.SummaryText.Text = "マスタ再読込失敗: $_"
     }
@@ -1060,16 +1053,11 @@ function _SafeApplyFilters {
 
 $u.ReloadBtn.Add_Click({ _Diag "ReloadBtn click"; Reload-Masters; Reload-Entries })
 $u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
-$u.MemberFilter.Add_SelectionChanged({
-    $val = if ($Script:AllEntries) { "entries=$($Script:AllEntries.Count)" } else { "no entries" }
-    _Diag "MemberFilter changed sel=$($u.MemberFilter.SelectedValue) $val"
-    if ($Script:AllEntries) { _SafeApplyFilters }
-})
-$u.ProjectFilter.Add_SelectionChanged({
-    $val = if ($Script:AllEntries) { "entries=$($Script:AllEntries.Count)" } else { "no entries" }
-    _Diag "ProjectFilter changed sel=$($u.ProjectFilter.SelectedValue) $val"
-    if ($Script:AllEntries) { _SafeApplyFilters }
-})
+
+# 期間クイック選択ボタン → 期間を設定して即フィルタ適用
+$u.PeriodThisMonthBtn.Add_Click({ _SetPeriodThisMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.PeriodPrevMonthBtn.Add_Click({ _SetPeriodPrevMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.PeriodThisFYBtn.Add_Click({    _SetPeriodThisFY;    if ($Script:AllEntries) { _SafeApplyFilters } })
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
