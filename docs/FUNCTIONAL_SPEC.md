@@ -349,6 +349,20 @@ Pester 5 で 53 ケース (全 PASS)。
    - `%LOCALAPPDATA%\worktime-tracker` にコピー
    - デスクトップに **WorkTime Tracker** / **WBS Input** / **WorkTime Report** のショートカット作成
 
+### 8.1.0 デモ用サンプルデータ投入
+`scripts\load-demo.cmd` をダブルクリックで実行。`config.json` の `local_store` 配下に以下を一括投入 (既存ファイルは上書き):
+
+| 投入対象 | 内容 |
+|---|---|
+| `master/members.json` | 4 メンバー (admin/leader/member 混在) + 退職者 1 |
+| `master/projects.json` | 4 プロジェクト (案件対応 2 + 維持運用 2) + `wbs_items` |
+| `master/task_patterns.json` | 共通パターン 2 (新規開発 / 維持運用) |
+| `master/categories.json` | 9 カテゴリ |
+| `master/holidays.json` | 2026 GW + 月例祝日 |
+| `data/YYYY/MM/E001-E004.json` | 当月 + 前月の実績エントリ (有給休暇含む、シード固定で再現性あり) |
+
+オプション: `-LocalStore <path>` で投入先を明示指定、`-Force` で確認スキップ。
+
 ### 8.1.1 アンインストール
 `scripts\uninstall.cmd` をダブルクリックで起動 (`-Force` で確認スキップ可)。削除対象:
 
