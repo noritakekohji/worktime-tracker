@@ -169,7 +169,7 @@
                                    Margin="6,6,6,8"/>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,6,6">
                             <Button x:Name="DelRowBtn" Content="🗑 選択行を削除" IsEnabled="False" Padding="8,2" Margin="0,0,8,0"/>
-                            <CheckBox x:Name="ShowDoneChk" Content="完了も表示" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox x:Name="ShowDoneChk" Content="完了/中止も表示" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock x:Name="FilterStatusText" VerticalAlignment="Center"
                                        Foreground="{StaticResource Muted}" FontSize="11"/>
                         </StackPanel>

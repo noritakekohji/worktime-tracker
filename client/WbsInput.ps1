@@ -340,7 +340,7 @@ function Build-GridColumns {
     )
     $overdueConv = New-Object WT.OverdueBgConverter
     # 状態列で使う候補リスト (CLR string[] でも OK だが PowerShell の配列でも動く)
-    $statusOptions = [string[]]@('進行中', '完了', '中止')
+    $statusOptions = [string[]]@('未着手', '進捗中', '完了', '中止')
     foreach ($fd in $fixedDef) {
         # 状態列は ComboBox 編集
         if ($fd.H -eq '状態') {
@@ -507,7 +507,7 @@ function Load-WbsData {
                 assignee      = if ($p.assignee) { [string]$p.assignee } else { '' }
                 planned_start = if ($p.planned_start) { [string]$p.planned_start } else { '' }
                 planned_end   = if ($p.planned_end)   { [string]$p.planned_end }   else { '' }
-                status        = if ($p.status)        { [string]$p.status }        else { '進行中' }
+                status        = if ($p.status)        { [string]$p.status }        else { '未着手' }
             }
         }
 
@@ -646,7 +646,7 @@ function Load-WbsData {
             $row["別名"] = $alias
             # プラン値 (alias 込みキーで参照)
             $pkey = "$($info.pc)|$($info.tgc)|$($info.tc)|$alias"
-            $status = '進行中'
+            $status = '未着手'
             if ($planMap.ContainsKey($pkey)) {
                 $p = $planMap[$pkey]
                 if ($p.assignee)      { $row["担当"] = [string]$p.assignee }
@@ -826,14 +826,14 @@ function Apply-DoneFilter {
     if ($showDone) {
         $Script:DataTable.DefaultView.RowFilter = ''
     } else {
-        # DataView の RowFilter — 状態 != '完了'
-        $Script:DataTable.DefaultView.RowFilter = "[状態] <> '完了' OR [状態] IS NULL"
+        # 完了 / 中止 を非表示 (進捗中・未着手のみ表示)
+        $Script:DataTable.DefaultView.RowFilter = "([状態] <> '完了' AND [状態] <> '中止') OR [状態] IS NULL"
     }
     $totalRows = $Script:DataTable.Rows.Count
     $visibleRows = $Script:DataTable.DefaultView.Count
     $hiddenRows = $totalRows - $visibleRows
     if ($hiddenRows -gt 0 -and -not $showDone) {
-        $ui.FilterStatusText.Text = ("(完了 {0} 件 非表示)" -f $hiddenRows)
+        $ui.FilterStatusText.Text = ("(完了/中止 {0} 件 非表示)" -f $hiddenRows)
     } else {
         $ui.FilterStatusText.Text = ''
     }
@@ -913,7 +913,7 @@ $ui.AddRowBtn.Add_Click({
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
     $row["タスク"] = $displayTask
     $row["別名"] = $newAlias
-    $row["状態"] = '進行中'
+    $row["状態"] = '未着手'
     $row["担当"] = ''
     [void]$Script:DataTable.Rows.Add($row)
     $ui.WbsGrid.ScrollIntoView($ui.WbsGrid.Items[$ui.WbsGrid.Items.Count - 1])
@@ -1036,7 +1036,7 @@ function _BuildWbsItems {
             -and [string]::IsNullOrWhiteSpace($tc)) { continue }
         $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
         $status = [string]$row["状態"]
-        if ([string]::IsNullOrWhiteSpace($status)) { $status = '進行中' }
+        if ([string]::IsNullOrWhiteSpace($status)) { $status = '未着手' }
         $items.Add([ordered]@{
             process_code    = $pc
             task_group_code = $tgc

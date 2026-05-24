@@ -36,7 +36,9 @@ $u = @{}
 foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','ReloadBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
-              'HeatmapCanvas','AnomalyGrid','DashboardPanel') {
+              'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
+              'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
+              'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -358,36 +360,75 @@ function Build-Heatmap {
     $cv.Children.Clear()
     if (-not $Rows -or $Rows.Count -eq 0) { return }
 
-    # 日付集合とプロジェクト集合
-    $dates = @($Rows | ForEach-Object { $_.date } | Sort-Object -Unique)
-    $projs = @($Rows | ForEach-Object { $_.project_code } | Where-Object { $_ } | Sort-Object -Unique)
-    if ($dates.Count -eq 0 -or $projs.Count -eq 0) { return }
+    # 軸選択 (HeatmapAxisCombo) — 3 種類
+    $axisSel = '日付 × プロジェクト'
+    if ($u.HeatmapAxisCombo -and $u.HeatmapAxisCombo.SelectedItem) {
+        $axisSel = [string]$u.HeatmapAxisCombo.SelectedItem.Content
+    }
 
-    # 集計: project_code,date → hours
+    # 行軸 / 列軸 のキー抽出
+    switch ($axisSel) {
+        '日付 × メンバー (個人別)' {
+            $rowKey  = 'member_id'
+            $colKey  = 'date'
+            $rowLbl  = '👤 メンバー'
+            $colLbl  = '日付'
+            $rowDisp = { param($v) $m = $Script:Members | Where-Object { [string]$_.id -eq [string]$v } | Select-Object -First 1
+                         if ($m) { "$($m.id)  $($m.name)" } else { [string]$v } }
+            $colDisp = { param($v) $d = [datetime]::MinValue
+                         if ([datetime]::TryParse([string]$v, [ref]$d)) { $d.ToString('M/d') } else { [string]$v } }
+            $colW = 22; $useDateGap = $true
+        }
+        'メンバー × プロジェクト' {
+            $rowKey  = 'member_id'
+            $colKey  = 'project_code'
+            $rowLbl  = '👤 メンバー'
+            $colLbl  = '📁 プロジェクト'
+            $rowDisp = { param($v) $m = $Script:Members | Where-Object { [string]$_.id -eq [string]$v } | Select-Object -First 1
+                         if ($m) { "$($m.id)  $($m.name)" } else { [string]$v } }
+            $colDisp = { param($v) $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq [string]$v } | Select-Object -First 1
+                         if ($p) { [string]$p.unit_code } else { [string]$v } }
+            $colW = 80; $useDateGap = $false
+        }
+        default {
+            $rowKey  = 'project_code'
+            $colKey  = 'date'
+            $rowLbl  = '📁 プロジェクト'
+            $colLbl  = '日付'
+            $rowDisp = { param($v) [string]$v }
+            $colDisp = { param($v) $d = [datetime]::MinValue
+                         if ([datetime]::TryParse([string]$v, [ref]$d)) { $d.ToString('M/d') } else { [string]$v } }
+            $colW = 22; $useDateGap = $true
+        }
+    }
+
+    $rowVals = @($Rows | ForEach-Object { [string]$_.$rowKey } | Where-Object { $_ } | Sort-Object -Unique)
+    $colVals = @($Rows | ForEach-Object { [string]$_.$colKey } | Where-Object { $_ } | Sort-Object -Unique)
+    if ($rowVals.Count -eq 0 -or $colVals.Count -eq 0) { return }
+
+    # 集計: row|col → hours
     $cell = @{}
     $maxH = 0.0
     foreach ($r in $Rows) {
-        $k = "$($r.project_code)|$($r.date)"
+        $rk = [string]$r.$rowKey; $ck = [string]$r.$colKey
+        if (-not $rk -or -not $ck) { continue }
+        $k = "$rk|$ck"
         if (-not $cell.ContainsKey($k)) { $cell[$k] = 0.0 }
         $cell[$k] += [double]$r.hours
         if ($cell[$k] -gt $maxH) { $maxH = $cell[$k] }
     }
     if ($maxH -le 0) { $maxH = 1.0 }
 
-    # レイアウト
-    $colW = 22
     $rowH = 22
     $lblW = 200
     $lblH = 60
-    $cv.Width  = $lblW + ($dates.Count * $colW) + 20
-    $cv.Height = $lblH + ($projs.Count * $rowH) + 20
+    $cv.Width  = $lblW + ($colVals.Count * $colW) + 20
+    $cv.Height = $lblH + ($rowVals.Count * $rowH) + 20
 
-    # 日付ヘッダ (縦書き風: 日のみ)
-    for ($i = 0; $i -lt $dates.Count; $i++) {
+    # 列ヘッダ
+    for ($i = 0; $i -lt $colVals.Count; $i++) {
         $tb = New-Object System.Windows.Controls.TextBlock
-        $d = [datetime]::MinValue
-        $label = if ([datetime]::TryParse([string]$dates[$i], [ref]$d)) { $d.ToString('M/d') } else { [string]$dates[$i] }
-        $tb.Text = $label
+        $tb.Text = & $colDisp $colVals[$i]
         $tb.FontSize = 9
         [System.Windows.Controls.Canvas]::SetLeft($tb, $lblW + ($i * $colW))
         [System.Windows.Controls.Canvas]::SetTop($tb, 30)
@@ -395,10 +436,10 @@ function Build-Heatmap {
         [void]$cv.Children.Add($tb)
     }
 
-    # プロジェクトラベル + セル
-    for ($r = 0; $r -lt $projs.Count; $r++) {
+    # 行ラベル + セル
+    for ($r = 0; $r -lt $rowVals.Count; $r++) {
         $tb = New-Object System.Windows.Controls.TextBlock
-        $tb.Text = [string]$projs[$r]
+        $tb.Text = & $rowDisp $rowVals[$r]
         $tb.FontSize = 11
         $tb.FontWeight = 'SemiBold'
         [System.Windows.Controls.Canvas]::SetLeft($tb, 4)
@@ -406,20 +447,19 @@ function Build-Heatmap {
         $tb.Width = $lblW - 8
         [void]$cv.Children.Add($tb)
 
-        for ($i = 0; $i -lt $dates.Count; $i++) {
-            $k = "$($projs[$r])|$($dates[$i])"
+        for ($i = 0; $i -lt $colVals.Count; $i++) {
+            $k = "$($rowVals[$r])|$($colVals[$i])"
             $h = 0.0
             if ($cell.ContainsKey($k)) { $h = $cell[$k] }
             if ($h -le 0) { continue }
             $rect = New-Object System.Windows.Shapes.Rectangle
             $rect.Width = $colW - 1; $rect.Height = $rowH - 1
-            # 濃度: 0..maxH → 240..40 (HSL Lightness)
             $intensity = [Math]::Min(1.0, $h / $maxH)
-            $light = [int](240 - (200 * $intensity))   # 240→明 / 40→暗
+            $light = [int](240 - (200 * $intensity))
             $r1 = [int]($light * 0.6); $g1 = [int]$light; $b1 = [int]($light * 0.8)
             $bg = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb($r1, $g1, $b1))
             $rect.Fill = $bg
-            $rect.ToolTip = ("{0}  {1}  {2:N1}h" -f $projs[$r], $dates[$i], $h)
+            $rect.ToolTip = ("{0}  {1}  {2:N1}h" -f (& $rowDisp $rowVals[$r]), (& $colDisp $colVals[$i]), $h)
             [System.Windows.Controls.Canvas]::SetLeft($rect, $lblW + ($i * $colW))
             [System.Windows.Controls.Canvas]::SetTop($rect, $lblH + ($r * $rowH))
             [void]$cv.Children.Add($rect)
@@ -1013,6 +1053,279 @@ $u.ExportBtn.Add_Click({
     $rows | Select-Object -Property $picked | Export-Csv -LiteralPath $dlg.FileName -NoTypeInformation -Encoding UTF8
     [System.Windows.MessageBox]::Show("エクスポート完了 ($($picked.Count) 列):`n$($dlg.FileName)", 'CSV', 'OK', 'Information') | Out-Null
 })
+
+# ===== チームマネージャ向け 拡張集計 =====
+
+# プロジェクトコード → 業務種別 (案件対応 / 維持運用 / その他) 解決ヘルパ
+function _ProjectWorkType {
+    param([string]$ProjCode)
+    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $ProjCode } | Select-Object -First 1
+    if ($p -and $p.work_type) { return [string]$p.work_type }
+    return 'その他'
+}
+
+# 日付文字列の月曜日を取得 (ISO 週始まり = 月曜)
+function _MondayOf {
+    param([datetime]$D)
+    $diff = [int]$D.DayOfWeek - [int][System.DayOfWeek]::Monday
+    if ($diff -lt 0) { $diff += 7 }
+    return $D.Date.AddDays(-$diff)
+}
+
+# メンバー名解決 (members.json + entries の member_id) 統合リスト
+function _ResolveMember {
+    param([string]$Id)
+    $m = $Script:Members | Where-Object { [string]$_.id -eq $Id -and $_.active } | Select-Object -First 1
+    if ($m) { return "$($m.id)  $($m.name)" }
+    return $Id
+}
+
+# ---- メンバー負荷バランス ----
+function Build-MemberLoad {
+    param($Rows)
+    if (-not $u.LoadWeeklyGrid -or -not $u.MissingEntriesGrid) { return }
+    $u.LoadWeeklyGrid.Columns.Clear()
+    $u.LoadWeeklyGrid.ItemsSource = $null
+    $u.MissingEntriesGrid.ItemsSource = $null
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    # しきい値
+    $over = 45.0
+    [void][double]::TryParse([string]$u.LoadOverThresholdTxt.Text, [ref]$over)
+    $target = 40.0
+    [void][double]::TryParse([string]$u.LoadTargetTxt.Text, [ref]$target)
+
+    # week start (月曜) ごとのキー: yyyy-MM-dd (月曜の日付)
+    $byMemberWeek = @{}  # memberId -> { weekKey -> hours }
+    $weekKeys = New-Object 'System.Collections.Generic.SortedSet[string]'
+    foreach ($r in $Rows) {
+        $d = [datetime]::MinValue
+        if (-not [datetime]::TryParse([string]$r.date, [ref]$d)) { continue }
+        $wk = (_MondayOf $d).ToString('yyyy-MM-dd')
+        $mid = [string]$r.member_id
+        if (-not $mid) { continue }
+        if (-not $byMemberWeek.ContainsKey($mid)) { $byMemberWeek[$mid] = @{} }
+        if (-not $byMemberWeek[$mid].ContainsKey($wk)) { $byMemberWeek[$mid][$wk] = 0.0 }
+        $byMemberWeek[$mid][$wk] += [double]$r.hours
+        [void]$weekKeys.Add($wk)
+    }
+
+    $weekArr = @($weekKeys)
+    # 動的列: メンバー + 各週 + 合計 + 平均
+    $weeklyRows = New-Object System.Collections.Generic.List[object]
+    foreach ($mid in ($byMemberWeek.Keys | Sort-Object)) {
+        $row = [ordered]@{ 'メンバー' = (_ResolveMember $mid) }
+        $tot = 0.0; $cnt = 0; $overCnt = 0
+        foreach ($wk in $weekArr) {
+            $h = if ($byMemberWeek[$mid].ContainsKey($wk)) { [double]$byMemberWeek[$mid][$wk] } else { 0.0 }
+            $marker = ''
+            if ($h -gt $over)   { $marker = '🔴 ' }
+            elseif ($h -gt $target) { $marker = '🟡 ' }
+            $col = ([datetime]::Parse($wk)).ToString('M/d~')
+            $row[$col] = if ($h -gt 0) { "{0}{1:N1}" -f $marker, $h } else { '' }
+            $tot += $h
+            if ($h -gt 0) { $cnt++ }
+            if ($h -gt $over) { $overCnt++ }
+        }
+        $row['合計']     = "{0:N1}" -f $tot
+        $row['週平均']   = if ($cnt -gt 0) { "{0:N1}" -f ($tot / $cnt) } else { '' }
+        $row['超過週']   = if ($overCnt -gt 0) { "$overCnt 週" } else { '' }
+        $weeklyRows.Add([pscustomobject]$row)
+    }
+    $u.LoadWeeklyGrid.ItemsSource = @($weeklyRows)
+
+    # ---- 未入力検知: 期間内の平日で 0h の日 (active メンバーのみ) ----
+    $from = $u.FromDate.SelectedDate
+    $to   = $u.ToDate.SelectedDate
+    if (-not $from -or -not $to) { return }
+    $activeMembers = @($Script:Members | Where-Object { $_.active } | ForEach-Object { [string]$_.id })
+    if ($activeMembers.Count -eq 0) { return }
+
+    # 平日リスト (土日除外)
+    $weekdays = New-Object System.Collections.Generic.List[datetime]
+    $cur = $from.Date
+    while ($cur -le $to.Date) {
+        if ($cur.DayOfWeek -ne [System.DayOfWeek]::Saturday -and $cur.DayOfWeek -ne [System.DayOfWeek]::Sunday) {
+            $weekdays.Add($cur)
+        }
+        $cur = $cur.AddDays(1)
+    }
+
+    # 日付セット per member
+    $hasEntry = @{}
+    foreach ($r in $Rows) {
+        $mid = [string]$r.member_id
+        if (-not $hasEntry.ContainsKey($mid)) { $hasEntry[$mid] = New-Object 'System.Collections.Generic.HashSet[string]' }
+        [void]$hasEntry[$mid].Add([string]$r.date)
+    }
+
+    $missing = New-Object System.Collections.Generic.List[object]
+    foreach ($mid in $activeMembers) {
+        $missDates = New-Object System.Collections.Generic.List[string]
+        foreach ($d in $weekdays) {
+            $k = $d.ToString('yyyy-MM-dd')
+            if (-not $hasEntry.ContainsKey($mid) -or -not $hasEntry[$mid].Contains($k)) {
+                $missDates.Add($d.ToString('M/d(ddd)'))
+            }
+        }
+        if ($missDates.Count -eq 0) { continue }
+        $shown = if ($missDates.Count -le 10) { $missDates -join ', ' } else {
+            (($missDates | Select-Object -First 10) -join ', ') + " ... 他 $($missDates.Count - 10) 件"
+        }
+        $missing.Add([pscustomobject]@{
+            member        = (_ResolveMember $mid)
+            missing_count = $missDates.Count
+            missing_dates = $shown
+        })
+    }
+    $u.MissingEntriesGrid.ItemsSource = @($missing | Sort-Object -Property missing_count -Descending)
+}
+
+# ---- メンバー × プロジェクト クロス集計 ----
+function Build-MemberProjectMatrix {
+    param($Rows)
+    if (-not $u.MemberProjectGrid) { return }
+    $u.MemberProjectGrid.Columns.Clear()
+    $u.MemberProjectGrid.ItemsSource = $null
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    $projs = @($Rows | ForEach-Object { [string]$_.project_code } | Where-Object { $_ } | Sort-Object -Unique)
+    $members = @($Rows | ForEach-Object { [string]$_.member_id } | Where-Object { $_ } | Sort-Object -Unique)
+
+    $matrix = @{}  # member -> { project -> hours }
+    foreach ($r in $Rows) {
+        $mid = [string]$r.member_id; $pc = [string]$r.project_code
+        if (-not $mid -or -not $pc) { continue }
+        if (-not $matrix.ContainsKey($mid)) { $matrix[$mid] = @{} }
+        if (-not $matrix[$mid].ContainsKey($pc)) { $matrix[$mid][$pc] = 0.0 }
+        $matrix[$mid][$pc] += [double]$r.hours
+    }
+
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($mid in $members) {
+        $row = [ordered]@{ 'メンバー' = (_ResolveMember $mid) }
+        $tot = 0.0
+        foreach ($pc in $projs) {
+            $h = if ($matrix.ContainsKey($mid) -and $matrix[$mid].ContainsKey($pc)) { [double]$matrix[$mid][$pc] } else { 0.0 }
+            $row[$pc] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
+            $tot += $h
+        }
+        $row['合計'] = "{0:N1}" -f $tot
+        $out.Add([pscustomobject]$row)
+    }
+    # フッタ風: プロジェクト合計行
+    $footer = [ordered]@{ 'メンバー' = '◆ プロジェクト合計' }
+    $grand = 0.0
+    foreach ($pc in $projs) {
+        $sum = 0.0
+        foreach ($mid in $members) {
+            if ($matrix.ContainsKey($mid) -and $matrix[$mid].ContainsKey($pc)) {
+                $sum += [double]$matrix[$mid][$pc]
+            }
+        }
+        $footer[$pc] = "{0:N1}" -f $sum
+        $grand += $sum
+    }
+    $footer['合計'] = "{0:N1}" -f $grand
+    $out.Add([pscustomobject]$footer)
+
+    $u.MemberProjectGrid.ItemsSource = @($out)
+}
+
+# ---- 業務種別 (案件対応 / 維持運用 / その他) 稼働比率 ----
+function Build-WorkTypeMix {
+    param($Rows)
+    if (-not $u.WorkTypeKpiPanel -or -not $u.WorkTypeByMemberGrid) { return }
+    $u.WorkTypeKpiPanel.Children.Clear()
+    $u.WorkTypeByMemberGrid.Columns.Clear()
+    $u.WorkTypeByMemberGrid.ItemsSource = $null
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    # チーム全体集計
+    $byType = @{}
+    $total = 0.0
+    foreach ($r in $Rows) {
+        $wt = _ProjectWorkType ([string]$r.project_code)
+        if (-not $byType.ContainsKey($wt)) { $byType[$wt] = 0.0 }
+        $byType[$wt] += [double]$r.hours
+        $total += [double]$r.hours
+    }
+
+    # KPI カード (チーム全体の業務種別比率)
+    $colorMap = @{
+        '案件対応' = '#0369a1'
+        '維持運用' = '#059669'
+        'その他'   = '#7c3aed'
+    }
+    foreach ($wt in @('案件対応','維持運用','その他')) {
+        $h = if ($byType.ContainsKey($wt)) { [double]$byType[$wt] } else { 0.0 }
+        $pct = if ($total -gt 0) { ($h / $total) * 100.0 } else { 0.0 }
+        $col = if ($colorMap.ContainsKey($wt)) { $colorMap[$wt] } else { '#6b7280' }
+        $b = New-Object System.Windows.Controls.Border
+        $b.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#f8fafc')
+        $b.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom($col)
+        $b.BorderThickness = '2'; $b.CornerRadius = '8'
+        $b.Padding = '14'; $b.Margin = '0,0,10,0'; $b.MinWidth = 180
+        $sp = New-Object System.Windows.Controls.StackPanel
+        $t1 = New-Object System.Windows.Controls.TextBlock
+        $t1.Text = $wt; $t1.FontSize = 12; $t1.Foreground = [System.Windows.Media.Brushes]::SlateGray
+        $sp.Children.Add($t1) | Out-Null
+        $t2 = New-Object System.Windows.Controls.TextBlock
+        $t2.Text = "{0:N1} h  ({1:N1}%)" -f $h, $pct
+        $t2.FontSize = 18; $t2.FontWeight = 'Bold'
+        $t2.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($col)
+        $sp.Children.Add($t2) | Out-Null
+        $b.Child = $sp
+        [void]$u.WorkTypeKpiPanel.Children.Add($b)
+    }
+
+    # メンバー別 × 業務種別 集計
+    $byMember = @{}
+    foreach ($r in $Rows) {
+        $mid = [string]$r.member_id
+        if (-not $mid) { continue }
+        $wt = _ProjectWorkType ([string]$r.project_code)
+        if (-not $byMember.ContainsKey($mid)) { $byMember[$mid] = @{} }
+        if (-not $byMember[$mid].ContainsKey($wt)) { $byMember[$mid][$wt] = 0.0 }
+        $byMember[$mid][$wt] += [double]$r.hours
+    }
+    $rowsOut = New-Object System.Collections.Generic.List[object]
+    foreach ($mid in ($byMember.Keys | Sort-Object)) {
+        $tot = 0.0
+        foreach ($wt in @('案件対応','維持運用','その他')) {
+            if ($byMember[$mid].ContainsKey($wt)) { $tot += [double]$byMember[$mid][$wt] }
+        }
+        $row = [ordered]@{ 'メンバー' = (_ResolveMember $mid) }
+        foreach ($wt in @('案件対応','維持運用','その他')) {
+            $h = if ($byMember[$mid].ContainsKey($wt)) { [double]$byMember[$mid][$wt] } else { 0.0 }
+            $pct = if ($tot -gt 0) { ($h / $tot) * 100.0 } else { 0.0 }
+            $row["$wt (h)"]  = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
+            $row["$wt (%)"]  = if ($h -gt 0) { "{0:N0}" -f $pct } else { '' }
+        }
+        $row['合計'] = "{0:N1}" -f $tot
+        $rowsOut.Add([pscustomobject]$row)
+    }
+    $u.WorkTypeByMemberGrid.ItemsSource = @($rowsOut)
+}
+
+# ---- イベントフック ----
+if ($u.HeatmapAxisCombo) {
+    $u.HeatmapAxisCombo.Add_SelectionChanged({ Build-Heatmap -Rows $Script:ChartRows })
+}
+if ($u.LoadRefreshBtn) {
+    $u.LoadRefreshBtn.Add_Click({ Build-MemberLoad -Rows $Script:ChartRows })
+}
+
+# Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
+# wrapper を新設する。元の Apply-Filters は ChartRows をセットするので、その後に
+# 拡張集計を呼ぶ。
+$origApply = ${function:Apply-Filters}
+function Apply-Filters {
+    & $origApply
+    try { Build-MemberLoad           -Rows $Script:ChartRows } catch { }
+    try { Build-MemberProjectMatrix  -Rows $Script:ChartRows } catch { }
+    try { Build-WorkTypeMix          -Rows $Script:ChartRows } catch { }
+}
 
 Reload-Entries
 
