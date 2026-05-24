@@ -297,7 +297,7 @@ $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 
 $names = @(
     'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','StatusText',
-    'EntryDate','TodayBtn','YesterdayBtn',
+    'EntryDate','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
@@ -547,10 +547,14 @@ function Load-ViewMonth {
             $tkc = _Str $e.task_code
             $ctc = _Str $e.category
             $names = Resolve-EntryNames -ProjCode $pc -ProcCode $prc -TgCode $tgc -TaskCode $tkc -CatCode $ctc
+            $isLeaveLoaded = $false
+            if ($e.PSObject.Properties['is_leave']) { $isLeaveLoaded = [bool]$e.is_leave }
+            $projDisp = $names.project_name
+            if ($isLeaveLoaded -and -not $projDisp) { $projDisp = '(休暇)' }
             $Script:Entries.Add([pscustomobject]@{
                 date            = _Str $e.date
                 project_code    = $pc
-                project_name    = $names.project_name
+                project_name    = $projDisp
                 process_code    = $prc
                 process_name    = $names.process_name
                 task_group_code = $tgc
@@ -559,6 +563,7 @@ function Load-ViewMonth {
                 task_name       = $names.task_name
                 category        = $ctc
                 category_name   = $names.category_name
+                is_leave        = $isLeaveLoaded
                 hours           = _Num $e.hours
                 comment         = _Str $e.comment
                 dirty           = ''
@@ -600,22 +605,16 @@ function Get-EntryFromForm {
     $task = $ui.TaskCombo.SelectedItem
     $cat  = $ui.CategoryCombo.SelectedItem
 
-    # 休暇カテゴリ (categories.json の is_leave=true) ならプロジェクト/工程/タスク不要
-    $isLeave = $false
-    if ($cat) {
-        $catCode = [string]$cat.code
-        $catObj = $Script:Categories | Where-Object { [string]$_.code -eq $catCode } | Select-Object -First 1
-        if ($catObj -and $catObj.is_leave) { $isLeave = [bool]$catObj.is_leave }
-    }
+    # 休暇チェック (フォームの IsLeaveChk) — エントリ属性として扱う
+    $isLeave = [bool]$ui.IsLeaveChk.IsChecked
 
     if (-not $isLeave) {
-        if (-not $proj) { throw 'プロジェクトを選択してください (休暇カテゴリの場合は省略可)' }
+        if (-not $proj) { throw 'プロジェクトを選択してください (休暇は ☑ 休暇 をチェック)' }
         if (-not $proc -and $ui.ProcessCombo.Items.Count -gt 0) { throw '工程を選択してください' }
         if (-not $tg   -and $ui.TaskGroupCombo.Items.Count -gt 0) { throw 'タスクグループを選択してください' }
         if (-not $task -and $ui.TaskCombo.Items.Count -gt 0) { throw 'タスクを選択してください' }
-    } else {
-        if (-not $cat) { throw 'カテゴリを選択してください' }
     }
+    # 休暇のときは proj/proc/tg/task すべて任意。カテゴリは無くても OK。
     $hours = 0.0
     if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
         throw '工数は正の数値で入力してください'
@@ -649,6 +648,7 @@ function Get-EntryFromForm {
         task_name       = if ($task) { [string]$task.name } else { '' }
         category        = if ($cat)  { [string]$cat.code }  else { '' }
         category_name   = if ($cat)  { [string]$cat.name }  else { '' }
+        is_leave        = $isLeave
         hours           = $hours
         dirty           = 'yes'
         dirty_mark      = '●'
@@ -669,6 +669,10 @@ function Set-FormFromEntry {
     $ui.CategoryCombo.SelectedValue  = $Entry.category
     $ui.HoursBox.Text = [string]$Entry.hours
     $ui.CommentBox.Text = $Entry.comment
+    # 休暇フラグも復元
+    $leaveVal = $false
+    if ($Entry.PSObject.Properties['is_leave']) { $leaveVal = [bool]$Entry.is_leave }
+    $ui.IsLeaveChk.IsChecked = $leaveVal
 }
 
 function Clear-Form {
@@ -678,6 +682,7 @@ function Clear-Form {
     $ui.CategoryCombo.SelectedIndex = -1
     $ui.HoursBox.Text = '1.0'
     $ui.CommentBox.Text = ''
+    $ui.IsLeaveChk.IsChecked = $false
     $Script:EditingItem = $null
     $ui.FormHeader.Text = '新規エントリ'
     $ui.AddBtn.Visibility = 'Visible'
@@ -769,6 +774,8 @@ function _DoLocalSave {
         if ([string]::IsNullOrWhiteSpace($d)) { continue }
         $h = 0.0
         [void][double]::TryParse([string](_Sc $e.hours), [ref]$h)
+        $isLeaveE = $false
+        if ($e.PSObject.Properties['is_leave']) { $isLeaveE = [bool](_Sc $e.is_leave) }
         $clean.Add([pscustomobject]@{
             date            = $d
             project_code    = [string](_Sc $e.project_code)
@@ -776,6 +783,7 @@ function _DoLocalSave {
             task_group_code = [string](_Sc $e.task_group_code)
             task_code       = [string](_Sc $e.task_code)
             category        = [string](_Sc $e.category)
+            is_leave        = $isLeaveE
             hours           = $h
             comment         = [string](_Sc $e.comment)
         })

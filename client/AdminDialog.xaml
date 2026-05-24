@@ -331,8 +331,6 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="コード" Binding="{Binding code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
                                 <DataGridTextColumn Header="名称"   Binding="{Binding name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                                <DataGridCheckBoxColumn Header="休暇" Binding="{Binding is_leave, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"
-                                                        ToolTipService.ToolTip="ON にすると、このカテゴリで保存する際にプロジェクト未選択でも保存可能 (有給/半休 等)"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>

@@ -149,11 +149,7 @@ function Show-AdminDialog {
             }
             $categories.Clear()
             foreach ($c in (Get-MasterCategories -Source $Source)) {
-                $categories.Add([pscustomobject]@{
-                    code     = [string]$c.code
-                    name     = [string]$c.name
-                    is_leave = if ($null -ne $c.is_leave) { [bool]$c.is_leave } else { $false }
-                })
+                $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
             }
             $holidays.Clear()
             foreach ($h in (Get-MasterHolidays -Source $Source)) {
@@ -237,7 +233,7 @@ function Show-AdminDialog {
 
     # ---- カテゴリ ----
     $u.CatAddBtn.Add_Click({
-        $categories.Add([pscustomobject]@{ code=''; name=''; is_leave=$false })
+        $categories.Add([pscustomobject]@{ code=''; name='' })
     })
     $u.CatDelBtn.Add_Click({
         $sel = $u.CategoriesGrid.SelectedItem
@@ -851,11 +847,7 @@ function Show-AdminDialog {
                 'categories' {
                     $categories.Clear()
                     foreach ($c in @($parsed)) {
-                        $categories.Add([pscustomobject]@{
-                    code     = [string]$c.code
-                    name     = [string]$c.name
-                    is_leave = if ($null -ne $c.is_leave) { [bool]$c.is_leave } else { $false }
-                })
+                        $categories.Add([pscustomobject]@{ code=[string]$c.code; name=[string]$c.name })
                     }
                 }
             }
@@ -921,11 +913,7 @@ function Show-AdminDialog {
 
             $where = 'categories serialize'
             $catsOut = @($categories | ForEach-Object {
-                [ordered]@{
-                    code     = [string]$_.code
-                    name     = [string]$_.name
-                    is_leave = [bool]$_.is_leave
-                }
+                [ordered]@{ code = [string]$_.code; name = [string]$_.name }
             })
             $where = 'Save-MasterCategories'
             Save-MasterCategories -Source $Source -Data $catsOut -AuthorName $authorName -AuthorEmail $authorEmail

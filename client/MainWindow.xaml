@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="WorkTime Tracker"
@@ -331,6 +331,10 @@
                             <Button x:Name="TodayBtn" Content="今日" MinWidth="56" Margin="4,1,0,1" MinHeight="26" Padding="6,2"/>
                             <Button x:Name="YesterdayBtn" Content="昨日" MinWidth="56" Margin="2,1,0,1" MinHeight="26" Padding="6,2"/>
                         </StackPanel>
+
+                        <CheckBox x:Name="IsLeaveChk" Content="🏖 休暇 (プロジェクト/工程/タスク不要)"
+                                  Margin="0,8,0,2" FontWeight="SemiBold"
+                                  ToolTip="ON にすると有給休暇/半休/特別休暇 等を記録できます。プロジェクト等の選択は不要になります"/>
 
                         <Label Content="プロジェクト (ユニット)" Margin="0,4,0,0"/>
                         <ComboBox x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"
