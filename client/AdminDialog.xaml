@@ -239,8 +239,8 @@
                                 <DataGridComboBoxColumn x:Name="ProjPatternCol"
                                                         Header="タスクパターン"
                                                         SelectedValueBinding="{Binding task_pattern_id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                        SelectedValuePath="id"
-                                                        DisplayMemberPath="display"
+                                                        SelectedValuePath="Id"
+                                                        DisplayMemberPath="Display"
                                                         Width="200"/>
                                 <DataGridCheckBoxColumn Header="有効" Binding="{Binding active, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
                             </DataGrid.Columns>

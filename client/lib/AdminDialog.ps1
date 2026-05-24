@@ -2,6 +2,22 @@
 
 . (Join-Path $PSScriptRoot 'DataStore.ps1')
 
+# DataGridComboBoxColumn 用の強型クラス
+# PSCustomObject だと WPF の SelectedValuePath / DisplayMemberPath が解決できない
+# ケースがあるため、明示的に CLR プロパティを持つ型を定義する
+if (-not ([System.Management.Automation.PSTypeName]'WT.PatternComboItem').Type) {
+    Add-Type -Language CSharp -TypeDefinition @'
+namespace WT {
+    public class PatternComboItem {
+        public string Id { get; set; }
+        public string Display { get; set; }
+        public PatternComboItem() {}
+        public PatternComboItem(string id, string display) { Id = id; Display = display; }
+    }
+}
+'@
+}
+
 function Show-AdminDialog {
     param(
         [Parameter(Mandatory)]$Source,
@@ -80,6 +96,33 @@ function Show-AdminDialog {
                     active     = if ($null -ne $m.active) { [bool]$m.active } else { $true }
                 })
             }
+            # タスクパターンを先に読込 → ComboBox items を準備
+            # (projects の行生成時点で既に items が解決できる状態にしておく)
+            $patterns.Clear()
+            foreach ($pt in (Get-MasterTaskPatterns -Source $Source)) {
+                $patterns.Add( (_ToHash $pt) )
+            }
+            Render-PatternsList
+            # task_pattern_id ComboBox 用リストを更新 (id + name の display 付き)
+            # WT.PatternComboItem (CLR 型) を使うことで WPF の SelectedValuePath="Id" /
+            # DisplayMemberPath="Display" が確実に解決される
+            $patternComboItems.Clear()
+            $patternComboItems.Add((New-Object WT.PatternComboItem '', '(未設定)'))
+            foreach ($pt in $patterns) {
+                $ptId  = [string]$pt.id
+                $ptNm  = if ($pt.name) { " — $([string]$pt.name)" } else { '' }
+                $patternComboItems.Add((New-Object WT.PatternComboItem $ptId, "$ptId$ptNm"))
+            }
+            # ProjectsGrid の DataGridComboBoxColumn に ItemsSource を貼り直す
+            # (DataGridColumn は FrameworkElement ではないため FindName で取れない
+            # ことが多い → Columns コレクションを Header 名で走査して確実に当てる)
+            foreach ($col in $u.ProjectsGrid.Columns) {
+                if ($col -is [System.Windows.Controls.DataGridComboBoxColumn] -and ([string]$col.Header) -eq 'タスクパターン') {
+                    $col.ItemsSource = $patternComboItems
+                }
+            }
+            # projects を入れる前に上で combo items を貼り終えているので、
+            # 各行のセル生成時に SelectedValue → Display 解決が即座に効く
             $projects.Clear()
             foreach ($p in (Get-MasterProjects -Source $Source)) {
                 # 旧スキーマ (id/name) からのフォールバック
@@ -96,30 +139,6 @@ function Show-AdminDialog {
                     task_pattern_id = [string]$p.task_pattern_id
                     active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
                 })
-            }
-            $patterns.Clear()
-            foreach ($pt in (Get-MasterTaskPatterns -Source $Source)) {
-                $patterns.Add( (_ToHash $pt) )
-            }
-            Render-PatternsList
-            # task_pattern_id ComboBox 用リストを更新 (id + name の display 付き)
-            $patternComboItems.Clear()
-            $patternComboItems.Add([pscustomobject]@{ id=''; display='(未設定)' })
-            foreach ($pt in $patterns) {
-                $pid = [string]$pt.id
-                $pnm = if ($pt.name) { " — $([string]$pt.name)" } else { '' }
-                $patternComboItems.Add([pscustomobject]@{ id=$pid; display="$pid$pnm" })
-            }
-            # ProjectsGrid の DataGridComboBoxColumn にここで毎回 ItemsSource を貼り直す
-            # (起動時の最初のセル生成より前に確実に items を持たせる)
-            if ($u.ProjPatternCol) {
-                $u.ProjPatternCol.ItemsSource = $patternComboItems
-            } else {
-                foreach ($col in $u.ProjectsGrid.Columns) {
-                    if ($col -is [System.Windows.Controls.DataGridComboBoxColumn] -and ([string]$col.Header) -eq 'タスクパターン') {
-                        $col.ItemsSource = $patternComboItems
-                    }
-                }
             }
             $categories.Clear()
             foreach ($c in (Get-MasterCategories -Source $Source)) {
