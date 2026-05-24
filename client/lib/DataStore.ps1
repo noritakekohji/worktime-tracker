@@ -12,6 +12,29 @@
 
 . (Join-Path $PSScriptRoot 'GitLab.ps1')
 
+# ---- ロール判定 (member / leader / admin の複数選択対応) ----
+# 全画面 (WorkTimeTracker / WbsInput / ReportViewer / AdminDialog) が DataStore を
+# dot-source するため、共通ヘルパとしてここに定義する。
+# 新スキーマ: members.json の各要素に "roles": ["admin","leader","member"] 配列
+# 旧スキーマ: "role": "admin" / "member" の単一文字列 (後方互換で受理)
+function Get-MemberRoles {
+    param($Member)
+    if (-not $Member) { return @() }
+    if ($Member.PSObject.Properties['roles'] -and $Member.roles) {
+        return @($Member.roles | Where-Object { $_ } | ForEach-Object { [string]$_ })
+    }
+    if ($Member.PSObject.Properties['role'] -and $Member.role) {
+        return @([string]$Member.role)
+    }
+    return @('member')
+}
+
+function Has-Role {
+    param($Member, [string]$Role)
+    $roles = Get-MemberRoles -Member $Member
+    return ($roles -contains $Role)
+}
+
 function _AsScalarStr { param($v)
     if ($null -eq $v) { return '' }
     if ($v -is [array]) { if ($v.Count -gt 0) { return [string]$v[0] } else { return '' } }
