@@ -335,6 +335,16 @@ Pester 5 で 53 ケース (全 PASS)。
    - `%LOCALAPPDATA%\worktime-tracker` にコピー
    - デスクトップに **WorkTime Tracker** / **WBS Input** / **WorkTime Report** のショートカット作成
 
+### 8.1.1 アンインストール
+`scripts\uninstall.cmd` をダブルクリックで起動 (`-Force` で確認スキップ可)。削除対象:
+
+| 段階 | 対象 |
+|---|---|
+| 1 | `%LOCALAPPDATA%\worktime-tracker` (インストール先) |
+| 2 | デスクトップショートカット 3 個 |
+| 3 | `%APPDATA%\worktime-tracker` (config / token / user_prefs / ログ) — `-KeepUserData` でスキップ可 |
+| 4 | `config.local_store` のローカルキャッシュ (重要データのため個別確認) |
+
 ### 8.2 初回設定
 - ConfigDialog で以下を入力
   - 動作モード (スタンドアローン / Gitlab)
