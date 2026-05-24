@@ -182,6 +182,46 @@ function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEma
 function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 function Save-MasterHolidays     { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/holidays.json'      -CommitMessage 'update master: holidays'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 
+# プロジェクトの wbs_items だけを更新する (WbsInput からの保存用)
+# 他プロジェクトはそのまま温存し、対象プロジェクトの wbs_items のみ差し替える。
+# 戻り値: 保存後の projects 配列
+function Save-ProjectWbsItems {
+    param(
+        $Source,
+        [string]$ProjectCode,
+        $WbsItems,
+        [string]$AuthorName,
+        [string]$AuthorEmail
+    )
+    # 最新の projects.json を取得 → 配列で差し替え → 保存
+    $current = @(Get-MasterProjects -Source $Source)
+    $updated = New-Object System.Collections.Generic.List[object]
+    foreach ($p in $current) {
+        if ($null -eq $p) { continue }
+        $h = [ordered]@{
+            unit_code       = [string]$p.unit_code
+            project_name    = [string]$p.project_name
+            unit_name       = [string]$p.unit_name
+            target_system   = [string]$p.target_system
+            work_type       = if ($p.work_type) { [string]$p.work_type } else { '案件対応' }
+            period_from     = [string]$p.period_from
+            period_to       = [string]$p.period_to
+            task_pattern_id = [string]$p.task_pattern_id
+            active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
+            wbs_items       = @()
+        }
+        if (([string]$p.unit_code) -eq $ProjectCode) {
+            $h.wbs_items = @($WbsItems)
+        } elseif ($p.wbs_items) {
+            $h.wbs_items = @($p.wbs_items)
+        }
+        $updated.Add($h)
+    }
+    Save-MasterProjects -Source $Source -Data $updated.ToArray() `
+                        -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+    return $updated.ToArray()
+}
+
 # ---- 実績データ (ローカル) ----
 
 function Load-MonthEntries {

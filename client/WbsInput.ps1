@@ -299,62 +299,14 @@ function Update-AllTotals {
     }
 }
 
-# ---- プランファイル I/O (プロジェクト共有: 担当/計画/期間は全員で共通) ----
-function Get-WbsPlanRelPath {
-    param([string]$ProjectCode, [int]$Year, [int]$Month)
-    return ("wbs_plans/{0}/{1:D4}_{2:D2}.json" -f $ProjectCode, $Year, $Month)
-}
-
-function Load-WbsPlanItems {
-    param($Source, [string]$ProjectCode, [int]$Year, [int]$Month)
-    # Gitlab モードなら最新版を pull (失敗してもローカル版で続行)
-    if ($Source -and $Source.RemoteCtx) {
-        try {
-            $rel = Get-WbsPlanRelPath -ProjectCode $ProjectCode -Year $Year -Month $Month
-            $remoteText = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $rel
-            if ($remoteText) {
-                $localPath = Join-Path $Source.LocalRoot $rel
-                $parent = Split-Path -Parent $localPath
-                if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-                [System.IO.File]::WriteAllText($localPath, [string]$remoteText, [System.Text.UTF8Encoding]::new($false))
-            }
-        } catch { }
-    }
-    $rel = Get-WbsPlanRelPath -ProjectCode $ProjectCode -Year $Year -Month $Month
-    $raw = Get-DataFile -Source $Source -RelPath $rel
-    if (-not $raw) { return @() }
-    try {
-        $doc = ConvertFrom-Json -InputObject ([string]$raw)
-        if ($null -eq $doc -or $null -eq $doc.items) { return @() }
-        return @($doc.items)
-    } catch {
-        return @()
-    }
-}
-
-function Save-WbsPlanItems {
-    param($Source, [string]$ProjectCode, [int]$Year, [int]$Month, $Items, [string]$AuthorName, [string]$AuthorEmail, [switch]$PushRemote)
-    $rel = Get-WbsPlanRelPath -ProjectCode $ProjectCode -Year $Year -Month $Month
-    $doc = [ordered]@{
-        project_code = $ProjectCode
-        year         = $Year
-        month        = $Month
-        items        = @($Items)
-        updated_at   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    }
-    $json = ConvertTo-Json -InputObject $doc -Depth 10
-    Set-DataFile -Source $Source -RelPath $rel -Content ([string]$json) `
-                 -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
-    # Gitlab モードならリモートにも push (共有のため即時送信)
-    if ($PushRemote -and $Source.RemoteCtx) {
-        try {
-            Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content ([string]$json) `
-                -CommitMessage ("WBS plan update: {0} {1:D4}/{2:D2}" -f $ProjectCode, $Year, $Month) `
-                -AuthorName $AuthorName -AuthorEmail $AuthorEmail
-        } catch {
-            throw "WBS プランの送信失敗: $_"
-        }
-    }
+# ---- プロジェクト定義の WBS items 取得 (projects.json 内の wbs_items 配列) ----
+# 旧仕様の wbs_plans/<proj>/<y>_<m>.json は廃止。
+# 担当/計画/期間/別名はすべてプロジェクト定義に統合 (月別ではなく全月共通)
+function Get-ProjectWbsItems {
+    param($Project)
+    if (-not $Project) { return @() }
+    if (-not $Project.wbs_items) { return @() }
+    return @($Project.wbs_items)
 }
 
 function Build-GridColumns {
@@ -523,8 +475,8 @@ function Load-WbsData {
             })
         }
 
-        # プランファイル読込 — タスク + 別名 単位で集約 (key = "pc|tgc|tc|alias")
-        $planItems = @(Load-WbsPlanItems -Source $Script:Source -ProjectCode $projCode -Year $year -Month $month)
+        # プロジェクト定義から WBS items を取得 (担当/計画/期間/別名 すべて)
+        $planItems = @(Get-ProjectWbsItems -Project $Script:CurrentProj)
         $planMap = @{}
         foreach ($p in $planItems) {
             if (-not $p) { continue }
@@ -954,9 +906,10 @@ function _BuildEntries {
     }
 }
 
-function _BuildPlanItems {
-    param([string]$ProjCode)
-    # タスクレベルのプラン情報 (1 行 = 1 タスク + 別名) を抽出
+function _BuildWbsItems {
+    # プロジェクト定義の wbs_items 用 (project_code は外側のプロジェクト要素自体に
+    # 紐づくので不要)。グリッドの全行を 1 要素 = (process_code, task_group_code,
+    # task_code, alias, planned_hours, assignee, planned_start, planned_end) で抽出。
     $items = New-Object 'System.Collections.Generic.List[object]'
     foreach ($drv in $Script:DataTable.DefaultView) {
         $row = $drv.Row
@@ -967,13 +920,11 @@ function _BuildPlanItems {
         if ([string]::IsNullOrWhiteSpace($pc) -and [string]::IsNullOrWhiteSpace($tgc) `
             -and [string]::IsNullOrWhiteSpace($tc)) { continue }
         $planNum = 0.0; [void][double]::TryParse($plan, [ref]$planNum)
-        $items.Add([pscustomobject]@{
-            project_code    = $ProjCode
+        $items.Add([ordered]@{
             process_code    = $pc
             task_group_code = $tgc
             task_code       = $tc
             alias           = $alias
-            category        = ''
             planned_hours   = if ($planNum -gt 0) { $planNum } else { $null }
             assignee        = $assn
             planned_start   = $st
@@ -991,19 +942,21 @@ function _DoSave {
     $memberId   = [string]$Script:CurrentMember.id
     $memberName = [string]$Script:CurrentMember.name
 
-    # 1. 実績エントリ保存 (他プロジェクトとマージ)
+    # 1. 個人実績エントリ保存 (他プロジェクトとマージ)
     $r = _BuildEntries -ProjCode $projCode -Year $year -Month $month -MemberId $memberId
     Save-EntriesGrouped -Source $Script:Source -MemberId $memberId `
         -AllEntries $r.Merged -ViewYear $year -ViewMonth $month `
         -AuthorName $memberName -AuthorEmail "$memberId@worktime-tracker.local"
 
-    # 2. プラン (計画/担当/期間) 保存 — プロジェクト全体で共有されるファイルに書く
-    # Gitlab モードなら即時 push して他ユーザに見える状態にする
-    $thisProjPlanItems = _BuildPlanItems -ProjCode $projCode
-    Save-WbsPlanItems -Source $Script:Source -ProjectCode $projCode -Year $year -Month $month `
-        -Items $thisProjPlanItems `
-        -AuthorName $memberName -AuthorEmail "$memberId@worktime-tracker.local" `
-        -PushRemote:($null -ne $Script:Source.RemoteCtx)
+    # 2. プロジェクト定義の wbs_items を更新 (項目 + 別名 + 計画/期間/担当)
+    #    projects.json 内の対象プロジェクトだけ差し替え、他は温存
+    $thisWbsItems = _BuildWbsItems
+    $updatedProjects = Save-ProjectWbsItems -Source $Script:Source -ProjectCode $projCode `
+        -WbsItems $thisWbsItems `
+        -AuthorName $memberName -AuthorEmail "$memberId@worktime-tracker.local"
+    # 反映: Script:Projects / CurrentProj を更新
+    $Script:Projects = @($updatedProjects | Where-Object { $_.active })
+    $Script:CurrentProj = $Script:Projects | Where-Object { ([string]$_.unit_code) -eq $projCode } | Select-Object -First 1
     return $r
 }
 
@@ -1029,10 +982,16 @@ $ui.PushBtn.Add_Click({
     try {
         $r = _DoSave
         Set-Status "リモートへ送信中…" '#f9e2af'
+        # 個人実績データを push
         Sync-Push-MyData -Source $Script:Source -MemberId $r.MemberId `
                          -AuthorName $r.MemberId -AuthorEmail "$($r.MemberId)@worktime-tracker.local"
-        Set-Status ("送信完了: {0} 件エントリ" -f $r.NewCount) '#10b981'
-        [System.Windows.MessageBox]::Show("Gitlab に送信しました。", '送信完了', 'OK', 'Information') | Out-Null
+        # プロジェクト定義 (wbs_items 込み) を push — 他メンバーに共有するため
+        if ($Script:Source.RemoteCtx) {
+            Sync-Push-Masters -Source $Script:Source `
+                              -AuthorName $r.MemberId -AuthorEmail "$($r.MemberId)@worktime-tracker.local" | Out-Null
+        }
+        Set-Status ("送信完了: {0} 件エントリ + プロジェクト定義" -f $r.NewCount) '#10b981'
+        [System.Windows.MessageBox]::Show("Gitlab に送信しました (個人実績 + プロジェクト定義)。", '送信完了', 'OK', 'Information') | Out-Null
         Load-WbsData
     } catch {
         Set-Status "送信失敗: $_" '#ef4444'

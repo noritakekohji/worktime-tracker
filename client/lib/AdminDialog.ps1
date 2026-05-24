@@ -128,6 +128,8 @@ function Show-AdminDialog {
                 # 旧スキーマ (id/name) からのフォールバック
                 $uc  = if ($p.unit_code)    { [string]$p.unit_code }    else { [string]$p.id }
                 $pn  = if ($p.project_name) { [string]$p.project_name } else { [string]$p.name }
+                # wbs_items は管理画面では編集しないが、保存時に温存する必要がある
+                $wbsItems = if ($p.wbs_items) { @($p.wbs_items) } else { @() }
                 $projects.Add([pscustomobject]@{
                     unit_code       = $uc
                     project_name    = $pn
@@ -138,6 +140,7 @@ function Show-AdminDialog {
                     period_to       = [string]$p.period_to
                     task_pattern_id = [string]$p.task_pattern_id
                     active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
+                    wbs_items       = $wbsItems
                 })
             }
             $categories.Clear()
@@ -184,6 +187,7 @@ function Show-AdminDialog {
             period_to      = ''
             task_pattern_id= ''
             active         = $true
+            wbs_items      = @()
         })
     })
     $u.PrjDelBtn.Add_Click({
@@ -808,6 +812,7 @@ function Show-AdminDialog {
                     foreach ($p in @($parsed)) {
                         $uc = if ($p.unit_code) { [string]$p.unit_code } else { [string]$p.id }
                         $pn = if ($p.project_name) { [string]$p.project_name } else { [string]$p.name }
+                        $wbsItems = if ($p.wbs_items) { @($p.wbs_items) } else { @() }
                         $projects.Add([pscustomobject]@{
                             unit_code       = $uc
                             project_name    = $pn
@@ -818,6 +823,7 @@ function Show-AdminDialog {
                             period_to       = [string]$p.period_to
                             task_pattern_id = [string]$p.task_pattern_id
                             active          = if ($null -ne $p.active) { [bool]$p.active } else { $true }
+                            wbs_items       = $wbsItems
                         })
                     }
                 }
@@ -864,6 +870,8 @@ function Show-AdminDialog {
 
             $where = 'projects serialize'
             $projectsOut = @($projects | ForEach-Object {
+                # wbs_items は管理画面で編集しないが、必ず温存して書き戻す
+                $items = if ($_.wbs_items) { @($_.wbs_items) } else { @() }
                 [ordered]@{
                     unit_code       = [string]$_.unit_code
                     project_name    = [string]$_.project_name
@@ -874,6 +882,7 @@ function Show-AdminDialog {
                     period_to       = [string]$_.period_to
                     task_pattern_id = [string]$_.task_pattern_id
                     active          = [bool]$_.active
+                    wbs_items       = $items
                 }
             })
             $where = 'Save-MasterProjects'
