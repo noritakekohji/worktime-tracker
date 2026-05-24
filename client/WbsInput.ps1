@@ -475,12 +475,16 @@ function Load-WbsData {
             $catName = $catCode
             $catObj = $Script:Categories | Where-Object { [string]$_.code -eq $catCode } | Select-Object -First 1
             if ($catObj -and $catObj.name) { $catName = "$catCode  $($catObj.name)" }
+            # 空 task_code は '-' (タスクグループレベル) に正規化 — Tracker からの入力で
+            # ユーザがタスクを選ばずに保存した場合に WBS グリッドの行と紐づけるため
+            $tcNorm = [string]$e.task_code
+            if ([string]::IsNullOrWhiteSpace($tcNorm)) { $tcNorm = '-' }
             $Script:AllEntries.Add([pscustomobject]@{
                 date             = [string]$e.date
                 project_code     = [string]$e.project_code
                 process_code     = [string]$e.process_code
                 task_group_code  = [string]$e.task_group_code
-                task_code        = [string]$e.task_code
+                task_code        = $tcNorm
                 alias            = if ($e.alias) { [string]$e.alias } else { '' }
                 category         = $catCode
                 category_display = $catName
@@ -560,16 +564,58 @@ function Load-WbsData {
         $taskList = New-Object 'System.Collections.Generic.List[object]'
         $seenKeys = New-Object 'System.Collections.Generic.HashSet[string]'
 
+        # 名前解決ヘルパ: lookup 失敗時にパターンを直接走査して工程/タスクグループ/タスク名を取得
+        # Tracker から書き込まれたエントリは task_code が空のケースがあるため (= グループ
+        # レベル入力)、空は '-' と同一視する。
+        function _ResolveWbsInfo {
+            param([string]$Pc, [string]$Tgc, [string]$Tc)
+            $tcNorm = if ([string]::IsNullOrWhiteSpace($Tc)) { '-' } else { $Tc }
+            # 1) 完全一致 (タスクレベル or タスクグループレベル)
+            $key = "$Pc|$Tgc|$tcNorm"
+            if ($wbsMap.ContainsKey($key)) { return $wbsMap[$key] }
+            # 2) パターンを直接走査して partial match — pn/tgn だけでも返す
+            $info = @{ pc=$Pc; pn=''; tgc=$Tgc; tgn=''; tc=$tcNorm; tn=''
+                       procIdx=0; wbsNo=''; sortKey='9999.9999.9999' }
+            if ($Script:CurrentPtn -and $Script:CurrentPtn.processes) {
+                $procIdx = 0
+                foreach ($pr in @($Script:CurrentPtn.processes)) {
+                    if (-not $pr) { continue }
+                    $procIdx++
+                    if (([string]$pr.code) -ne $Pc) { continue }
+                    $info.pn = [string]$pr.name; $info.procIdx = $procIdx
+                    $tgIdx = 0
+                    foreach ($tg in @($pr.task_groups)) {
+                        if (-not $tg) { continue }
+                        $tgIdx++
+                        if (([string]$tg.code) -ne $Tgc) { continue }
+                        $info.tgn = [string]$tg.name
+                        $info.wbsNo   = "$procIdx.$tgIdx.0"
+                        $info.sortKey = '{0:D4}.{1:D4}.0000' -f $procIdx, $tgIdx
+                        $tkIdx = 0
+                        foreach ($tk in @($tg.tasks)) {
+                            if (-not $tk) { continue }
+                            $tkIdx++
+                            if (([string]$tk.code) -ne $tcNorm) { continue }
+                            $info.tn = [string]$tk.name
+                            $info.wbsNo   = "$procIdx.$tgIdx.$tkIdx"
+                            $info.sortKey = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, $tkIdx
+                            break
+                        }
+                        break
+                    }
+                    break
+                }
+            }
+            return $info
+        }
+
         function _AddTaskRow {
             param([string]$Pc, [string]$Tgc, [string]$Tc, [string]$Alias)
-            $rowKey = "$Pc|$Tgc|$Tc|$Alias"
+            $tcNorm = if ([string]::IsNullOrWhiteSpace($Tc)) { '-' } else { $Tc }
+            $rowKey = "$Pc|$Tgc|$tcNorm|$Alias"
             if ($seenKeys.Contains($rowKey)) { return }
             [void]$seenKeys.Add($rowKey)
-            $infoKey = "$Pc|$Tgc|$Tc"
-            $info = if ($wbsMap.ContainsKey($infoKey)) { $wbsMap[$infoKey] } else {
-                @{ pc=$Pc; pn=''; tgc=$Tgc; tgn=''; tc=$Tc; tn=''
-                   procIdx=0; wbsNo=''; sortKey='9999.9999.9999' }
-            }
+            $info = _ResolveWbsInfo -Pc $Pc -Tgc $Tgc -Tc $tcNorm
             $taskList.Add(@{ info=$info; alias=$Alias })
         }
         # プラン定義タスク
@@ -578,7 +624,7 @@ function Load-WbsData {
             if ($parts.Count -lt 4) { continue }
             _AddTaskRow $parts[0] $parts[1] $parts[2] $parts[3]
         }
-        # 既存実績エントリのタスク
+        # 既存実績エントリのタスク (Tracker からの入力含む)
         foreach ($e in $projEntries) {
             $aliasE = if ($e.alias) { [string]$e.alias } else { '' }
             _AddTaskRow ([string]$e.process_code) ([string]$e.task_group_code) ([string]$e.task_code) $aliasE
