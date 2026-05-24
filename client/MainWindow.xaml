@@ -236,7 +236,6 @@
                             <TextBlock x:Name="ListTitle" Text="📋 当月エントリ一覧" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="CopyPrevMonthBtn" Content="📋 先月コピー" ToolTip="先月の同日実績を当月に取り込む"/>
                             <Button x:Name="DuplicateBtn" Content="⎘ 行を複製"/>
                             <Button x:Name="EditRowBtn" Content="✎ 編集"/>
                             <Button x:Name="DeleteRowBtn" Content="🗑 削除" Style="{StaticResource Danger}"/>

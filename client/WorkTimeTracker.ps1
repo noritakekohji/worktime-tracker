@@ -300,7 +300,7 @@ $names = @(
     'EntryDate','TodayBtn','YesterdayBtn',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
-    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','CopyPrevMonthBtn','SaveBtn','HoursTotalText','HoursDayText',
+    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
     'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
 )
 $ui = @{}
@@ -727,66 +727,6 @@ $ui.DuplicateBtn.Add_Click({
     Clear-Form
     Set-FormFromEntry -Entry $sel
     Set-Status "選択行をフォームに複製しました。値を編集して『追加』してください。" '#89b4fa'
-})
-
-# ---- A1: 先月コピー (前月の実績を当月にコピー、日付は同じ「日」を当月に適用) ----
-$ui.CopyPrevMonthBtn.Add_Click({
-    try {
-        $vy = [int]$ui.YearCombo.SelectedItem
-        $vm = [int]$ui.MonthCombo.SelectedItem
-        $prevDate = [datetime]::new($vy, $vm, 1).AddMonths(-1)
-        $py = $prevDate.Year; $pm = $prevDate.Month
-        $r = [System.Windows.MessageBox]::Show(
-            ("先月 ({0:D4}/{1:D2}) の実績を当月 ({2:D4}/{3:D2}) にコピーします。`n" +
-             "日付は同じ「日」を当月に適用し、当月の最終日を超える行は除外します。`n" +
-             "既存の当月エントリと重複する可能性があるため、必要に応じて後で削除してください。`n`n続行しますか?") -f $py, $pm, $vy, $vm,
-            '先月コピー確認', 'OKCancel', 'Question')
-        if ($r -ne 'OK') { return }
-
-        $mid = [string]$Script:CurrentMember.id
-        $prev = @(Load-MonthEntries -Source $Script:Source -MemberId $mid -Year $py -Month $pm)
-        $lastDay = [datetime]::DaysInMonth($vy, $vm)
-        $added = 0
-        foreach ($e in $prev) {
-            if (-not $e) { continue }
-            $dStr = [string]$e.date
-            $d = [datetime]::MinValue
-            if (-not [datetime]::TryParse($dStr, [ref]$d)) { continue }
-            if ($d.Day -gt $lastDay) { continue }
-            $newDate = [datetime]::new($vy, $vm, $d.Day)
-            $hours = 0.0; [void][double]::TryParse([string]$e.hours, [ref]$hours)
-            if ($hours -le 0) { continue }
-            # 名称を解決して新規エントリを構築 (既存 Load-ViewMonth と同じシェイプ)
-            $pc  = [string]$e.process_code
-            $tgc = [string]$e.task_group_code
-            $tc  = [string]$e.task_code
-            $cat = [string]$e.category
-            $projCode = [string]$e.project_code
-            $names = Resolve-EntryNames -ProjCode $projCode -ProcCode $pc -TgCode $tgc -TaskCode $tc -CatCode $cat
-            $Script:Entries.Add([pscustomobject]@{
-                date            = $newDate.ToString('yyyy-MM-dd')
-                project_code    = $projCode
-                project_name    = $names.project_name
-                process_code    = $pc
-                process_name    = $names.process_name
-                task_group_code = $tgc
-                task_group_name = $names.task_group_name
-                task_code       = $tc
-                task_name       = $names.task_name
-                category        = $cat
-                category_name   = $names.category_name
-                hours           = $hours
-                comment         = [string]$e.comment
-                dirty           = 'yes'
-                dirty_mark      = '●'
-            })
-            $added++
-        }
-        Update-HoursTotal
-        Set-Status ("先月から {0} 件コピーしました (未保存)。確認のうえ『保存』を押してください。" -f $added) '#a6e3a1'
-    } catch {
-        [System.Windows.MessageBox]::Show("先月コピー失敗:`n$_", 'エラー', 'OK', 'Error') | Out-Null
-    }
 })
 
 # ---- 保存ロジック (共通) ----
