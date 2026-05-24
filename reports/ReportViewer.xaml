@@ -394,6 +394,23 @@
                                                        Text="行 = プロジェクト / 列 = 選択軸 (案件対応のみ)"/>
                                         </StackPanel>
                                     </Border>
+                                    <Border DockPanel.Dock="Top" Background="White" CornerRadius="8"
+                                            BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                            Padding="10" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <StackPanel Orientation="Vertical" Margin="0,0,16,0">
+                                                <TextBlock Text="🥧 軸別 工数比率" FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,4"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Canvas x:Name="CasePieCanvas" Width="200" Height="200" Background="White"/>
+                                                    <StackPanel x:Name="CasePieLegend" Orientation="Vertical" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="📊 月別工数 (積上 = 軸別内訳)" FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,4"/>
+                                                <Canvas x:Name="CaseBarCanvas" Width="600" Height="200" Background="White"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
                                     <DataGrid x:Name="CaseAnalysisGrid" AutoGenerateColumns="False"
                                               CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
                                               HeadersVisibility="Column" RowHeight="26"
@@ -416,6 +433,23 @@
                                             <TextBlock VerticalAlignment="Center" Margin="14,0,0,0"
                                                        Foreground="Gray" FontSize="11"
                                                        Text="行 = 対象システム / 列 = 選択軸 (維持運用のみ)"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border DockPanel.Dock="Top" Background="White" CornerRadius="8"
+                                            BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                            Padding="10" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <StackPanel Orientation="Vertical" Margin="0,0,16,0">
+                                                <TextBlock Text="🥧 軸別 工数比率" FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,4"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Canvas x:Name="OpsPieCanvas" Width="200" Height="200" Background="White"/>
+                                                    <StackPanel x:Name="OpsPieLegend" Orientation="Vertical" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Vertical">
+                                                <TextBlock Text="📊 月別工数 (積上 = 軸別内訳)" FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,4"/>
+                                                <Canvas x:Name="OpsBarCanvas" Width="600" Height="200" Background="White"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
                                     <DataGrid x:Name="OpsAnalysisGrid" AutoGenerateColumns="False"

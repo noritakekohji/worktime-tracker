@@ -162,7 +162,9 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
               'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid','WorkTypePieCanvas','WorkTypePieLegend',
-              'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid') {
+              'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid',
+              'CasePieCanvas','CasePieLegend','CaseBarCanvas',
+              'OpsPieCanvas','OpsPieLegend','OpsBarCanvas') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -1539,6 +1541,146 @@ function _DrawPieLegend {
     }
 }
 
+# ---- 共通カラーパレット ----
+$Script:_ChartPalette = @(
+    '#0369a1','#059669','#d97706','#7c3aed','#db2777',
+    '#0891b2','#16a34a','#ea580c','#9333ea','#0284c7',
+    '#65a30d','#c2410c','#a16207','#4338ca','#be123c'
+)
+
+# 大量のシリーズを Top N + 「その他」に丸める
+function _TopNCollapse {
+    param([string[]]$Labels, [double[]]$Values, [int]$TopN = 8)
+    if ($Labels.Count -le $TopN) {
+        return @{ Labels = $Labels; Values = $Values }
+    }
+    # hours 降順で並べ、Top-1 件を採用し、残りを「その他」に合算
+    $pairs = New-Object 'System.Collections.Generic.List[object]'
+    for ($i = 0; $i -lt $Labels.Count; $i++) {
+        [void]$pairs.Add([pscustomobject]@{ Label = $Labels[$i]; Value = [double]$Values[$i] })
+    }
+    $sorted = @($pairs | Sort-Object -Property Value -Descending)
+    $head = $sorted | Select-Object -First ($TopN - 1)
+    $tail = $sorted | Select-Object -Skip ($TopN - 1)
+    $otherSum = 0.0; foreach ($t in $tail) { $otherSum += [double]$t.Value }
+    $newLabels = New-Object 'System.Collections.Generic.List[string]'
+    $newValues = New-Object 'System.Collections.Generic.List[double]'
+    foreach ($h in $head) { [void]$newLabels.Add([string]$h.Label); [void]$newValues.Add([double]$h.Value) }
+    [void]$newLabels.Add('(その他)')
+    [void]$newValues.Add($otherSum)
+    return @{ Labels = $newLabels.ToArray(); Values = $newValues.ToArray() }
+}
+
+# ---- 月別 積上棒グラフ ----
+# $Data: hashtable[xLabel][seriesLabel] = double 工数
+function _DrawStackedBarChart {
+    param(
+        [System.Windows.Controls.Canvas]$Canvas,
+        [string[]]$XLabels,        # 並び順を保持
+        [string[]]$SeriesLabels,   # 系列順 (色配列と対応)
+        $Data,                     # @{ x -> @{ series -> hours } }
+        [string[]]$Colors
+    )
+    if (-not $Canvas) { return }
+    $Canvas.Children.Clear()
+    if ($XLabels.Count -eq 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = '(該当月なし)'; $tb.Foreground = [System.Windows.Media.Brushes]::Gray
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 10); [System.Windows.Controls.Canvas]::SetTop($tb, 80)
+        [void]$Canvas.Children.Add($tb)
+        return
+    }
+    $w = [double]$Canvas.Width;  if ($w -le 0) { $w = 600 }
+    $h = [double]$Canvas.Height; if ($h -le 0) { $h = 200 }
+    $padLeft = 36; $padBottom = 30; $padTop = 8; $padRight = 8
+    $plotW = $w - $padLeft - $padRight
+    $plotH = $h - $padTop - $padBottom
+
+    # 各 X の合計を出して最大値スケール
+    $sums = @{}
+    $maxSum = 0.0
+    foreach ($x in $XLabels) {
+        $s = 0.0
+        if ($Data.ContainsKey($x)) {
+            foreach ($k in $Data[$x].Keys) { $s += [double]$Data[$x][$k] }
+        }
+        $sums[$x] = $s
+        if ($s -gt $maxSum) { $maxSum = $s }
+    }
+    if ($maxSum -le 0) { $maxSum = 1 }
+
+    # 軸 (Y 0 と最大ライン)
+    $axis = New-Object System.Windows.Shapes.Line
+    $axis.X1 = $padLeft; $axis.X2 = $padLeft; $axis.Y1 = $padTop; $axis.Y2 = $padTop + $plotH
+    $axis.Stroke = [System.Windows.Media.Brushes]::Gray; $axis.StrokeThickness = 1
+    [void]$Canvas.Children.Add($axis)
+    $base = New-Object System.Windows.Shapes.Line
+    $base.X1 = $padLeft; $base.X2 = $padLeft + $plotW; $base.Y1 = $padTop + $plotH; $base.Y2 = $padTop + $plotH
+    $base.Stroke = [System.Windows.Media.Brushes]::Gray; $base.StrokeThickness = 1
+    [void]$Canvas.Children.Add($base)
+    # Y 軸目盛 (max + max/2)
+    foreach ($r in @(0.0, 0.5, 1.0)) {
+        $yy = $padTop + (1 - $r) * $plotH
+        $val = $maxSum * $r
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = "{0:N0}" -f $val; $tb.FontSize = 9; $tb.Foreground = [System.Windows.Media.Brushes]::Gray
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 0); [System.Windows.Controls.Canvas]::SetTop($tb, $yy - 6)
+        [void]$Canvas.Children.Add($tb)
+        if ($r -gt 0 -and $r -lt 1) {
+            $ln = New-Object System.Windows.Shapes.Line
+            $ln.X1 = $padLeft; $ln.X2 = $padLeft + $plotW; $ln.Y1 = $yy; $ln.Y2 = $yy
+            $ln.Stroke = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#e5e7eb')
+            $ln.StrokeThickness = 1; $ln.StrokeDashArray = '2,3'
+            [void]$Canvas.Children.Add($ln)
+        }
+    }
+
+    $barGap = 6
+    $barW = ($plotW - ($XLabels.Count - 1) * $barGap) / [Math]::Max(1, $XLabels.Count)
+    if ($barW -gt 40) { $barW = 40 }
+    if ($barW -lt 8) { $barW = 8 }
+
+    for ($i = 0; $i -lt $XLabels.Count; $i++) {
+        $x = $XLabels[$i]
+        $bx = $padLeft + $i * ($barW + $barGap)
+        $stackTop = $padTop + $plotH    # 下から積み上げ
+        if ($Data.ContainsKey($x)) {
+            for ($s = 0; $s -lt $SeriesLabels.Count; $s++) {
+                $sl = $SeriesLabels[$s]
+                $hv = 0.0
+                if ($Data[$x].ContainsKey($sl)) { $hv = [double]$Data[$x][$sl] }
+                if ($hv -le 0) { continue }
+                $segH = ($hv / $maxSum) * $plotH
+                $rect = New-Object System.Windows.Shapes.Rectangle
+                $rect.Width = $barW; $rect.Height = $segH
+                $rect.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Colors[$s % $Colors.Count])
+                $rect.Stroke = [System.Windows.Media.Brushes]::White; $rect.StrokeThickness = 0.5
+                $rect.ToolTip = ("{0}  {1}  {2:N1}h" -f $x, $sl, $hv)
+                [System.Windows.Controls.Canvas]::SetLeft($rect, $bx)
+                [System.Windows.Controls.Canvas]::SetTop($rect, $stackTop - $segH)
+                [void]$Canvas.Children.Add($rect)
+                $stackTop -= $segH
+            }
+        }
+        # X ラベル
+        $lab = New-Object System.Windows.Controls.TextBlock
+        $lab.Text = $x; $lab.FontSize = 9; $lab.TextAlignment = 'Center'; $lab.Width = $barW
+        [System.Windows.Controls.Canvas]::SetLeft($lab, $bx)
+        [System.Windows.Controls.Canvas]::SetTop($lab, $padTop + $plotH + 3)
+        [void]$Canvas.Children.Add($lab)
+        # 合計値ラベル (上部)
+        if ($sums[$x] -gt 0) {
+            $sumLab = New-Object System.Windows.Controls.TextBlock
+            $sumLab.Text = ("{0:N0}" -f $sums[$x]); $sumLab.FontSize = 9
+            $sumLab.Foreground = [System.Windows.Media.Brushes]::DimGray
+            $sumLab.TextAlignment = 'Center'; $sumLab.Width = $barW
+            [System.Windows.Controls.Canvas]::SetLeft($sumLab, $bx)
+            [System.Windows.Controls.Canvas]::SetTop($sumLab, $stackTop - 12)
+            [void]$Canvas.Children.Add($sumLab)
+        }
+    }
+}
+
 function Build-WorkTypeMix {
     param($Rows)
     if (-not $u.WorkTypeKpiPanel -or -not $u.WorkTypeByMemberGrid) { return }
@@ -1653,11 +1795,18 @@ function _BuildWorkTypeDrillDown {
     param(
         $Rows,
         [string]$WorkType,         # '案件対応' または '維持運用'
-        [string]$ColAxis,          # '工程' or 'タスクグループ'
+        [string]$ColAxis,          # '工程' or 'タスクグループ' or 'タスク'
         [scriptblock]$RowKeyFn,    # entry → 行キー (code)
         [scriptblock]$RowLabelFn,  # row key → 表示
-        $Grid
+        $Grid,
+        $PieCanvas = $null,        # 軸別 工数比率の円グラフ (任意)
+        $PieLegend = $null,        # 円グラフ凡例 (任意)
+        $BarCanvas = $null         # 月別 積上棒グラフ (任意)
     )
+    # 描画キャンバスはクリアしておく
+    if ($PieCanvas) { $PieCanvas.Children.Clear() }
+    if ($PieLegend) { $PieLegend.Children.Clear() }
+    if ($BarCanvas) { $BarCanvas.Children.Clear() }
     if (-not $Grid) { return }
     $Grid.Columns.Clear()
     $Grid.ItemsSource = $null
@@ -1735,6 +1884,87 @@ function _BuildWorkTypeDrillDown {
     $out.Add([pscustomobject]$footer)
 
     Set-PivotGrid -Grid $Grid -Rows $out
+
+    # ---- 円グラフ: 軸 (列) ごとの工数比率 (Top 8 + その他) ----
+    if ($PieCanvas -or $PieLegend) {
+        $colTotals = New-Object 'System.Collections.Generic.List[double]'
+        $colLbls   = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($ck in $colKeys) {
+            $sum = 0.0
+            foreach ($rk in $rowKeys) {
+                if ($cell[$rk] -and $cell[$rk].ContainsKey($ck)) { $sum += [double]$cell[$rk][$ck] }
+            }
+            if ($sum -gt 0) {
+                [void]$colLbls.Add($colHeaders[$ck])
+                [void]$colTotals.Add($sum)
+            }
+        }
+        $collapsed = _TopNCollapse -Labels $colLbls.ToArray() -Values $colTotals.ToArray() -TopN 8
+        $palette = $Script:_ChartPalette
+        $usedColors = @()
+        for ($i = 0; $i -lt $collapsed.Labels.Count; $i++) {
+            $usedColors += $palette[$i % $palette.Count]
+        }
+        if ($PieCanvas) { _DrawPieChart  -Canvas $PieCanvas -Labels $collapsed.Labels -Values $collapsed.Values -Colors $usedColors }
+        if ($PieLegend) { _DrawPieLegend -Panel  $PieLegend -Labels $collapsed.Labels -Values $collapsed.Values -Colors $usedColors }
+    }
+
+    # ---- 月別 積上棒グラフ: X=月 / 系列=軸 (col) ----
+    if ($BarCanvas) {
+        # 月キー + 軸別集計
+        $byMonth = @{}    # ym -> @{ colHeader -> hours }
+        $monthSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+        foreach ($r in $filtered) {
+            $d = [datetime]::MinValue
+            if (-not [datetime]::TryParse([string]$r.date, [ref]$d)) { continue }
+            $ym = $d.ToString('yyyy-MM')
+            $ck = [string]$r.$colKey
+            if (-not $ck) { continue }
+            $colDisplay = $colHeaders[$ck]
+            if (-not $byMonth.ContainsKey($ym)) { $byMonth[$ym] = @{} }
+            if (-not $byMonth[$ym].ContainsKey($colDisplay)) { $byMonth[$ym][$colDisplay] = 0.0 }
+            $byMonth[$ym][$colDisplay] += [double]$r.hours
+            [void]$monthSet.Add($ym)
+        }
+        # 系列は colHeaders の値だが、Top N に合わせて絞る
+        $allSeriesLbls = $colKeys | ForEach-Object { $colHeaders[$_] }
+        # 系列ごとの合計
+        $seriesTotals = @{}
+        foreach ($sl in $allSeriesLbls) { $seriesTotals[$sl] = 0.0 }
+        foreach ($ym in $byMonth.Keys) {
+            foreach ($k in $byMonth[$ym].Keys) {
+                if ($seriesTotals.ContainsKey($k)) { $seriesTotals[$k] += [double]$byMonth[$ym][$k] }
+            }
+        }
+        # Top 8 系列 + その他
+        $topSeries = @($seriesTotals.GetEnumerator() | Where-Object { $_.Value -gt 0 } |
+                       Sort-Object -Property Value -Descending | Select-Object -First 8 |
+                       ForEach-Object { $_.Key })
+        $hasOther = ($allSeriesLbls.Count -gt $topSeries.Count)
+        $seriesLabels = if ($hasOther) { $topSeries + '(その他)' } else { $topSeries }
+        # データを丸める: topSeries に含まれないものは「(その他)」に合算
+        $barData = @{}
+        foreach ($ym in $monthSet) {
+            $barData[$ym] = @{}
+            foreach ($sl in $seriesLabels) { $barData[$ym][$sl] = 0.0 }
+            if ($byMonth.ContainsKey($ym)) {
+                foreach ($k in $byMonth[$ym].Keys) {
+                    if ($topSeries -contains $k) {
+                        $barData[$ym][$k] += [double]$byMonth[$ym][$k]
+                    } elseif ($hasOther) {
+                        $barData[$ym]['(その他)'] += [double]$byMonth[$ym][$k]
+                    }
+                }
+            }
+        }
+        $palette = $Script:_ChartPalette
+        $colors = @()
+        for ($i = 0; $i -lt $seriesLabels.Count; $i++) {
+            $colors += $palette[$i % $palette.Count]
+        }
+        _DrawStackedBarChart -Canvas $BarCanvas `
+            -XLabels @($monthSet) -SeriesLabels $seriesLabels -Data $barData -Colors $colors
+    }
 }
 
 # 案件対応 (行=プロジェクト)
@@ -1747,7 +1977,8 @@ function Build-CaseAnalysis {
     _BuildWorkTypeDrillDown -Rows $Rows -WorkType '案件対応' -ColAxis $axis `
         -RowKeyFn   { param($e) [string]$e.project_code } `
         -RowLabelFn { param($k) _RowLabelForCase $k } `
-        -Grid $u.CaseAnalysisGrid
+        -Grid $u.CaseAnalysisGrid `
+        -PieCanvas $u.CasePieCanvas -PieLegend $u.CasePieLegend -BarCanvas $u.CaseBarCanvas
 }
 
 # 維持運用 (行=対象システム)
@@ -1760,7 +1991,8 @@ function Build-OpsAnalysis {
     _BuildWorkTypeDrillDown -Rows $Rows -WorkType '維持運用' -ColAxis $axis `
         -RowKeyFn   { param($e) _ProjectAttr -ProjCode ([string]$e.project_code) -Attr 'target_system' } `
         -RowLabelFn { param($k) _RowLabelForOps $k } `
-        -Grid $u.OpsAnalysisGrid
+        -Grid $u.OpsAnalysisGrid `
+        -PieCanvas $u.OpsPieCanvas -PieLegend $u.OpsPieLegend -BarCanvas $u.OpsBarCanvas
 }
 
 # ---- イベントフック ----
