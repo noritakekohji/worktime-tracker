@@ -590,33 +590,48 @@ function Get-EntryFromForm {
     $tg   = $ui.TaskGroupCombo.SelectedItem
     $task = $ui.TaskCombo.SelectedItem
     $cat  = $ui.CategoryCombo.SelectedItem
-    if (-not $proj) { throw 'プロジェクトを選択してください' }
-    if (-not $proc -and $ui.ProcessCombo.Items.Count -gt 0) { throw '工程を選択してください' }
-    if (-not $tg   -and $ui.TaskGroupCombo.Items.Count -gt 0) { throw 'タスクグループを選択してください' }
-    if (-not $task -and $ui.TaskCombo.Items.Count -gt 0) { throw 'タスクを選択してください' }
+
+    # 休暇カテゴリ (categories.json の is_leave=true) ならプロジェクト/工程/タスク不要
+    $isLeave = $false
+    if ($cat) {
+        $catCode = [string]$cat.code
+        $catObj = $Script:Categories | Where-Object { [string]$_.code -eq $catCode } | Select-Object -First 1
+        if ($catObj -and $catObj.is_leave) { $isLeave = [bool]$catObj.is_leave }
+    }
+
+    if (-not $isLeave) {
+        if (-not $proj) { throw 'プロジェクトを選択してください (休暇カテゴリの場合は省略可)' }
+        if (-not $proc -and $ui.ProcessCombo.Items.Count -gt 0) { throw '工程を選択してください' }
+        if (-not $tg   -and $ui.TaskGroupCombo.Items.Count -gt 0) { throw 'タスクグループを選択してください' }
+        if (-not $task -and $ui.TaskCombo.Items.Count -gt 0) { throw 'タスクを選択してください' }
+    } else {
+        if (-not $cat) { throw 'カテゴリを選択してください' }
+    }
     $hours = 0.0
     if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
         throw '工数は正の数値で入力してください'
     }
 
-    # 対象期間チェック (period_from / period_to を持つプロジェクトのみ)
-    if ($proj.period_from) {
-        $pf = [datetime]::MinValue
-        if ([datetime]::TryParse([string]$proj.period_from, [ref]$pf) -and $d -lt $pf) {
-            throw ("日付 {0} は対象期間 (FROM: {1}) より前です" -f $d.ToString('yyyy-MM-dd'), $proj.period_from)
+    # 対象期間チェック (period_from / period_to を持つプロジェクトのみ; 休暇は対象外)
+    if (-not $isLeave -and $proj) {
+        if ($proj.period_from) {
+            $pf = [datetime]::MinValue
+            if ([datetime]::TryParse([string]$proj.period_from, [ref]$pf) -and $d -lt $pf) {
+                throw ("日付 {0} は対象期間 (FROM: {1}) より前です" -f $d.ToString('yyyy-MM-dd'), $proj.period_from)
+            }
         }
-    }
-    if ($proj.period_to) {
-        $pt = [datetime]::MinValue
-        if ([datetime]::TryParse([string]$proj.period_to, [ref]$pt) -and $d -gt $pt) {
-            throw ("日付 {0} は対象期間 (TO: {1}) より後です" -f $d.ToString('yyyy-MM-dd'), $proj.period_to)
+        if ($proj.period_to) {
+            $pt = [datetime]::MinValue
+            if ([datetime]::TryParse([string]$proj.period_to, [ref]$pt) -and $d -gt $pt) {
+                throw ("日付 {0} は対象期間 (TO: {1}) より後です" -f $d.ToString('yyyy-MM-dd'), $proj.period_to)
+            }
         }
     }
 
     return [pscustomobject]@{
         date            = $d.ToString('yyyy-MM-dd')
-        project_code    = [string]$proj.unit_code
-        project_name    = [string]$proj.project_name
+        project_code    = if ($proj) { [string]$proj.unit_code }    else { '' }
+        project_name    = if ($proj) { [string]$proj.project_name } else { if ($isLeave) { '(休暇)' } else { '' } }
         process_code    = if ($proc) { [string]$proc.code } else { '' }
         process_name    = if ($proc) { [string]$proc.name } else { '' }
         task_group_code = if ($tg)   { [string]$tg.code }   else { '' }

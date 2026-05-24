@@ -46,7 +46,7 @@
 | `members.json` | メンバー (id, name, company, department, rank, **roles[]**, active) | `id` |
 | `projects.json` | プロジェクト (unit_code, project_name, unit_name, target_system, work_type, period_from, period_to, **task_pattern_id**, active) | `unit_code` |
 | `task_patterns.json` | WBS テンプレート (id, name, processes → task_groups → tasks) | `id` |
-| `categories.json` | 作業カテゴリ (code, name) | `code` |
+| `categories.json` | 作業カテゴリ (code, name, **is_leave**) | `code` |
 | `holidays.json` | 会社休業日 (date=`yyyy-MM-dd`, name) | `date` |
 
 `projects.task_pattern_id` で `task_patterns` を参照することにより、複数プロジェクトで同一 WBS テンプレートを共有できる。
@@ -218,6 +218,10 @@
 
 #### 📂 カテゴリ / 🏖 休業日
 - シンプル DataGrid 編集
+- カテゴリは `is_leave` フラグあり: ON にすると Tracker でそのカテゴリを選んだとき
+  **プロジェクト/工程/タスク選択不要** (有給休暇・半休・特別休暇 等の登録用)
+- `is_leave=true` のエントリは Report の「未入力検知」で「入力あり」として扱い、
+  休暇日を未入力と誤検知しない
 - 休業日は `WbsInput` のガント着色に即反映
 
 #### 🛠 他者データ編集
