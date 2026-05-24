@@ -1510,14 +1510,40 @@ if ($u.OpsAxisCombo) {
 # Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
 # wrapper を新設する。元の Apply-Filters は ChartRows をセットするので、その後に
 # 拡張集計を呼ぶ。
+# wrapper 用の module-level トレース (Apply-Filters 内の nested _Trace と同じ
+# ファイルに書く。どこで落ちているか確実に追跡するため try で囲まない)
+function _TraceMgr {
+    param([string]$Tag, [string]$Msg)
+    try {
+        $logDir = Join-Path $env:APPDATA 'worktime-tracker'
+        if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+        Add-Content -LiteralPath (Join-Path $logDir 'report_trace.log') `
+            -Value ("[{0}] [mgr] {1} {2}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Tag, $Msg) -Encoding UTF8
+    } catch { }
+}
+
 $origApply = ${function:Apply-Filters}
 function Apply-Filters {
     & $origApply
-    try { Build-MemberLoad           -Rows $Script:ChartRows } catch { }
-    try { Build-MemberProjectMatrix  -Rows $Script:ChartRows } catch { }
-    try { Build-WorkTypeMix          -Rows $Script:ChartRows } catch { }
-    try { Build-CaseAnalysis         -Rows $Script:ChartRows } catch { }
-    try { Build-OpsAnalysis          -Rows $Script:ChartRows } catch { }
+    _TraceMgr 'wrapper' 'begin'
+    foreach ($step in @(
+        @{N='MemberLoad';          S={ Build-MemberLoad          -Rows $Script:ChartRows }},
+        @{N='MemberProjectMatrix'; S={ Build-MemberProjectMatrix -Rows $Script:ChartRows }},
+        @{N='WorkTypeMix';         S={ Build-WorkTypeMix         -Rows $Script:ChartRows }},
+        @{N='CaseAnalysis';        S={ Build-CaseAnalysis        -Rows $Script:ChartRows }},
+        @{N='OpsAnalysis';         S={ Build-OpsAnalysis         -Rows $Script:ChartRows }}
+    )) {
+        _TraceMgr $step.N 'begin'
+        try { & $step.S; _TraceMgr $step.N 'ok' }
+        catch {
+            _TraceMgr $step.N ("ERROR: $($_.Exception.Message) / $($_.ScriptStackTrace)")
+            Write-FatalLog ("[$($step.N)] $($_.Exception.Message)`r`n$($_.ScriptStackTrace)")
+            try {
+                $u.SummaryText.Text = "[$($step.N)] $($_.Exception.Message)"
+            } catch { }
+        }
+    }
+    _TraceMgr 'wrapper' 'end'
 }
 
 Reload-Entries
