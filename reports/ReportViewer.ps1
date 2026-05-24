@@ -71,8 +71,84 @@ $Script:Token         = $ctx.Token
 $Script:Source        = $ctx.Source
 $Script:Members       = $ctx.Members
 $Script:Projects      = $ctx.Projects
+$Script:Categories    = $ctx.Categories
+$Script:TaskPatterns  = $ctx.TaskPatterns
 $Script:CurrentMember = $ctx.CurrentMember
 $Script:AllEntries    = @()
+
+# ---- 名称解決ヘルパ ----
+# Report は ID/Code を集計キーに使うが、画面表示には名称を併記する。
+# パターン経由の名称 (process/task_group/task) は project_code から特定。
+function Resolve-MemberName {
+    param([string]$Id)
+    if (-not $Id) { return '' }
+    $m = $Script:Members | Where-Object { [string]$_.id -eq $Id } | Select-Object -First 1
+    if ($m -and $m.name) { return [string]$m.name }
+    return ''
+}
+function Resolve-MemberDisplay {
+    param([string]$Id)
+    if (-not $Id) { return '' }
+    $n = Resolve-MemberName $Id
+    if ($n) { return "$Id  $n" } else { return $Id }
+}
+function Resolve-ProjectName {
+    param([string]$Code)
+    if (-not $Code) { return '' }
+    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $Code } | Select-Object -First 1
+    if ($p -and $p.project_name) { return [string]$p.project_name }
+    return ''
+}
+function Resolve-ProjectDisplay {
+    param([string]$Code)
+    if (-not $Code) { return '' }
+    $n = Resolve-ProjectName $Code
+    if ($n) { return "$Code  $n" } else { return $Code }
+}
+function Resolve-CategoryName {
+    param([string]$Code)
+    if (-not $Code) { return '' }
+    $c = $Script:Categories | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
+    if ($c -and $c.name) { return [string]$c.name }
+    return ''
+}
+function Resolve-CategoryDisplay {
+    param([string]$Code)
+    if (-not $Code) { return '' }
+    $n = Resolve-CategoryName $Code
+    if ($n) { return "$Code  $n" } else { return $Code }
+}
+# task pattern 経由: process_code → name (どこかのパターンで一致したらそれを採用)
+$Script:_PatternNameCache = $null
+function _BuildPatternNameMap {
+    if ($null -ne $Script:_PatternNameCache) { return $Script:_PatternNameCache }
+    $m = @{}  # 'process|code' / 'group|code' / 'task|code' → name
+    foreach ($pt in @($Script:TaskPatterns)) {
+        if (-not $pt) { continue }
+        foreach ($pr in @($pt.processes)) {
+            if (-not $pr -or -not $pr.code) { continue }
+            $m["process|$([string]$pr.code)"] = [string]$pr.name
+            foreach ($tg in @($pr.task_groups)) {
+                if (-not $tg -or -not $tg.code) { continue }
+                $m["group|$([string]$tg.code)"] = [string]$tg.name
+                foreach ($tk in @($tg.tasks)) {
+                    if (-not $tk -or -not $tk.code) { continue }
+                    $m["task|$([string]$tk.code)"] = [string]$tk.name
+                }
+            }
+        }
+    }
+    $Script:_PatternNameCache = $m
+    return $m
+}
+function Resolve-ProcessName    { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("process|$Code")) { return $m["process|$Code"] }; return '' }
+function Resolve-TaskGroupName  { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("group|$Code"))   { return $m["group|$Code"]   }; return '' }
+function Resolve-TaskName       { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("task|$Code"))    { return $m["task|$Code"]    }; return '' }
+function _MergeCodeName {
+    param([string]$Code, [string]$Name)
+    if (-not $Code) { return '' }
+    if ($Name) { return "$Code  $Name" } else { return $Code }
+}
 
 # ---- XAML ----
 $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
@@ -85,7 +161,7 @@ foreach ($n in 'FromDate','ToDate','MemberFilter','ProjectFilter','ApplyBtn','Re
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
-              'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid',
+              'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid','WorkTypePieCanvas','WorkTypePieLegend',
               'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid') {
     $u[$n] = $win.FindName($n)
 }
@@ -193,25 +269,25 @@ function Apply-Filters {
     foreach ($r in $rows) { $total += [double]$r.hours }
     $u.SummaryText.Text = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f $total
 
-    # メンバー別
+    # メンバー別 (ID + 氏名)
     $byMember = $rows | Group-Object member_id | ForEach-Object {
         $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ member_id = $_.Name; entries = $_.Count; hours = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property hours -Descending
+        [pscustomobject]@{ メンバー = (Resolve-MemberDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
+    } | Sort-Object -Property 工数 -Descending
     $u.MemberSummaryGrid.ItemsSource = @($byMember)
 
-    # プロジェクト別
+    # プロジェクト別 (Code + 名称)
     $byProject = $rows | Group-Object project_code | ForEach-Object {
         $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ project_code = $_.Name; entries = $_.Count; hours = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property hours -Descending
+        [pscustomobject]@{ プロジェクト = (Resolve-ProjectDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
+    } | Sort-Object -Property 工数 -Descending
     $u.ProjectSummaryGrid.ItemsSource = @($byProject)
 
-    # カテゴリ別
+    # カテゴリ別 (Code + 名称)
     $byCat = $rows | Group-Object category | ForEach-Object {
         $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ category = $_.Name; entries = $_.Count; hours = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property hours -Descending
+        [pscustomobject]@{ カテゴリ = (Resolve-CategoryDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
+    } | Sort-Object -Property 工数 -Descending
     $u.CategorySummaryGrid.ItemsSource = @($byCat)
 
     # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
@@ -1373,10 +1449,114 @@ function Build-MemberProjectMatrix {
 }
 
 # ---- 業務種別 (案件対応 / 維持運用 / その他) 稼働比率 ----
+function _DrawPieChart {
+    # 円グラフを Canvas に描く (3 セクター対応・360°)
+    # $Slices: 順序を保つ [ordered]@{ Label=hex色 } 形式 + $Values: 同順 double[]
+    param(
+        [System.Windows.Controls.Canvas]$Canvas,
+        [string[]]$Labels,
+        [double[]]$Values,
+        [string[]]$Colors
+    )
+    if (-not $Canvas) { return }
+    $Canvas.Children.Clear()
+    $total = 0.0; foreach ($v in $Values) { $total += $v }
+    if ($total -le 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = '(データなし)'; $tb.Foreground = [System.Windows.Media.Brushes]::Gray
+        [System.Windows.Controls.Canvas]::SetLeft($tb, 70)
+        [System.Windows.Controls.Canvas]::SetTop($tb, 100)
+        [void]$Canvas.Children.Add($tb)
+        return
+    }
+    $w = [double]$Canvas.Width; $h = [double]$Canvas.Height
+    if ($w -le 0) { $w = 220 }; if ($h -le 0) { $h = 220 }
+    $cx = $w / 2.0; $cy = $h / 2.0
+    $radius = ([Math]::Min($cx, $cy)) - 6
+    $startAngle = -90.0  # 12 時方向から開始
+    for ($i = 0; $i -lt $Values.Count; $i++) {
+        $v = [double]$Values[$i]
+        if ($v -le 0) { continue }
+        $sweep = ($v / $total) * 360.0
+        # Path で扇形を作成: M cx,cy → L 始点 → ArcSegment → Z
+        $rad1 = $startAngle * [Math]::PI / 180.0
+        $rad2 = ($startAngle + $sweep) * [Math]::PI / 180.0
+        $p1 = New-Object System.Windows.Point ($cx + $radius * [Math]::Cos($rad1)), ($cy + $radius * [Math]::Sin($rad1))
+        $p2 = New-Object System.Windows.Point ($cx + $radius * [Math]::Cos($rad2)), ($cy + $radius * [Math]::Sin($rad2))
+        $fig = New-Object System.Windows.Media.PathFigure
+        $fig.StartPoint = New-Object System.Windows.Point $cx, $cy
+        $segL = New-Object System.Windows.Media.LineSegment $p1, $true
+        $segA = New-Object System.Windows.Media.ArcSegment
+        $segA.Point = $p2
+        $segA.Size  = New-Object System.Windows.Size $radius, $radius
+        $segA.SweepDirection = [System.Windows.Media.SweepDirection]::Clockwise
+        $segA.IsLargeArc = ($sweep -gt 180.0)
+        $segA.IsStroked = $true
+        [void]$fig.Segments.Add($segL)
+        [void]$fig.Segments.Add($segA)
+        $fig.IsClosed = $true
+        $geom = New-Object System.Windows.Media.PathGeometry
+        [void]$geom.Figures.Add($fig)
+        $path = New-Object System.Windows.Shapes.Path
+        $path.Data = $geom
+        $brush = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Colors[$i])
+        $path.Fill = $brush
+        $path.Stroke = [System.Windows.Media.Brushes]::White
+        $path.StrokeThickness = 2
+        $pct = ($v / $total) * 100.0
+        $path.ToolTip = ("{0}  {1:N1}h  ({2:N1}%)" -f $Labels[$i], $v, $pct)
+        [void]$Canvas.Children.Add($path)
+        # ラベル (10% 以上のときだけ描画)
+        if ($pct -ge 10) {
+            $midRad = ($startAngle + $sweep / 2.0) * [Math]::PI / 180.0
+            $lx = $cx + ($radius * 0.6) * [Math]::Cos($midRad)
+            $ly = $cy + ($radius * 0.6) * [Math]::Sin($midRad)
+            $tb = New-Object System.Windows.Controls.TextBlock
+            $tb.Text = "{0:N0}%" -f $pct
+            $tb.Foreground = [System.Windows.Media.Brushes]::White
+            $tb.FontWeight = 'Bold'
+            [System.Windows.Controls.Canvas]::SetLeft($tb, $lx - 14)
+            [System.Windows.Controls.Canvas]::SetTop($tb, $ly - 9)
+            [void]$Canvas.Children.Add($tb)
+        }
+        $startAngle += $sweep
+    }
+}
+
+function _DrawPieLegend {
+    param(
+        [System.Windows.Controls.Panel]$Panel,
+        [string[]]$Labels,
+        [double[]]$Values,
+        [string[]]$Colors
+    )
+    if (-not $Panel) { return }
+    $Panel.Children.Clear()
+    $total = 0.0; foreach ($v in $Values) { $total += $v }
+    for ($i = 0; $i -lt $Labels.Count; $i++) {
+        $sp = New-Object System.Windows.Controls.StackPanel
+        $sp.Orientation = 'Horizontal'; $sp.Margin = '0,3,0,3'
+        $sw = New-Object System.Windows.Shapes.Rectangle
+        $sw.Width = 16; $sw.Height = 16; $sw.Margin = '0,0,6,0'
+        $sw.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Colors[$i])
+        $sw.Stroke = [System.Windows.Media.Brushes]::Gainsboro
+        [void]$sp.Children.Add($sw)
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $v = [double]$Values[$i]
+        $pct = if ($total -gt 0) { ($v / $total) * 100.0 } else { 0.0 }
+        $tb.Text = "{0} : {1:N1} h ({2:N1}%)" -f $Labels[$i], $v, $pct
+        $tb.VerticalAlignment = 'Center'
+        [void]$sp.Children.Add($tb)
+        [void]$Panel.Children.Add($sp)
+    }
+}
+
 function Build-WorkTypeMix {
     param($Rows)
     if (-not $u.WorkTypeKpiPanel -or -not $u.WorkTypeByMemberGrid) { return }
     $u.WorkTypeKpiPanel.Children.Clear()
+    if ($u.WorkTypePieCanvas)  { $u.WorkTypePieCanvas.Children.Clear() }
+    if ($u.WorkTypePieLegend) { $u.WorkTypePieLegend.Children.Clear() }
     $u.WorkTypeByMemberGrid.Columns.Clear()
     $u.WorkTypeByMemberGrid.ItemsSource = $null
     if (-not $Rows -or $Rows.Count -eq 0) { return }
@@ -1418,6 +1598,16 @@ function Build-WorkTypeMix {
         $b.Child = $sp
         [void]$u.WorkTypeKpiPanel.Children.Add($b)
     }
+
+    # 円グラフ (チーム全体の業務種別比率)
+    $pieLabels = @('案件対応','維持運用','その他')
+    $vCase  = if ($byType.ContainsKey('案件対応')) { [double]$byType['案件対応'] } else { 0.0 }
+    $vOps   = if ($byType.ContainsKey('維持運用')) { [double]$byType['維持運用'] } else { 0.0 }
+    $vOther = if ($byType.ContainsKey('その他'))   { [double]$byType['その他']   } else { 0.0 }
+    $pieValues = @([double]$vCase, [double]$vOps, [double]$vOther)
+    $pieColors = @('#0369a1','#059669','#7c3aed')
+    if ($u.WorkTypePieCanvas)  { _DrawPieChart  -Canvas $u.WorkTypePieCanvas -Labels $pieLabels -Values $pieValues -Colors $pieColors }
+    if ($u.WorkTypePieLegend) { _DrawPieLegend -Panel  $u.WorkTypePieLegend -Labels $pieLabels -Values $pieValues -Colors $pieColors }
 
     # メンバー別 × 業務種別 集計
     $byMember = @{}
@@ -1485,8 +1675,18 @@ function _BuildWorkTypeDrillDown {
     $Grid.ItemsSource = $null
     if (-not $Rows -or $Rows.Count -eq 0) { return }
 
-    # 列キー: entries の process_code or task_group_code
-    $colKey = if ($ColAxis -eq 'タスクグループ') { 'task_group_code' } else { 'process_code' }
+    # 列キー: entries の process_code / task_group_code / task_code
+    # ヘッダ表示は code → 名称も併記
+    $colKey = switch ($ColAxis) {
+        'タスクグループ' { 'task_group_code' }
+        'タスク'         { 'task_code' }
+        default          { 'process_code' }
+    }
+    $colNameFn = switch ($ColAxis) {
+        'タスクグループ' { { param($c) Resolve-TaskGroupName $c } }
+        'タスク'         { { param($c) Resolve-TaskName $c } }
+        default          { { param($c) Resolve-ProcessName $c } }
+    }
 
     # フィルタ: 業務種別が一致するエントリのみ
     $filtered = New-Object System.Collections.Generic.List[object]
@@ -1514,13 +1714,19 @@ function _BuildWorkTypeDrillDown {
     }
 
     $rowLabel = if ($WorkType -eq '案件対応') { 'プロジェクト' } else { '対象システム' }
+    # 列表示ヘッダ: code + name 形式 (Resolve-* で名称を引く)
+    $colHeaders = @{}
+    foreach ($ck in $colKeys) {
+        $name = & $colNameFn $ck
+        $colHeaders[$ck] = _MergeCodeName $ck $name
+    }
     $out = New-Object System.Collections.Generic.List[object]
     foreach ($rk in $rowKeys) {
         $row = [ordered]@{ $rowLabel = (& $RowLabelFn $rk) }
         $tot = 0.0
         foreach ($ck in $colKeys) {
             $h = if ($cell[$rk] -and $cell[$rk].ContainsKey($ck)) { [double]$cell[$rk][$ck] } else { 0.0 }
-            $row[$ck] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
+            $row[$colHeaders[$ck]] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
             $tot += $h
         }
         $row['合計'] = "{0:N1}" -f $tot
@@ -1534,7 +1740,7 @@ function _BuildWorkTypeDrillDown {
         foreach ($rk in $rowKeys) {
             if ($cell[$rk] -and $cell[$rk].ContainsKey($ck)) { $sum += [double]$cell[$rk][$ck] }
         }
-        $footer[$ck] = "{0:N1}" -f $sum
+        $footer[$colHeaders[$ck]] = "{0:N1}" -f $sum
         $grand += $sum
     }
     $footer['合計'] = "{0:N1}" -f $grand
