@@ -1432,17 +1432,32 @@ function Build-OpsAnalysis {
 }
 
 # ---- イベントフック ----
+# WPF イベント中で未捕捉例外が出ると Dispatcher が落ちてウインドウが消える。
+# 全ハンドラを try/catch で包み、エラーは StatusText / MessageBox に出すだけにする。
+function _SafeRun {
+    param([string]$Tag, [scriptblock]$Body)
+    try {
+        if ($null -eq $Script:ChartRows) { return }
+        & $Body
+    } catch {
+        $msg = "[$Tag] $($_.Exception.Message)"
+        try { $u.SummaryText.Text = $msg } catch { }
+        $detail = "$msg`n`n$($_.InvocationInfo.PositionMessage)`n`n$($_.ScriptStackTrace)"
+        [System.Windows.MessageBox]::Show($detail, "$Tag エラー", 'OK', 'Error') | Out-Null
+    }
+}
+
 if ($u.HeatmapAxisCombo) {
-    $u.HeatmapAxisCombo.Add_SelectionChanged({ Build-Heatmap -Rows $Script:ChartRows })
+    $u.HeatmapAxisCombo.Add_SelectionChanged({ _SafeRun 'Heatmap'        { Build-Heatmap          -Rows $Script:ChartRows } })
 }
 if ($u.LoadRefreshBtn) {
-    $u.LoadRefreshBtn.Add_Click({ Build-MemberLoad -Rows $Script:ChartRows })
+    $u.LoadRefreshBtn.Add_Click({          _SafeRun 'MemberLoad'     { Build-MemberLoad       -Rows $Script:ChartRows } })
 }
 if ($u.CaseAxisCombo) {
-    $u.CaseAxisCombo.Add_SelectionChanged({ Build-CaseAnalysis -Rows $Script:ChartRows })
+    $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows $Script:ChartRows } })
 }
 if ($u.OpsAxisCombo) {
-    $u.OpsAxisCombo.Add_SelectionChanged({ Build-OpsAnalysis -Rows $Script:ChartRows })
+    $u.OpsAxisCombo.Add_SelectionChanged({  _SafeRun 'OpsAnalysis'    { Build-OpsAnalysis      -Rows $Script:ChartRows } })
 }
 
 # Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
