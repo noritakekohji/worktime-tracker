@@ -374,8 +374,8 @@ function Build-GridColumns {
         @{H="WBS";            B="[WBS]";            W=55;  RO=$true  },
         @{H="工程";           B="[工程]";           W=75;  RO=$true  },
         @{H="タスクグループ"; B="[タスクグループ]"; W=100; RO=$true  },
-        @{H="タスク";         B="[タスク]";         W=110; RO=$true  },
-        @{H="別名";           B="[別名]";           W=120; RO=$false },
+        # タスク列が alias を兼ねるため編集可。CellEditEnding で [別名] にも同期する
+        @{H="タスク";         B="[タスク]";         W=180; RO=$false },
         @{H="担当";           B="[担当]";           W=70;  RO=$false },
         @{H="計画";           B="[計画]";           W=50;  RO=$false },
         @{H="実績";           B="[合計]";           W=50;  RO=$true  },
@@ -551,6 +551,20 @@ function Load-WbsData {
                 foreach ($tg in @($proc.task_groups)) {
                     if (-not $tg) { continue }
                     $tgIdx++; $tkIdx = 0
+                    # タスクグループレベル (tc='-') のエントリも wbsMap に登録
+                    # → 既存実績/プランの tc='-' を再読込した時に WBS 番号で正しく並ぶ
+                    $groupInfo = @{
+                        pc       = [string]$proc.code
+                        pn       = [string]$proc.name
+                        tgc      = [string]$tg.code
+                        tgn      = [string]$tg.name
+                        tc       = '-'
+                        tn       = ''
+                        procIdx  = $procIdx
+                        wbsNo    = "$procIdx.$tgIdx.0"
+                        sortKey  = '{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, 0
+                    }
+                    $wbsMap["$($groupInfo.pc)|$($groupInfo.tgc)|-"] = $groupInfo
                     foreach ($tk in @($tg.tasks)) {
                         if (-not $tk) { continue }
                         $tkIdx++
@@ -611,7 +625,10 @@ function Load-WbsData {
             $row["_proc_idx"] = "$($info.procIdx)"
             $row["_sort_key"] = $info.sortKey
             $row["WBS"]  = $info.wbsNo
-            $row["工程"] = $info.pn; $row["タスクグループ"] = $info.tgn; $row["タスク"] = $info.tn
+            $row["工程"] = $info.pn; $row["タスクグループ"] = $info.tgn
+            # タスク列は alias を表示 (alias 未設定なら パターンのタスク名、それも無ければ "-")
+            $displayTask = if ($alias) { $alias } elseif ($info.tn) { [string]$info.tn } else { '-' }
+            $row["タスク"] = $displayTask
             $row["別名"] = $alias
             # プラン値 (alias 込みキーで参照)
             $pkey = "$($info.pc)|$($info.tgc)|$($info.tc)|$alias"
@@ -711,6 +728,16 @@ function Build-WbsTree {
             $tgIdx++
             $ti = New-Object System.Windows.Controls.TreeViewItem
             $ti.Header = "🗂 $([string]$tg.name)"; $ti.IsExpanded = $true
+            # タスクグループにも Tag を付与 → AddRowBtn でグループ単位の行を追加可能 (tc='-')
+            $ti.Tag = [pscustomobject]@{
+                pc=$proc.code; pn=$proc.name
+                tgc=$tg.code;  tgn=$tg.name
+                procIdx=$procIdx; tgIdx=$tgIdx; tkIdx=0
+                wbsNo=("$procIdx.$tgIdx.0")
+                sortKey=('{0:D4}.{1:D4}.{2:D4}' -f $procIdx, $tgIdx, 0)
+                tc='-';   tn=''
+                isGroup=$true
+            }
             $tkIdx = 0
             foreach ($tk in @($tg.tasks)) {
                 if (-not $tk) { continue }
@@ -770,34 +797,55 @@ $ui.WbsTree.Add_SelectedItemChanged({
     $ui.AddRowBtn.IsEnabled = ($null -ne $sel -and $null -ne $sel.Tag -and $null -ne $Script:DataTable)
 })
 
+# タスク列 (= 別名表示) を編集したら、内部の [別名] 列にも同期する
+# (alias は (pc,tgc,tc,alias) のキーの一部なので Recompute-TaskRow が正しく一致するように)
+$ui.WbsGrid.Add_CellEditEnding({
+    param($s, $e)
+    if ($e.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
+    $col = $e.Column
+    if (-not $col -or [string]$col.Header -ne 'タスク') { return }
+    $tb = $e.EditingElement -as [System.Windows.Controls.TextBox]
+    if (-not $tb) { return }
+    $drv = $e.Row.Item -as [System.Data.DataRowView]
+    if (-not $drv) { return }
+    $newText = [string]$tb.Text
+    # 別名 (内部キー) に書き戻す
+    try { $drv.Row["別名"] = $newText } catch { }
+})
+
 $ui.AddRowBtn.Add_Click({
     $sel = $ui.WbsTree.SelectedItem
     if (-not $sel -or -not $sel.Tag -or -not $Script:DataTable) { return }
     $info = $sel.Tag
-    # 同じタスクが既にあるなら、別名を自動で連番にする (#2, #3 …)
+    # タスクグループ選択時は tc='-' (グループレベル行)
+    $tc = if ($info.tc) { [string]$info.tc } else { '-' }
+    # 表示用の初期値: パターンのタスク名 → '-' (グループ行)
+    $baseName = if ($info.tn) { [string]$info.tn } else { '-' }
+    # 同じ (pc, tgc, tc) が既にあるなら、別名を "{baseName} #2", "#3" 形式で自動採番
     $existingAliases = New-Object 'System.Collections.Generic.HashSet[string]'
     foreach ($r0 in $Script:DataTable.Rows) {
         if (([string]$r0["_pc"])  -eq [string]$info.pc -and
             ([string]$r0["_tgc"]) -eq [string]$info.tgc -and
-            ([string]$r0["_tc"])  -eq [string]$info.tc) {
+            ([string]$r0["_tc"])  -eq $tc) {
             [void]$existingAliases.Add([string]$r0["別名"])
         }
     }
     $newAlias = ''
+    $displayTask = $baseName
     if ($existingAliases.Count -gt 0) {
-        # 既存に空別名があるなら #2, #3 ... を提案
         $i = 2
-        while ($existingAliases.Contains("#$i")) { $i++ }
-        $newAlias = "#$i"
+        while ($existingAliases.Contains("$baseName #$i")) { $i++ }
+        $newAlias = "$baseName #$i"
+        $displayTask = $newAlias
     }
     # インラインで行作成
     $row = $Script:DataTable.NewRow()
-    $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = [string]$info.tc
+    $row["_pc"]  = [string]$info.pc;  $row["_tgc"] = [string]$info.tgc; $row["_tc"] = $tc
     $row["_proc_idx"] = if ($info.procIdx) { "$($info.procIdx)" } else { '0' }
     $row["_sort_key"] = if ($info.sortKey) { [string]$info.sortKey } else { '9999.9999.9999' }
     $row["WBS"] = if ($info.wbsNo) { [string]$info.wbsNo } else { '' }
     $row["工程"] = [string]$info.pn;  $row["タスクグループ"] = [string]$info.tgn
-    $row["タスク"] = [string]$info.tn
+    $row["タスク"] = $displayTask
     $row["別名"] = $newAlias
     $row["担当"] = ''
     [void]$Script:DataTable.Rows.Add($row)
