@@ -355,6 +355,15 @@ if (-not $Script:CurrentMember) {
     $Script:CurrentMember = [pscustomobject]@{ id = $Script:Config.member_id; name = '(未登録)'; role = 'member' }
 }
 $ui.CurrentMemberText.Text = ("{0}  {1}" -f $Script:CurrentMember.id, $Script:CurrentMember.name)
+# 診断: ロール判定をログに残す (管理者モードが出ない問題の調査用)
+try {
+    $rolesNow = (Get-MemberRoles -Member $Script:CurrentMember) -join ','
+    $hasAdmin = Has-Role -Member $Script:CurrentMember -Role 'admin'
+    $hasRolesProp = $null -ne ($Script:CurrentMember.PSObject.Properties['roles'])
+    $hasRoleProp  = $null -ne ($Script:CurrentMember.PSObject.Properties['role'])
+    Write-FatalLog ("CurrentMember id={0} name={1} hasRolesProp={2} hasRoleProp={3} roles=[{4}] isAdmin={5}" `
+        -f $Script:CurrentMember.id, $Script:CurrentMember.name, $hasRolesProp, $hasRoleProp, $rolesNow, $hasAdmin)
+} catch { Write-FatalLog "Role diag failed: $_" }
 if (Has-Role -Member $Script:CurrentMember -Role 'admin') {
     $ui.AdminBtn.Visibility = 'Visible'
 }
