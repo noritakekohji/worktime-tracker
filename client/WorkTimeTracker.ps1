@@ -497,28 +497,93 @@ function Resolve-EntryNames {
     }
 }
 
+# ---- プロジェクト wbs_items によるカスケード絞り込みヘルパ ----
+# wbs_items が定義されているプロジェクトでは、Tracker のカスケードもそれに合わせて
+# 絞り込み、入力ミスを防ぐ。wbs_items 無しなら従来通り (パターン全項目を表示)。
+function _ProjectWbsItems {
+    param($Project)
+    if (-not $Project) { return @() }
+    if (-not $Project.PSObject.Properties['wbs_items']) { return @() }
+    if (-not $Project.wbs_items) { return @() }
+    return @($Project.wbs_items)
+}
+
+function _FilterByWbs-Processes {
+    param([array]$AllProcs, $Project)
+    $wbs = _ProjectWbsItems -Project $Project
+    if ($wbs.Count -eq 0) { return $AllProcs }
+    $codes = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($w in $wbs) {
+        $c = [string]$w.process_code
+        if ($c) { [void]$codes.Add($c) }
+    }
+    return @($AllProcs | Where-Object { $codes.Contains([string]$_.code) })
+}
+
+function _FilterByWbs-TaskGroups {
+    param([array]$AllGroups, $Project, [string]$ProcessCode)
+    $wbs = _ProjectWbsItems -Project $Project
+    if ($wbs.Count -eq 0) { return $AllGroups }
+    $codes = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($w in $wbs) {
+        if (([string]$w.process_code) -ne $ProcessCode) { continue }
+        $c = [string]$w.task_group_code
+        if ($c) { [void]$codes.Add($c) }
+    }
+    return @($AllGroups | Where-Object { $codes.Contains([string]$_.code) })
+}
+
+function _FilterByWbs-Tasks {
+    param([array]$AllTasks, $Project, [string]$ProcessCode, [string]$TaskGroupCode)
+    $wbs = _ProjectWbsItems -Project $Project
+    if ($wbs.Count -eq 0) { return $AllTasks }
+    $codes = New-Object 'System.Collections.Generic.HashSet[string]'
+    $allowGroupLevel = $false
+    foreach ($w in $wbs) {
+        if (([string]$w.process_code)    -ne $ProcessCode)   { continue }
+        if (([string]$w.task_group_code) -ne $TaskGroupCode) { continue }
+        $c = [string]$w.task_code
+        if (-not $c -or $c -eq '-') { $allowGroupLevel = $true; continue }
+        [void]$codes.Add($c)
+    }
+    $filtered = @($AllTasks | Where-Object { $codes.Contains([string]$_.code) })
+    # WBS でグループレベル登録あり (task_code='-' or 空) → 「(タスクグループ全体)」を選択肢に
+    if ($allowGroupLevel) {
+        $groupItem = [pscustomobject]@{ code = '-'; name = '(タスクグループ全体)' }
+        $filtered = @($groupItem) + $filtered
+    }
+    return $filtered
+}
+
 $ui.ProjectCombo.Add_SelectionChanged({
     Reset-Cascade -From @('process','task_group','task')
     $p = $ui.ProjectCombo.SelectedItem
     $pattern = Get-TaskPatternFor -Project $p
     if ($pattern -and $pattern.processes) {
-        $ui.ProcessCombo.ItemsSource = @($pattern.processes)
+        $filtered = _FilterByWbs-Processes -AllProcs @($pattern.processes) -Project $p
+        $ui.ProcessCombo.ItemsSource = @($filtered)
         if ($ui.ProcessCombo.Items.Count -gt 0) { $ui.ProcessCombo.SelectedIndex = 0 }
     }
 })
 $ui.ProcessCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task_group','task')
+    $proj = $ui.ProjectCombo.SelectedItem
     $p = $ui.ProcessCombo.SelectedItem
     if ($p -and $p.task_groups) {
-        $ui.TaskGroupCombo.ItemsSource = @($p.task_groups)
+        $filtered = _FilterByWbs-TaskGroups -AllGroups @($p.task_groups) -Project $proj -ProcessCode ([string]$p.code)
+        $ui.TaskGroupCombo.ItemsSource = @($filtered)
         if ($ui.TaskGroupCombo.Items.Count -gt 0) { $ui.TaskGroupCombo.SelectedIndex = 0 }
     }
 })
 $ui.TaskGroupCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task')
+    $proj = $ui.ProjectCombo.SelectedItem
+    $proc = $ui.ProcessCombo.SelectedItem
     $g = $ui.TaskGroupCombo.SelectedItem
     if ($g -and $g.tasks) {
-        $ui.TaskCombo.ItemsSource = @($g.tasks)
+        $filtered = _FilterByWbs-Tasks -AllTasks @($g.tasks) -Project $proj `
+                                       -ProcessCode ([string]$proc.code) -TaskGroupCode ([string]$g.code)
+        $ui.TaskCombo.ItemsSource = @($filtered)
         if ($ui.TaskCombo.Items.Count -gt 0) { $ui.TaskCombo.SelectedIndex = 0 }
     }
 })
