@@ -105,6 +105,20 @@ function Resolve-ProjectDisplay {
     $n = Resolve-ProjectName $Code
     if ($n) { return "$Code  $n" } else { return $Code }
 }
+function Resolve-MemberCompany {
+    param([string]$Id)
+    if (-not $Id) { return '' }
+    $m = $Script:Members | Where-Object { [string]$_.id -eq $Id } | Select-Object -First 1
+    if ($m -and $m.company) { return [string]$m.company }
+    return ''
+}
+function Resolve-ProjectTargetSystem {
+    param([string]$Code)
+    if (-not $Code) { return '' }
+    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $Code } | Select-Object -First 1
+    if ($p -and $p.target_system) { return [string]$p.target_system }
+    return ''
+}
 function Resolve-CategoryName {
     param([string]$Code)
     if (-not $Code) { return '' }
@@ -157,7 +171,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $u = @{}
 foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
-              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SummaryText','StatusText','AnalysisPanel',
+              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
@@ -320,6 +334,30 @@ function Apply-Filters {
         [pscustomobject]@{ カテゴリ = (Resolve-CategoryDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
     } | Sort-Object -Property 工数 -Descending
     $u.CategorySummaryGrid.ItemsSource = @($byCat)
+
+    # システム別 (projects.target_system 解決)
+    $sysRows = $rows | ForEach-Object {
+        $sys = Resolve-ProjectTargetSystem ([string]$_.project_code)
+        if (-not $sys) { $sys = '(未設定)' }
+        [pscustomobject]@{ _sys = $sys; hours = $_.hours }
+    }
+    $bySys = $sysRows | Group-Object _sys | ForEach-Object {
+        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
+        [pscustomobject]@{ 対象システム = $_.Name; 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
+    } | Sort-Object -Property 工数 -Descending
+    $u.SystemSummaryGrid.ItemsSource = @($bySys)
+
+    # 会社別 (members.company 解決)
+    $coRows = $rows | ForEach-Object {
+        $co = Resolve-MemberCompany ([string]$_.member_id)
+        if (-not $co) { $co = '(未設定)' }
+        [pscustomobject]@{ _co = $co; hours = $_.hours }
+    }
+    $byCo = $coRows | Group-Object _co | ForEach-Object {
+        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
+        [pscustomobject]@{ 会社 = $_.Name; 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
+    } | Sort-Object -Property 工数 -Descending
+    $u.CompanySummaryGrid.ItemsSource = @($byCo)
 
     # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
     function _Trace {

@@ -271,6 +271,40 @@
                         </DataGrid.Resources>
                     </DataGrid>
                 </TabItem>
+                <TabItem Header="🖥 システム別">
+                    <DataGrid x:Name="SystemSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#e0f2fe" GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                              RowHeight="32" ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="🏢 会社別">
+                    <DataGrid x:Name="CompanySummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                              AlternatingRowBackground="#fef3c7" GridLinesVisibility="None"
+                              BorderBrush="{StaticResource Border}" BorderThickness="1"
+                              RowHeight="32" ColumnHeaderHeight="38">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="Padding" Value="10,4"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </TabItem>
                 <TabItem Header="📈 分析">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="AnalysisPanel" Margin="10"/>
