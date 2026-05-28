@@ -304,7 +304,7 @@ $names = @(
     'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText',
     'EntryDate','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
-    'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn',
+    'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
     'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
 )
@@ -574,6 +574,7 @@ $ui.ProcessCombo.Add_SelectionChanged({
         $ui.TaskGroupCombo.ItemsSource = @($filtered)
         if ($ui.TaskGroupCombo.Items.Count -gt 0) { $ui.TaskGroupCombo.SelectedIndex = 0 }
     }
+    Update-TaskDesc
 })
 $ui.TaskGroupCombo.Add_SelectionChanged({
     Reset-Cascade -From @('task')
@@ -586,7 +587,35 @@ $ui.TaskGroupCombo.Add_SelectionChanged({
         $ui.TaskCombo.ItemsSource = @($filtered)
         if ($ui.TaskCombo.Items.Count -gt 0) { $ui.TaskCombo.SelectedIndex = 0 }
     }
+    Update-TaskDesc
 })
+$ui.TaskCombo.Add_SelectionChanged({ Update-TaskDesc })
+
+# 選択中の 工程 / タスクグループ / タスク に説明があれば黄帯で表示
+function Update-TaskDesc {
+    if (-not $ui.TaskDescBorder) { return }
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($pair in @(
+        @{ label='工程';           item=$ui.ProcessCombo.SelectedItem },
+        @{ label='タスクグループ'; item=$ui.TaskGroupCombo.SelectedItem },
+        @{ label='タスク';         item=$ui.TaskCombo.SelectedItem }
+    )) {
+        $it = $pair.item
+        if ($it -and $it.PSObject.Properties['desc']) {
+            $d = [string]$it.desc
+            if (-not [string]::IsNullOrWhiteSpace($d)) {
+                $parts.Add(("【{0}】 {1}" -f $pair.label, $d))
+            }
+        }
+    }
+    if ($parts.Count -gt 0) {
+        $ui.TaskDescText.Text = ($parts -join "`n")
+        $ui.TaskDescBorder.Visibility = 'Visible'
+    } else {
+        $ui.TaskDescText.Text = ''
+        $ui.TaskDescBorder.Visibility = 'Collapsed'
+    }
+}
 
 # ---- 表示月ロード ----
 function Load-ViewMonth {

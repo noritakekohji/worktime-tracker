@@ -38,7 +38,7 @@ function Show-AdminDialog {
                    'ProjectsGrid','PrjAddBtn','PrjDelBtn','ProjPatternCol',
                    'PatternsList','PatAddBtn','PatDelBtn',
                    'PatternTree','PatHeader','PatDetailTitle','PatKindText',
-                   'PatCodeBox','PatNameBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
+                   'PatCodeBox','PatNameBox','PatDescBox','PatHint','PatNodeAddBtn','PatNodeAddSibBtn','PatNodeDelBtn',
                    'PatNodeUpBtn','PatNodeDownBtn','PatCopyBtn',
                    'CategoriesGrid','CatAddBtn','CatDelBtn',
                    'HolidaysGrid','HolAddBtn','HolDelBtn',
@@ -440,8 +440,10 @@ function Show-AdminDialog {
         $u.PatKindText.Text = ''
         $u.PatCodeBox.Text = ''
         $u.PatNameBox.Text = ''
+        $u.PatDescBox.Text = ''
         $u.PatCodeBox.IsEnabled = $false
         $u.PatNameBox.IsEnabled = $false
+        $u.PatDescBox.IsEnabled = $false
         $u.PatNodeAddBtn.IsEnabled = $false
         $u.PatNodeAddSibBtn.IsEnabled = $false
         $u.PatNodeDelBtn.IsEnabled = $false
@@ -467,6 +469,8 @@ function Show-AdminDialog {
         $u.PatKindText.Text = 'パターン'
         $u.PatCodeBox.Text = [string]$global:WT_CurrentPattern.id
         $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
+        $u.PatDescBox.Text = ''                # パターン自体は説明なし (工程/分類/タスクのみ)
+        $u.PatDescBox.IsEnabled = $false
         $u.PatCodeBox.IsEnabled = $true
         $u.PatNameBox.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = $true
@@ -513,8 +517,10 @@ function Show-AdminDialog {
         $u.PatKindText.Text = $kindLabel
         $u.PatCodeBox.Text = [string]$info.data.code
         $u.PatNameBox.Text = [string]$info.data.name
+        $u.PatDescBox.Text = if ($info.data.PSObject.Properties['desc'] -or ($info.data -is [hashtable] -and $info.data.ContainsKey('desc'))) { [string]$info.data.desc } else { '' }
         $u.PatCodeBox.IsEnabled = $true
         $u.PatNameBox.IsEnabled = $true
+        $u.PatDescBox.IsEnabled = $true
         $u.PatNodeDelBtn.IsEnabled = $true
         $u.PatNodeAddBtn.IsEnabled = ($info.kind -ne 'task')
         $u.PatNodeAddSibBtn.IsEnabled = $true
@@ -533,10 +539,12 @@ function Show-AdminDialog {
         if ($global:WT_SuppressPatEdit) { return }
         $code = $u.PatCodeBox.Text.Trim()
         $name = $u.PatNameBox.Text.Trim()
+        $desc = $u.PatDescBox.Text
         if ($global:WT_CurrentPatNode -and $global:WT_CurrentPatNode.Tag) {
             $info = $global:WT_CurrentPatNode.Tag
             $info.data.code = $code
             $info.data.name = $name
+            $info.data.desc = $desc
             $icon = switch ($info.kind) { 'process'{'⚙'}; 'task_group'{'🗂'}; 'task'{'•'} }
             $global:WT_CurrentPatNode.Header = ('{0} [{1}] {2}' -f $icon, $code, $name)
         } elseif ($global:WT_CurrentPattern) {
@@ -549,6 +557,7 @@ function Show-AdminDialog {
     }.GetNewClosure()
     $u.PatCodeBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
     $u.PatNameBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
+    $u.PatDescBox.Add_TextChanged({ & $global:WT_ApplyPatEdit })
 
     # フォーカス離脱時にパターン一覧の表示文字列を更新
     # (TextChanged 中は再描画しないため、編集確定 = フォーカスを失ったタイミングで反映)
@@ -698,22 +707,32 @@ function Show-AdminDialog {
         $info = $global:WT_CurrentPatNode.Tag
         $r = [System.Windows.MessageBox]::Show(("[{0}] {1} を削除しますか?" -f $info.data.code, $info.data.name), '確認', 'OKCancel', 'Question')
         if ($r -ne 'OK') { return }
-        switch ($info.kind) {
-            'process'    { $global:WT_CurrentPattern.processes = @($global:WT_CurrentPattern.processes | Where-Object { $_ -ne $info.data }) }
-            'task_group' { $info.parent.task_groups = @($info.parent.task_groups | Where-Object { $_ -ne $info.data }) }
-            'task'       { $info.parent.tasks      = @($info.parent.tasks      | Where-Object { $_ -ne $info.data }) }
+        # 削除中に PatCodeBox/PatNameBox/PatDescBox の TextChanged が発火して
+        # WT_CurrentPatNode=$null の状態で別ノード/パターンを上書きする事故を防ぐため
+        # 一連の処理を WT_SuppressPatEdit で囲む。比較は参照同一性で厳密に行う。
+        $global:WT_SuppressPatEdit = $true
+        try {
+            $target = $info.data
+            switch ($info.kind) {
+                'process'    { $global:WT_CurrentPattern.processes = @($global:WT_CurrentPattern.processes | Where-Object { -not [object]::ReferenceEquals($_, $target) }) }
+                'task_group' { $info.parent.task_groups = @($info.parent.task_groups | Where-Object { -not [object]::ReferenceEquals($_, $target) }) }
+                'task'       { $info.parent.tasks       = @($info.parent.tasks       | Where-Object { -not [object]::ReferenceEquals($_, $target) }) }
+            }
+            $global:WT_CurrentPatNode = $null
+            Render-PatternTree -Pattern $global:WT_CurrentPattern
+            _ClearPatNode
+            # パターンレベルへ戻す
+            $u.PatDetailTitle.Text = '編集中: パターン'
+            $u.PatKindText.Text = 'パターン'
+            $u.PatCodeBox.Text = [string]$global:WT_CurrentPattern.id
+            $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
+            $u.PatDescBox.Text = ''
+            $u.PatCodeBox.IsEnabled = $true
+            $u.PatNameBox.IsEnabled = $true
+            $u.PatNodeAddBtn.IsEnabled = $true
+        } finally {
+            $global:WT_SuppressPatEdit = $false
         }
-        Render-PatternTree -Pattern $global:WT_CurrentPattern
-        $global:WT_CurrentPatNode = $null
-        _ClearPatNode
-        # パターンレベルへ戻す
-        $u.PatDetailTitle.Text = '編集中: パターン'
-        $u.PatKindText.Text = 'パターン'
-        $u.PatCodeBox.Text = [string]$global:WT_CurrentPattern.id
-        $u.PatNameBox.Text = [string]$global:WT_CurrentPattern.name
-        $u.PatCodeBox.IsEnabled = $true
-        $u.PatNameBox.IsEnabled = $true
-        $u.PatNodeAddBtn.IsEnabled = $true
     })
 
     # ---- 順序入れ替え (▲ 上へ / ▼ 下へ) ----

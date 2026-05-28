@@ -300,6 +300,10 @@
                                 <TextBox x:Name="PatCodeBox" IsEnabled="False"/>
                                 <Label Content="名称:" Margin="0,4,0,0"/>
                                 <TextBox x:Name="PatNameBox" IsEnabled="False"/>
+                                <Label Content="説明 (Tracker 入力時に参照):" Margin="0,4,0,0"/>
+                                <TextBox x:Name="PatDescBox" IsEnabled="False"
+                                         Height="70" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
                                 <TextBlock x:Name="PatHint" Text="" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,10,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>

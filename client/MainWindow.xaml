@@ -353,6 +353,12 @@
                         <Label Content="タスク" Margin="0,3,0,0"/>
                         <ComboBox x:Name="TaskCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
 
+                        <Border x:Name="TaskDescBorder" Margin="0,4,0,0" Padding="8,6" CornerRadius="4"
+                                Background="#fffbeb" BorderBrush="#fcd34d" BorderThickness="1"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="TaskDescText" TextWrapping="Wrap" FontSize="12" Foreground="#92400e"/>
+                        </Border>
+
                         <Label Content="作業カテゴリ" Margin="0,4,0,0"/>
                         <ComboBox x:Name="CategoryCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
 
