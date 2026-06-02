@@ -260,8 +260,11 @@ function Reload-Masters {
     param([switch]$Pull)   # -Pull が指定された場合のみ remote → local pull
     try {
         if ($Pull -and $Script:Source.RemoteCtx) {
-            $pull = Sync-Pull-Masters -Source $Script:Source
-            Write-FatalLog ("Master pull (Reload-Masters -Pull): pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count)
+            # 注意: $pull / $Pull は PS では同一変数 (大小区別なし)。
+            # ここで $Pull をローカルで上書きすると SwitchParameter→PSCustomObject に
+            # 化けてしまうため必ず別名 ($pullResult) を使うこと。
+            $pullResult = Sync-Pull-Masters -Source $Script:Source
+            Write-FatalLog ("Master pull (Reload-Masters -Pull): pulled={0} missing={1} errors={2}" -f $pullResult.Pulled, $pullResult.Missing, $pullResult.Errors.Count)
         }
         $Script:Members      = @(Get-MasterMembers      -Source $Script:Source)
         $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)

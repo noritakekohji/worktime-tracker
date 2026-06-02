@@ -78,6 +78,7 @@ if ($b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
 | WPF UI イベント中に PS が落ちる | ハンドラ内未捕捉例外で Dispatcher 経由ホスト終了 | 全ハンドラを try/catch で囲む。`_SafeRun` パターン参照 |
 | `$matches` を上書きしてしまう | PS 自動変数 (regex 結果) | `$hits` 等別名を使う。PSScriptAnalyzer が `PSAvoidAssignmentToAutomaticVariable` で検出 |
 | `@( (if X) {} else {} )` が parse error | PS 5.1 は `@()` 内 `if` 式を許容しない | `$x = if (...) {...} else {...}; @($x, ...)` 形式に |
+| `値 '@{...}' を型 'SwitchParameter' に変換できません` | `param([switch]$X)` の中で `$x = ...` と代入。PS は大小区別なしなので **同じ変数 `$X` を別型で上書き** | param と被らない別名 (`$xResult` 等) を使う |
 
 ---
 
