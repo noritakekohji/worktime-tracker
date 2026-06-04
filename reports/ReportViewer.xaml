@@ -395,6 +395,19 @@
                     <DockPanel Margin="10">
                         <TextBlock DockPanel.Dock="Top" Text="業務種別 (案件対応 / 維持運用 / その他) の稼働比率"
                                    FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
+                        <!-- 業務種別比率タブ内 専用 フィルタ -->
+                        <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal">
+                                <Label Content="🖥 システム:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="WorkTypeSystemFilter" MinWidth="180" Margin="4,0,12,0" VerticalAlignment="Center"
+                                          DisplayMemberPath="display" SelectedValuePath="key"
+                                          ToolTip="(全システム) で絞り込み解除"/>
+                                <Label Content="📁 プロジェクト:" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="WorkTypeProjectFilter" MinWidth="200" Margin="4,0,0,0" VerticalAlignment="Center"
+                                          DisplayMemberPath="display" SelectedValuePath="key"
+                                          ToolTip="(全プロジェクト) で絞り込み解除"/>
+                            </StackPanel>
+                        </Border>
                         <TabControl>
                             <TabItem Header="📊 概要">
                                 <Grid Margin="6">

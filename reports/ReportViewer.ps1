@@ -176,6 +176,7 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
               'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid','WorkTypePieCanvas','WorkTypePieLegend',
+              'WorkTypeSystemFilter','WorkTypeProjectFilter',
               'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid',
               'CasePieCanvas','CasePieLegend','CaseBarCanvas',
               'OpsPieCanvas','OpsPieLegend','OpsBarCanvas') {
@@ -254,6 +255,60 @@ function _RefreshMemberFilter {
     }
 }
 _RefreshMemberFilter
+
+# ---- 業務種別比率タブ専用フィルタ (システム / プロジェクト) ----
+function _RefreshWorkTypeFilters {
+    if (-not $u.WorkTypeSystemFilter -or -not $u.WorkTypeProjectFilter) { return }
+    # システム一覧 (target_system のユニーク集合)
+    $sysSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+    $projItems = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($p in @($Script:Projects)) {
+        if (-not $p) { continue }
+        if ($null -ne $p.active -and -not $p.active) { continue }
+        $sys = [string]$p.target_system
+        if ($sys) { [void]$sysSet.Add($sys) }
+        [void]$projItems.Add([pscustomobject]@{
+            key     = [string]$p.unit_code
+            display = (Resolve-ProjectDisplay ([string]$p.unit_code))
+        })
+    }
+    $sysItems = New-Object 'System.Collections.Generic.List[object]'
+    [void]$sysItems.Add([pscustomobject]@{ key=''; display='(全システム)' })
+    foreach ($s in $sysSet) {
+        [void]$sysItems.Add([pscustomobject]@{ key=$s; display=$s })
+    }
+    $projAll = New-Object 'System.Collections.Generic.List[object]'
+    [void]$projAll.Add([pscustomobject]@{ key=''; display='(全プロジェクト)' })
+    foreach ($pi in ($projItems | Sort-Object key)) { [void]$projAll.Add($pi) }
+
+    $curSys  = if ($u.WorkTypeSystemFilter)  { $u.WorkTypeSystemFilter.SelectedValue }  else { '' }
+    $curProj = if ($u.WorkTypeProjectFilter) { $u.WorkTypeProjectFilter.SelectedValue } else { '' }
+    $u.WorkTypeSystemFilter.ItemsSource  = $sysItems
+    $u.WorkTypeProjectFilter.ItemsSource = $projAll
+    if ($curSys)  { $u.WorkTypeSystemFilter.SelectedValue  = $curSys;  if ($u.WorkTypeSystemFilter.SelectedIndex  -lt 0) { $u.WorkTypeSystemFilter.SelectedIndex  = 0 } } else { $u.WorkTypeSystemFilter.SelectedIndex  = 0 }
+    if ($curProj) { $u.WorkTypeProjectFilter.SelectedValue = $curProj; if ($u.WorkTypeProjectFilter.SelectedIndex -lt 0) { $u.WorkTypeProjectFilter.SelectedIndex = 0 } } else { $u.WorkTypeProjectFilter.SelectedIndex = 0 }
+}
+_RefreshWorkTypeFilters
+
+# 選択中のフィルタを適用して rows を絞る
+function _ApplyWorkTypeFilters {
+    param($Rows)
+    if (-not $Rows) { return @() }
+    $sysSel  = if ($u.WorkTypeSystemFilter)  { [string]$u.WorkTypeSystemFilter.SelectedValue }  else { '' }
+    $projSel = if ($u.WorkTypeProjectFilter) { [string]$u.WorkTypeProjectFilter.SelectedValue } else { '' }
+    if (-not $sysSel -and -not $projSel) { return $Rows }
+    $filtered = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($r in $Rows) {
+        $pc = [string]$r.project_code
+        if ($projSel -and $pc -ne $projSel) { continue }
+        if ($sysSel) {
+            $s = Resolve-ProjectTargetSystem $pc
+            if ($s -ne $sysSel) { continue }
+        }
+        [void]$filtered.Add($r)
+    }
+    return $filtered.ToArray()
+}
 
 function Reload-Entries {
     # 「📋 読込」: ローカルから読込のみ (Gitlab モードでも remote にアクセスしない)
@@ -481,7 +536,9 @@ function Build-Dashboard {
         $row.ColumnDefinitions.Add($cd1); $row.ColumnDefinitions.Add($cd2); $row.ColumnDefinitions.Add($cd3)
 
         $lbl = New-Object System.Windows.Controls.TextBlock
-        $lbl.Text = [string]$e.Key; $lbl.VerticalAlignment = 'Center'
+        # コードではなく "コード 名称" 形式で表示
+        $lbl.Text = (Resolve-ProjectDisplay ([string]$e.Key)); $lbl.VerticalAlignment = 'Center'
+        $lbl.ToolTip = $lbl.Text
         [System.Windows.Controls.Grid]::SetColumn($lbl, 0)
         $row.Children.Add($lbl) | Out-Null
 
@@ -522,7 +579,9 @@ function Build-Dashboard {
         $row.ColumnDefinitions.Add($cd1); $row.ColumnDefinitions.Add($cd2); $row.ColumnDefinitions.Add($cd3)
 
         $lbl = New-Object System.Windows.Controls.TextBlock
-        $lbl.Text = [string]$e.Key; $lbl.VerticalAlignment = 'Center'
+        # メンバーは "ID 氏名" 形式で表示
+        $lbl.Text = (Resolve-MemberDisplay ([string]$e.Key)); $lbl.VerticalAlignment = 'Center'
+        $lbl.ToolTip = $lbl.Text
         [System.Windows.Controls.Grid]::SetColumn($lbl, 0)
         $row.Children.Add($lbl) | Out-Null
 
@@ -820,7 +879,8 @@ function Build-Analysis {
     } | Sort-Object h -Descending | Select-Object -First 5
     $projRows = foreach ($p in $topProj) {
         $pct = if ($totalHours -gt 0) { ($p.h / $totalHours) * 100 } else { 0 }
-        (_AnalysisRow ("{0}:" -f $p.code) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $p.h, $pct, $p.cnt))
+        # 名称併記で表示
+        (_AnalysisRow ("{0}:" -f (Resolve-ProjectDisplay $p.code)) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $p.h, $pct, $p.cnt))
     }
     $panel.Children.Add( (_AnalysisCard '🏆 プロジェクト Top 5' $projRows) ) | Out-Null
 
@@ -831,7 +891,7 @@ function Build-Analysis {
     } | Sort-Object h -Descending | Select-Object -First 5
     $catRows = foreach ($c in $topCat) {
         $pct = if ($totalHours -gt 0) { ($c.h / $totalHours) * 100 } else { 0 }
-        (_AnalysisRow ("{0}:" -f $c.code) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $c.h, $pct, $c.cnt))
+        (_AnalysisRow ("{0}:" -f (Resolve-CategoryDisplay $c.code)) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $c.h, $pct, $c.cnt))
     }
     $panel.Children.Add( (_AnalysisCard '🏷 カテゴリ Top 5' $catRows) ) | Out-Null
 
@@ -842,7 +902,7 @@ function Build-Analysis {
     } | Sort-Object h -Descending | Select-Object -First 5
     $memRows = foreach ($m in $topMem) {
         $pct = if ($totalHours -gt 0) { ($m.h / $totalHours) * 100 } else { 0 }
-        (_AnalysisRow ("{0}:" -f $m.code) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $m.h, $pct, $m.cnt))
+        (_AnalysisRow ("{0}:" -f (Resolve-MemberDisplay $m.code)) ("{0,6:N1} h  ({1:N1}%, {2} 件)" -f $m.h, $pct, $m.cnt))
     }
     $panel.Children.Add( (_AnalysisCard '👥 メンバー Top 5' $memRows) ) | Out-Null
 
@@ -1093,6 +1153,7 @@ function Reload-Masters {
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
         _RefreshMemberFilter
+        _RefreshWorkTypeFilters
     } catch {
         $u.SummaryText.Text = "マスタ再読込失敗: $_"
     }
@@ -2113,10 +2174,27 @@ if ($u.LoadRefreshBtn) {
     $u.LoadRefreshBtn.Add_Click({          _SafeRun 'MemberLoad'     { Build-MemberLoad       -Rows $Script:ChartRows } })
 }
 if ($u.CaseAxisCombo) {
-    $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows $Script:ChartRows } })
+    $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } })
 }
 if ($u.OpsAxisCombo) {
-    $u.OpsAxisCombo.Add_SelectionChanged({  _SafeRun 'OpsAnalysis'    { Build-OpsAnalysis      -Rows $Script:ChartRows } })
+    $u.OpsAxisCombo.Add_SelectionChanged({  _SafeRun 'OpsAnalysis'    { Build-OpsAnalysis      -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } })
+}
+# 業務種別比率タブ内 専用 フィルタ変更 → 3 集計を再描画
+if ($u.WorkTypeSystemFilter) {
+    $u.WorkTypeSystemFilter.Add_SelectionChanged({ _SafeRun 'WorkTypeFilter' {
+        $r = _ApplyWorkTypeFilters $Script:ChartRows
+        Build-WorkTypeMix    -Rows $r
+        Build-CaseAnalysis   -Rows $r
+        Build-OpsAnalysis    -Rows $r
+    } })
+}
+if ($u.WorkTypeProjectFilter) {
+    $u.WorkTypeProjectFilter.Add_SelectionChanged({ _SafeRun 'WorkTypeFilter' {
+        $r = _ApplyWorkTypeFilters $Script:ChartRows
+        Build-WorkTypeMix    -Rows $r
+        Build-CaseAnalysis   -Rows $r
+        Build-OpsAnalysis    -Rows $r
+    } })
 }
 
 # Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
@@ -2141,9 +2219,9 @@ function Apply-Filters {
     foreach ($step in @(
         @{N='MemberLoad';          S={ Build-MemberLoad          -Rows $Script:ChartRows }},
         @{N='MemberProjectMatrix'; S={ Build-MemberProjectMatrix -Rows $Script:ChartRows }},
-        @{N='WorkTypeMix';         S={ Build-WorkTypeMix         -Rows $Script:ChartRows }},
-        @{N='CaseAnalysis';        S={ Build-CaseAnalysis        -Rows $Script:ChartRows }},
-        @{N='OpsAnalysis';         S={ Build-OpsAnalysis         -Rows $Script:ChartRows }}
+        @{N='WorkTypeMix';         S={ Build-WorkTypeMix         -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }},
+        @{N='CaseAnalysis';        S={ Build-CaseAnalysis        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }},
+        @{N='OpsAnalysis';         S={ Build-OpsAnalysis         -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }}
     )) {
         _TraceMgr $step.N 'begin'
         try { & $step.S; _TraceMgr $step.N 'ok' }
