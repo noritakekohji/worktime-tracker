@@ -304,6 +304,7 @@ $xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 $Script:Window.Title = Format-WindowTitle -ScreenName '日次入力'
+# UI フッタにバージョンを表示 (FindName 後にセット)
 
 $names = @(
     'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText',
@@ -311,10 +312,13 @@ $names = @(
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
-    'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText'
+    'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText','VersionText'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
+
+# フッタにバージョン表示
+if ($ui.VersionText) { $ui.VersionText.Text = $Script:AppVersionTag }
 
 $ui.ModeText.Text = switch ($Script:Config.mode) {
     'gitlab' { "Gitlab モード | {0} / {1} @ {2} | local: {3}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch, $Script:Config.local_store }

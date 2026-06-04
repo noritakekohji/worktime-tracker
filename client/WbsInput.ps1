@@ -143,10 +143,11 @@ $xamlPath = Join-Path $PSScriptRoot 'WbsInput.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
 $Script:Window.Title = Format-WindowTitle -ScreenName 'WBS入力'
+# フッタの VersionText は FindName 後にセットする (下記 foreach で取得した後)
 
 $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','AdminBtn',
-                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText',
+                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText','VersionText',
                   'DelRowBtn','ShowDoneChk','FilterStatusText',
                   # タスクビュー (右下)
                   'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
@@ -154,6 +155,9 @@ foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','Ad
                   'TaskEntriesGrid')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
+
+# フッタにバージョン表示
+if ($ui.VersionText) { $ui.VersionText.Text = $Script:AppVersionTag }
 
 function Set-Status {
     param([string]$Msg, [string]$Color = '#6b7280')

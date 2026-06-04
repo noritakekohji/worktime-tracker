@@ -171,9 +171,10 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
 $win.Title = Format-WindowTitle -ScreenName 'Report'
+# (フッタ VersionText は FindName 後にセット)
 $u = @{}
 foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
-              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','AnalysisPanel',
+              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
@@ -184,6 +185,9 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'OpsPieCanvas','OpsPieLegend','OpsBarCanvas') {
     $u[$n] = $win.FindName($n)
 }
+
+# フッタにバージョン表示
+if ($u.VersionText) { $u.VersionText.Text = $Script:AppVersionTag }
 
 # 管理者ロールなら管理者ボタン表示 (CurrentMember は Bootstrap で解決済み)
 if ($Script:CurrentMember -and (Has-Role -Member $Script:CurrentMember -Role 'admin') -and $u.AdminBtn) {

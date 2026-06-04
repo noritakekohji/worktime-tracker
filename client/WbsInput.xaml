@@ -122,6 +122,9 @@
                             MinWidth="100" Margin="6,3,3,3"
                             ToolTip="ローカル保存 + Gitlabへ送信 (gitlabモードのみ有効)"/>
                 </StackPanel>
+                <TextBlock DockPanel.Dock="Left" x:Name="VersionText"
+                           Margin="0,0,12,0" VerticalAlignment="Center"
+                           Foreground="{StaticResource Muted}" FontSize="11"/>
                 <TextBlock x:Name="StatusText"
                            Text="プロジェクトと月を選択して「読込」を押してください"
                            VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
