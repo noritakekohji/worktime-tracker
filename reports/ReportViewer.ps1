@@ -59,6 +59,7 @@ Write-FatalLog ("PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScri
 $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'Config.ps1')
 . (Join-Path $libDir 'Credential.ps1')
+. (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
@@ -169,6 +170,7 @@ $xamlPath = Join-Path $PSScriptRoot 'ReportViewer.xaml'
 [xml]$xaml = Get-Content -LiteralPath $xamlPath -Raw -Encoding UTF8
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win = [Windows.Markup.XamlReader]::Load($reader)
+$win.Title = Format-WindowTitle -ScreenName 'Report'
 $u = @{}
 foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','AnalysisPanel',

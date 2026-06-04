@@ -33,7 +33,7 @@ function Show-AdminDialog {
     $win = [Windows.Markup.XamlReader]::Load($reader)
 
     $u = @{}
-    foreach ($n in 'StatusText','ReloadBtn','CloseBtn','SaveBtn',
+    foreach ($n in 'StatusText','ReloadBtn','CloseBtn','SaveBtn','SendBtn',
                    'MembersGrid','MemAddBtn','MemDelBtn',
                    'ProjectsGrid','PrjAddBtn','PrjDelBtn','ProjPatternCol',
                    'PatternsList','PatAddBtn','PatDelBtn',
@@ -874,8 +874,9 @@ function Show-AdminDialog {
         } catch { _Status "JSON 適用失敗: $_" '#dc2626' }
     })
 
-    # ---- 保存 ----
-    $u.SaveBtn.Add_Click({
+    # ---- 共通 ローカル保存処理 (Save / Send 両方が呼ぶ) ----
+    # 戻り値: $true=成功, $false=失敗 (例外は内部で MessageBox/Status 表示)
+    $global:WT_AdminLocalSave = {
         try {
             _Status '保存中...' '#db2777'
             $win.Cursor = [System.Windows.Input.Cursors]::Wait
@@ -944,30 +945,54 @@ function Show-AdminDialog {
             $where = 'Save-MasterHolidays'
             Save-MasterHolidays -Source $Source -Data $holsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
-            # Step 2: リモート モードならリモートへも push
-            if ($Source.RemoteCtx) {
-                $where = 'Sync-Push-Masters'
-                _Status 'リモートへ送信中...' '#db2777'
-                $pushResult = Sync-Push-Masters -Source $Source -AuthorName $authorName -AuthorEmail $authorEmail
-                $msg = "保存 → 送信 完了`n  ローカル保存: 4 ファイル`n  リモート push: $($pushResult.Pushed)`n  エラー: $($pushResult.Errors.Count)"
-                if ($pushResult.Errors.Count -gt 0) {
-                    $msg += "`n`n[リモート push エラー]`n" + (($pushResult.Errors | Select-Object -First 5) -join "`n")
-                    _Status "ローカル保存完了 / リモート push 失敗" '#dc2626'
-                    [System.Windows.MessageBox]::Show($msg, '送信エラー', 'OK', 'Warning') | Out-Null
-                } else {
-                    _Status 'ローカル保存 + リモート送信 完了。各クライアントの再読込で反映。' '#059669'
-                    [System.Windows.MessageBox]::Show($msg, '完了', 'OK', 'Information') | Out-Null
-                }
-            } else {
-                _Status 'ローカル保存完了 (local モードのためリモート送信なし)' '#059669'
-                [System.Windows.MessageBox]::Show("ローカルに保存しました。`n(リモート設定がないため送信なし)", '完了', 'OK', 'Information') | Out-Null
-            }
-            # 保存後にマスタを再読込して一覧表示を最新化 (タスクパターン名などの編集を反映)
+            _Status 'ローカル保存完了 (5 マスタ)' '#059669'
+            # 保存後にマスタを再読込して一覧表示を最新化 (タスクパターン名等の編集反映)
             Load-All
+            return $true
         } catch {
             $detail = "場所: $where`n`n$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
             _Status "保存失敗 (詳細はダイアログ)" '#dc2626'
             [System.Windows.MessageBox]::Show($detail, 'マスタ保存失敗', 'OK', 'Error') | Out-Null
+            return $false
+        } finally {
+            $win.Cursor = $null
+        }
+    }.GetNewClosure()
+
+    # 💾 保存 = ローカルに保存のみ
+    $u.SaveBtn.Add_Click({
+        $ok = & $global:WT_AdminLocalSave
+        if ($ok) {
+            [System.Windows.MessageBox]::Show("ローカルにマスタを保存しました。`n(Gitlab には反映されていません — 反映するには「📤 送信」を押してください)", '保存完了', 'OK', 'Information') | Out-Null
+        }
+    })
+
+    # 📤 送信 = ローカル保存 → Gitlab push (Gitlab モード時のみ実 push)
+    $u.SendBtn.Add_Click({
+        $ok = & $global:WT_AdminLocalSave
+        if (-not $ok) { return }
+        if (-not $Source.RemoteCtx) {
+            [System.Windows.MessageBox]::Show("スタンドアローンモードのためローカル保存のみで完了しました。`n(リモート push は行いません)", '保存完了', 'OK', 'Information') | Out-Null
+            return
+        }
+        try {
+            _Status 'リモートへ送信中...' '#db2777'
+            $win.Cursor = [System.Windows.Input.Cursors]::Wait
+            $authorName  = [string]$MemberName
+            $authorEmail = "$([string]$MemberId)@worktime-tracker.local"
+            $pushResult = Sync-Push-Masters -Source $Source -AuthorName $authorName -AuthorEmail $authorEmail
+            $msg = "保存 → 送信 完了`n  ローカル保存: 5 マスタ`n  リモート push: $($pushResult.Pushed)`n  エラー: $($pushResult.Errors.Count)"
+            if ($pushResult.Errors.Count -gt 0) {
+                $msg += "`n`n[リモート push エラー]`n" + (($pushResult.Errors | Select-Object -First 5) -join "`n")
+                _Status "ローカル保存完了 / リモート push 失敗" '#dc2626'
+                [System.Windows.MessageBox]::Show($msg, '送信エラー', 'OK', 'Warning') | Out-Null
+            } else {
+                _Status 'ローカル保存 + リモート送信 完了。各クライアントの取得で反映。' '#059669'
+                [System.Windows.MessageBox]::Show($msg, '送信完了', 'OK', 'Information') | Out-Null
+            }
+        } catch {
+            _Status "送信失敗: $_" '#dc2626'
+            [System.Windows.MessageBox]::Show("リモート送信に失敗:`n$_", '送信エラー', 'OK', 'Error') | Out-Null
         } finally {
             $win.Cursor = $null
         }

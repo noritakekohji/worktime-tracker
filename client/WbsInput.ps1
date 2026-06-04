@@ -90,6 +90,7 @@ namespace WT {
 
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Config.ps1')
+. (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
@@ -141,6 +142,7 @@ $xamlPath = Join-Path $PSScriptRoot 'WbsInput.xaml'
 [xml]$xaml = Get-Content -LiteralPath $xamlPath -Raw -Encoding UTF8
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $Script:Window = [Windows.Markup.XamlReader]::Load($reader)
+$Script:Window.Title = Format-WindowTitle -ScreenName 'WBS入力'
 
 $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','AdminBtn',

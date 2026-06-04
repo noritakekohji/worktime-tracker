@@ -164,7 +164,10 @@
                 <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#fbcfe8" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                     <Button x:Name="CloseBtn" Content="閉じる" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
-                    <Button x:Name="SaveBtn"  Content="💾 保存して反映" Style="{StaticResource Primary}" MinWidth="180"/>
+                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"
+                            ToolTip="ローカルにマスタを保存 (リモートへの送信は別ボタン)"/>
+                    <Button x:Name="SendBtn" Content="📤 送信" Style="{StaticResource Primary}" MinWidth="100" Margin="6,3,3,3"
+                            ToolTip="ローカル保存 + Gitlab へ push (Gitlabモード時のみ有効)"/>
                 </StackPanel>
             </DockPanel>
         </Border>
