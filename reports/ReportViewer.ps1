@@ -1602,13 +1602,14 @@ function Build-MemberProjectMatrix {
 
 # ---- 業務種別 (案件対応 / 維持運用 / その他) 稼働比率 ----
 function _DrawPieChart {
-    # 円グラフを Canvas に描く (3 セクター対応・360°)
-    # $Slices: 順序を保つ [ordered]@{ Label=hex色 } 形式 + $Values: 同順 double[]
+    # ドーナツ型チャートを Canvas に描く (内側に空白の穴)
+    # 各セクタは外側弧と内側弧を持つリング片として PathGeometry で構成。
     param(
         [System.Windows.Controls.Canvas]$Canvas,
         [string[]]$Labels,
         [double[]]$Values,
-        [string[]]$Colors
+        [string[]]$Colors,
+        [double]$InnerRatio = 0.55   # 内径 / 外径 比率 (0.0 で従来の pie, 0.55 でドーナツ)
     )
     if (-not $Canvas) { return }
     $Canvas.Children.Clear()
@@ -1624,31 +1625,84 @@ function _DrawPieChart {
     $w = [double]$Canvas.Width; $h = [double]$Canvas.Height
     if ($w -le 0) { $w = 220 }; if ($h -le 0) { $h = 220 }
     $cx = $w / 2.0; $cy = $h / 2.0
-    $radius = ([Math]::Min($cx, $cy)) - 6
+    $outerR = ([Math]::Min($cx, $cy)) - 6
+    $innerR = $outerR * $InnerRatio
     $startAngle = -90.0  # 12 時方向から開始
+    # 100% を 1 セクタが占めると PathGeometry の閉じ方が崩れるため特殊扱い
+    $nonZeroCount = ($Values | Where-Object { $_ -gt 0 }).Count
     for ($i = 0; $i -lt $Values.Count; $i++) {
         $v = [double]$Values[$i]
         if ($v -le 0) { continue }
         $sweep = ($v / $total) * 360.0
-        # Path で扇形を作成: M cx,cy → L 始点 → ArcSegment → Z
         $rad1 = $startAngle * [Math]::PI / 180.0
         $rad2 = ($startAngle + $sweep) * [Math]::PI / 180.0
-        $p1 = New-Object System.Windows.Point ($cx + $radius * [Math]::Cos($rad1)), ($cy + $radius * [Math]::Sin($rad1))
-        $p2 = New-Object System.Windows.Point ($cx + $radius * [Math]::Cos($rad2)), ($cy + $radius * [Math]::Sin($rad2))
+        # 外側弧の両端 / 内側弧の両端
+        $pOuter1 = New-Object System.Windows.Point ($cx + $outerR * [Math]::Cos($rad1)), ($cy + $outerR * [Math]::Sin($rad1))
+        $pOuter2 = New-Object System.Windows.Point ($cx + $outerR * [Math]::Cos($rad2)), ($cy + $outerR * [Math]::Sin($rad2))
+        $pInner2 = New-Object System.Windows.Point ($cx + $innerR * [Math]::Cos($rad2)), ($cy + $innerR * [Math]::Sin($rad2))
+        $pInner1 = New-Object System.Windows.Point ($cx + $innerR * [Math]::Cos($rad1)), ($cy + $innerR * [Math]::Sin($rad1))
+
         $fig = New-Object System.Windows.Media.PathFigure
-        $fig.StartPoint = New-Object System.Windows.Point $cx, $cy
-        $segL = New-Object System.Windows.Media.LineSegment $p1, $true
-        $segA = New-Object System.Windows.Media.ArcSegment
-        $segA.Point = $p2
-        $segA.Size  = New-Object System.Windows.Size $radius, $radius
-        $segA.SweepDirection = [System.Windows.Media.SweepDirection]::Clockwise
-        $segA.IsLargeArc = ($sweep -gt 180.0)
-        $segA.IsStroked = $true
-        [void]$fig.Segments.Add($segL)
-        [void]$fig.Segments.Add($segA)
-        $fig.IsClosed = $true
-        $geom = New-Object System.Windows.Media.PathGeometry
-        [void]$geom.Figures.Add($fig)
+        $fig.StartPoint = $pOuter1
+        $isLargeArc = ($sweep -gt 180.0)
+
+        if ($nonZeroCount -eq 1) {
+            # 100% 1 セクタは完全ドーナツ (2 円) として描く: 外側 1 円 + 内側 1 円
+            # PathFigure をそのまま 360° 弧で描くと潰れるため、半円 2 つで囲む
+            $half1Outer = New-Object System.Windows.Point ($cx - $outerR), $cy
+            $half2Outer = New-Object System.Windows.Point ($cx + $outerR), $cy
+            $fig.StartPoint = $half2Outer
+            $arcO1 = New-Object System.Windows.Media.ArcSegment
+            $arcO1.Point = $half1Outer; $arcO1.Size = New-Object System.Windows.Size $outerR, $outerR
+            $arcO1.SweepDirection = [System.Windows.Media.SweepDirection]::Clockwise
+            $arcO1.IsLargeArc = $false
+            [void]$fig.Segments.Add($arcO1)
+            $arcO2 = New-Object System.Windows.Media.ArcSegment
+            $arcO2.Point = $half2Outer; $arcO2.Size = New-Object System.Windows.Size $outerR, $outerR
+            $arcO2.SweepDirection = [System.Windows.Media.SweepDirection]::Clockwise
+            $arcO2.IsLargeArc = $false
+            [void]$fig.Segments.Add($arcO2)
+            $fig.IsClosed = $true
+            $fig2 = New-Object System.Windows.Media.PathFigure
+            $half2Inner = New-Object System.Windows.Point ($cx + $innerR), $cy
+            $half1Inner = New-Object System.Windows.Point ($cx - $innerR), $cy
+            $fig2.StartPoint = $half2Inner
+            $arcI1 = New-Object System.Windows.Media.ArcSegment
+            $arcI1.Point = $half1Inner; $arcI1.Size = New-Object System.Windows.Size $innerR, $innerR
+            $arcI1.SweepDirection = [System.Windows.Media.SweepDirection]::Counterclockwise
+            $arcI1.IsLargeArc = $false
+            [void]$fig2.Segments.Add($arcI1)
+            $arcI2 = New-Object System.Windows.Media.ArcSegment
+            $arcI2.Point = $half2Inner; $arcI2.Size = New-Object System.Windows.Size $innerR, $innerR
+            $arcI2.SweepDirection = [System.Windows.Media.SweepDirection]::Counterclockwise
+            $arcI2.IsLargeArc = $false
+            [void]$fig2.Segments.Add($arcI2)
+            $fig2.IsClosed = $true
+            $geom = New-Object System.Windows.Media.PathGeometry
+            [void]$geom.Figures.Add($fig)
+            [void]$geom.Figures.Add($fig2)
+            $geom.FillRule = [System.Windows.Media.FillRule]::EvenOdd
+        } else {
+            # 通常: 外側弧 → 内側端へ直線 → 内側弧 (逆回り) → 閉じる
+            $arcOuter = New-Object System.Windows.Media.ArcSegment
+            $arcOuter.Point = $pOuter2
+            $arcOuter.Size  = New-Object System.Windows.Size $outerR, $outerR
+            $arcOuter.SweepDirection = [System.Windows.Media.SweepDirection]::Clockwise
+            $arcOuter.IsLargeArc = $isLargeArc
+            [void]$fig.Segments.Add($arcOuter)
+            $line1 = New-Object System.Windows.Media.LineSegment $pInner2, $true
+            [void]$fig.Segments.Add($line1)
+            $arcInner = New-Object System.Windows.Media.ArcSegment
+            $arcInner.Point = $pInner1
+            $arcInner.Size  = New-Object System.Windows.Size $innerR, $innerR
+            $arcInner.SweepDirection = [System.Windows.Media.SweepDirection]::Counterclockwise
+            $arcInner.IsLargeArc = $isLargeArc
+            [void]$fig.Segments.Add($arcInner)
+            $fig.IsClosed = $true
+            $geom = New-Object System.Windows.Media.PathGeometry
+            [void]$geom.Figures.Add($fig)
+        }
+
         $path = New-Object System.Windows.Shapes.Path
         $path.Data = $geom
         $brush = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Colors[$i])
@@ -1658,11 +1712,12 @@ function _DrawPieChart {
         $pct = ($v / $total) * 100.0
         $path.ToolTip = ("{0}  {1:N1}h  ({2:N1}%)" -f $Labels[$i], $v, $pct)
         [void]$Canvas.Children.Add($path)
-        # ラベル (10% 以上のときだけ描画)
-        if ($pct -ge 10) {
+        # ラベル (8% 以上のときだけ描画) — 外側弧と内側弧の中間に置く
+        if ($pct -ge 8) {
             $midRad = ($startAngle + $sweep / 2.0) * [Math]::PI / 180.0
-            $lx = $cx + ($radius * 0.6) * [Math]::Cos($midRad)
-            $ly = $cy + ($radius * 0.6) * [Math]::Sin($midRad)
+            $midR   = ($outerR + $innerR) / 2.0
+            $lx = $cx + $midR * [Math]::Cos($midRad)
+            $ly = $cy + $midR * [Math]::Sin($midRad)
             $tb = New-Object System.Windows.Controls.TextBlock
             $tb.Text = "{0:N0}%" -f $pct
             $tb.Foreground = [System.Windows.Media.Brushes]::White
@@ -1673,6 +1728,16 @@ function _DrawPieChart {
         }
         $startAngle += $sweep
     }
+
+    # ドーナツ中央に合計値を表示
+    $totalLabel = New-Object System.Windows.Controls.TextBlock
+    $totalLabel.Text = "{0:N1} h" -f $total
+    $totalLabel.FontWeight = 'Bold'; $totalLabel.FontSize = 14
+    $totalLabel.Foreground = [System.Windows.Media.Brushes]::DimGray
+    $totalLabel.TextAlignment = 'Center'; $totalLabel.Width = 80
+    [System.Windows.Controls.Canvas]::SetLeft($totalLabel, $cx - 40)
+    [System.Windows.Controls.Canvas]::SetTop($totalLabel, $cy - 10)
+    [void]$Canvas.Children.Add($totalLabel)
 }
 
 function _DrawPieLegend {
