@@ -1998,26 +1998,41 @@ function _BuildWorkTypeDrillDown {
         return
     }
 
+    # 列キーが空のエントリは「(未分割)」バケットに集約 (パターン未細分化への対応)
+    $UNSPLIT_KEY = '(未分割)'
     $rowKeys = @($filtered | ForEach-Object { & $RowKeyFn $_ } | Where-Object { $_ -ne $null } | ForEach-Object { [string]$_ } | Sort-Object -Unique)
-    $colKeys = @($filtered | ForEach-Object { [string]$_.$colKey } | Where-Object { $_ } | Sort-Object -Unique)
+    $colKeysRaw = @($filtered | ForEach-Object { [string]$_.$colKey } | Sort-Object -Unique)
+    # 空の列キーを (未分割) に置き換えてユニーク化
+    $colKeys = New-Object 'System.Collections.Generic.List[string]'
+    $hasUnsplit = $false
+    foreach ($ck in $colKeysRaw) {
+        if ([string]::IsNullOrWhiteSpace($ck)) { $hasUnsplit = $true } else { [void]$colKeys.Add($ck) }
+    }
+    $colKeys = @($colKeys)
+    if ($hasUnsplit) { $colKeys = $colKeys + $UNSPLIT_KEY }
     if ($rowKeys.Count -eq 0 -or $colKeys.Count -eq 0) { return }
 
-    # 集計
+    # 集計 — 空 colKey は UNSPLIT_KEY に振り分ける
     $cell = @{}  # rowKey -> { colKey -> hours }
     foreach ($r in $filtered) {
         $rk = [string](& $RowKeyFn $r); $ck = [string]$r.$colKey
-        if (-not $rk -or -not $ck) { continue }
+        if (-not $rk) { continue }
+        if ([string]::IsNullOrWhiteSpace($ck)) { $ck = $UNSPLIT_KEY }
         if (-not $cell.ContainsKey($rk)) { $cell[$rk] = @{} }
         if (-not $cell[$rk].ContainsKey($ck)) { $cell[$rk][$ck] = 0.0 }
         $cell[$rk][$ck] += [double]$r.hours
     }
 
     $rowLabel = if ($WorkType -eq '案件対応') { 'プロジェクト' } else { '対象システム' }
-    # 列表示ヘッダ: code + name 形式 (Resolve-* で名称を引く)
+    # 列表示ヘッダ: code + name 形式 (未分割は専用ラベル)
     $colHeaders = @{}
     foreach ($ck in $colKeys) {
-        $name = & $colNameFn $ck
-        $colHeaders[$ck] = _MergeCodeName $ck $name
+        if ($ck -eq $UNSPLIT_KEY) {
+            $colHeaders[$ck] = $UNSPLIT_KEY
+        } else {
+            $name = & $colNameFn $ck
+            $colHeaders[$ck] = _MergeCodeName $ck $name
+        }
     }
     $out = New-Object System.Collections.Generic.List[object]
     foreach ($rk in $rowKeys) {
