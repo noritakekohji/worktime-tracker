@@ -146,7 +146,9 @@
         <Border DockPanel.Dock="Bottom" Background="#0c4a6e" Padding="18,14">
             <DockPanel>
                 <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#bae6fd" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock x:Name="VersionText" DockPanel.Dock="Left" Margin="14,0,0,0" Foreground="#7dd3fc" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock x:Name="VersionText" DockPanel.Dock="Left" Margin="14,0,0,0" Foreground="#7dd3fc" FontSize="11" VerticalAlignment="Center"
+                           Cursor="Hand" TextDecorations="Underline"
+                           ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"
                             ToolTip="ローカルから全データ再読込"/>

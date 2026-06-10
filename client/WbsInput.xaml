@@ -124,7 +124,9 @@
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Left" x:Name="VersionText"
                            Margin="0,0,12,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource Muted}" FontSize="11"/>
+                           Foreground="{StaticResource Muted}" FontSize="11"
+                           Cursor="Hand" TextDecorations="Underline"
+                           ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <TextBlock x:Name="StatusText"
                            Text="プロジェクトと月を選択して「読込」を押してください"
                            VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>

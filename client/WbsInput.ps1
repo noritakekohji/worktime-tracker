@@ -156,8 +156,11 @@ foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','Ad
     $ui[$n] = $Script:Window.FindName($n)
 }
 
-# フッタにバージョン表示
-if ($ui.VersionText) { $ui.VersionText.Text = $Script:AppVersionTag }
+# フッタにバージョン表示 (クリックで CHANGELOG を開く)
+if ($ui.VersionText) {
+    $ui.VersionText.Text = $Script:AppVersionTag
+    $ui.VersionText.Add_MouseLeftButtonUp({ Show-ChangelogDialog })
+}
 
 function Set-Status {
     param([string]$Msg, [string]$Color = '#6b7280')

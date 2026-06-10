@@ -317,8 +317,11 @@ $names = @(
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
 
-# フッタにバージョン表示
-if ($ui.VersionText) { $ui.VersionText.Text = $Script:AppVersionTag }
+# フッタにバージョン表示 (クリックで CHANGELOG を開く)
+if ($ui.VersionText) {
+    $ui.VersionText.Text = $Script:AppVersionTag
+    $ui.VersionText.Add_MouseLeftButtonUp({ Show-ChangelogDialog })
+}
 
 $ui.ModeText.Text = switch ($Script:Config.mode) {
     'gitlab' { "Gitlab モード | {0} / {1} @ {2} | local: {3}" -f $Script:Config.gitlab_url, $Script:Config.project_id, $Script:Config.branch, $Script:Config.local_store }

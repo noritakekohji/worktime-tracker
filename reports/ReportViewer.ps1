@@ -186,8 +186,11 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
     $u[$n] = $win.FindName($n)
 }
 
-# フッタにバージョン表示
-if ($u.VersionText) { $u.VersionText.Text = $Script:AppVersionTag }
+# フッタにバージョン表示 (クリックで CHANGELOG を開く)
+if ($u.VersionText) {
+    $u.VersionText.Text = $Script:AppVersionTag
+    $u.VersionText.Add_MouseLeftButtonUp({ Show-ChangelogDialog })
+}
 
 # 管理者ロールなら管理者ボタン表示 (CurrentMember は Bootstrap で解決済み)
 if ($Script:CurrentMember -and (Has-Role -Member $Script:CurrentMember -Role 'admin') -and $u.AdminBtn) {
