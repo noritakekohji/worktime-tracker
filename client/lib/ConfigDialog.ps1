@@ -25,7 +25,7 @@ function Show-ConfigDialog {
     $u = @{}
     foreach ($n in 'ModeCombo','UrlBox','ProjectIdBox','BranchBox','TokenBox','MemberIdBox','StatusText','TestBtn','SaveBtn','CancelBtn',
                    'UrlLabel','ProjectIdLabel','ProjectIdHint','BranchLabel','TokenLabel','TokenHint',
-                   'LocalRootBox','BrowseBtn') {
+                   'LocalRootBox','BrowseBtn','LogDirBox','BrowseLogBtn') {
         $u[$n] = $win.FindName($n)
     }
 
@@ -34,6 +34,7 @@ function Show-ConfigDialog {
     $u.BranchBox.Text    = $Config.branch
     $u.MemberIdBox.Text  = if ($Config.member_id) { $Config.member_id } else { $env:USERNAME }
     $u.LocalRootBox.Text = if ($Config.local_store) { $Config.local_store } else { (Get-DefaultLocalStore) }
+    $u.LogDirBox.Text    = if ($Config.PSObject.Properties['log_dir']) { $Config.log_dir } else { '' }
     $u.ProjectIdBox.Text = [string]$Config.project_id
 
     $modeWanted = if ($Config.mode -and ($Config.mode -eq 'gitlab')) { 'gitlab' } else { 'local' }
@@ -87,6 +88,17 @@ function Show-ConfigDialog {
         }
         if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             $u.LocalRootBox.Text = $dlg.SelectedPath
+        }
+    })
+
+    $u.BrowseLogBtn.Add_Click({
+        $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dlg.Description = 'ログ出力先フォルダ (ブランクのとき出力なし)'
+        if ($u.LogDirBox.Text -and (Test-Path -LiteralPath $u.LogDirBox.Text)) {
+            $dlg.SelectedPath = $u.LogDirBox.Text
+        }
+        if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $u.LogDirBox.Text = $dlg.SelectedPath
         }
     })
 
@@ -146,6 +158,7 @@ function Show-ConfigDialog {
             $Config.branch      = $u.BranchBox.Text.Trim()
             $Config.member_id   = $u.MemberIdBox.Text.Trim()
             $Config.local_store = $lr
+            $Config.log_dir     = $u.LogDirBox.Text.Trim()
             if ($mode -eq 'gitlab') {
                 $Config.gitlab_url = $u.UrlBox.Text.Trim()
                 $Config.project_id = $u.ProjectIdBox.Text.Trim()
