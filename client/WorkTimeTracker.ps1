@@ -12,19 +12,30 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
-# ---- 致命エラーログ + 持続表示 ----
-$Script:LogDir = Join-Path $env:APPDATA 'worktime-tracker'
-if (-not (Test-Path -LiteralPath $Script:LogDir)) {
-    New-Item -ItemType Directory -Path $Script:LogDir -Force | Out-Null
-}
-$Script:LogPath = Join-Path $Script:LogDir 'last_error.log'
+# ---- 致命エラーログ ----
+# Config ロード前は $null (出力なし)。Initialize-AppContext 後に Update-LogPath で確定。
+$Script:LogPath = $null
 
 function Write-FatalLog {
     param([string]$Text)
+    if (-not $Script:LogPath) { return }
     try {
         $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
         Add-Content -LiteralPath $Script:LogPath -Value "[$stamp] $Text`r`n" -Encoding UTF8
     } catch { }
+}
+
+function Update-LogPath {
+    param([Parameter(Mandatory)]$Config)
+    $dir = if ($Config.PSObject.Properties['log_dir']) { $Config.log_dir } else { '' }
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        $Script:LogPath = $null
+        return
+    }
+    if (-not (Test-Path -LiteralPath $dir)) {
+        try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $Script:LogPath = $null; return }
+    }
+    $Script:LogPath = Join-Path $dir 'last_error.log'
 }
 
 function Show-FatalDialog {
@@ -41,7 +52,8 @@ function Show-FatalDialog {
 }
 
 trap {
-    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)`n`n--- 詳細はログ: $Script:LogPath"
+    $logNote = if ($Script:LogPath) { "`n`n--- 詳細はログ: $Script:LogPath" } else { '' }
+    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)$logNote"
     Write-FatalLog "FATAL: $($_.Exception.Message)`r`n$($_.ScriptStackTrace)`r`n$($_.Exception | Format-List * -Force | Out-String)"
     Show-FatalDialog -Title 'WorkTime Tracker - 致命的エラー' -Message $msg
     exit 1
@@ -249,6 +261,7 @@ if (-not $ctx) {
     return
 }
 $Script:Config     = $ctx['Config']
+Update-LogPath -Config $Script:Config
 $Script:Source     = $ctx['Source']
 $Script:Token      = $ctx['Token']
 $Script:Members      = @($ctx['Members'])
