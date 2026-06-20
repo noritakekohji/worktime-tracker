@@ -23,6 +23,7 @@ function New-DefaultConfig {
         member_id    = ''
         local_store  = (Get-DefaultLocalStore)
         local_root   = ''                         # (旧設定; 互換)
+        log_dir      = ''                         # ログ出力先フォルダ (空文字 = 出力なし)
     }
 }
 
