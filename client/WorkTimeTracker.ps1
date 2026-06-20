@@ -1004,6 +1004,7 @@ $ui.SettingsBtn.Add_Click({
     $newCtx = Initialize-AppContext -ForceDialog
     if ($newCtx) {
         $Script:Config       = $newCtx['Config']
+        Update-LogPath -Config $Script:Config
         $Script:Source       = $newCtx['Source']
         $Script:Token        = $newCtx['Token']
         $Script:Members      = @($newCtx['Members'])
