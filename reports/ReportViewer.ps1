@@ -9,23 +9,41 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
 
-# ---- 致命エラーログ (Tracker と共用) ----
-$Script:LogDir = Join-Path $env:APPDATA 'worktime-tracker'
-if (-not (Test-Path -LiteralPath $Script:LogDir)) {
-    New-Item -ItemType Directory -Path $Script:LogDir -Force | Out-Null
-}
-$Script:LogPath = Join-Path $Script:LogDir 'last_error.log'
+# ---- 致命エラーログ ----
+# Config ロード前は $null (出力なし)。Initialize-DataContext 後に Update-LogPath で確定。
+$Script:LogPath = $null
 
 function Write-FatalLog {
     param([string]$Text)
+    if (-not $Script:LogPath) { return }
     try {
         $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
         Add-Content -LiteralPath $Script:LogPath -Value "[$stamp] [Report] $Text`r`n" -Encoding UTF8
     } catch { }
 }
 
+function Update-LogPath {
+    param([Parameter(Mandatory)]$Config)
+    $dir = if ($Config.PSObject.Properties['log_dir']) { $Config.log_dir } else { '' }
+    if ([string]::IsNullOrWhiteSpace($dir)) {
+        $Script:LogPath   = $null
+        $Script:TracePath = $null
+        return
+    }
+    if (-not (Test-Path -LiteralPath $dir)) {
+        try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch {
+            $Script:LogPath   = $null
+            $Script:TracePath = $null
+            return
+        }
+    }
+    $Script:LogPath   = Join-Path $dir 'last_error.log'
+    $Script:TracePath = Join-Path $dir 'report_trace.log'
+}
+
 trap {
-    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)`n`n--- 詳細: $Script:LogPath"
+    $logNote = if ($Script:LogPath) { "`n`n--- 詳細: $Script:LogPath" } else { '' }
+    $msg = "$($_.Exception.Message)`n`n--- StackTrace ---`n$($_.ScriptStackTrace)$logNote"
     Write-FatalLog "FATAL: $($_.Exception.Message)`r`n$($_.ScriptStackTrace)`r`n$($_.Exception | Format-List * -Force | Out-String)"
     try {
         [System.Windows.MessageBox]::Show($msg, 'ReportViewer - 致命的エラー', 'OK', 'Error') | Out-Null
@@ -68,6 +86,7 @@ $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 $ctx = Initialize-DataContext -AppName 'ReportViewer'
 if (-not $ctx) { return }
 $Script:Config        = $ctx.Config
+Update-LogPath -Config $Script:Config
 $Script:Token         = $ctx.Token
 $Script:Source        = $ctx.Source
 $Script:Members       = $ctx.Members
@@ -426,10 +445,9 @@ function Apply-Filters {
     # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
     function _Trace {
         param([string]$Tag, [string]$Msg)
+        if (-not $Script:TracePath) { return }
         try {
-            $logDir = Join-Path $env:APPDATA 'worktime-tracker'
-            if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
-            Add-Content -LiteralPath (Join-Path $logDir 'report_trace.log') `
+            Add-Content -LiteralPath $Script:TracePath `
                 -Value ("[{0}] {1} {2}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Tag, $Msg) -Encoding UTF8
         } catch { }
     }
@@ -1168,12 +1186,11 @@ function Reload-Masters {
     }
 }
 
-# 必ず書ける場所に診断ログを出す (Desktop に固定)
-$Script:DiagLogPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'report_trace.log'
 function _Diag {
     param([string]$Msg)
+    if (-not $Script:TracePath) { return }
     try {
-        Add-Content -LiteralPath $Script:DiagLogPath -Value ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Msg) -Encoding UTF8
+        Add-Content -LiteralPath $Script:TracePath -Value ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Msg) -Encoding UTF8
     } catch { }
 }
 _Diag "===== ReportViewer start ====="
@@ -2293,10 +2310,9 @@ if ($u.WorkTypeProjectFilter) {
 # ファイルに書く。どこで落ちているか確実に追跡するため try で囲まない)
 function _TraceMgr {
     param([string]$Tag, [string]$Msg)
+    if (-not $Script:TracePath) { return }
     try {
-        $logDir = Join-Path $env:APPDATA 'worktime-tracker'
-        if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
-        Add-Content -LiteralPath (Join-Path $logDir 'report_trace.log') `
+        Add-Content -LiteralPath $Script:TracePath `
             -Value ("[{0}] [mgr] {1} {2}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Tag, $Msg) -Encoding UTF8
     } catch { }
 }
