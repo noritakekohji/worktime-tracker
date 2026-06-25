@@ -61,6 +61,12 @@ function Show-AdminDialog {
         $u.StatusText.Text = $Text
         $u.StatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
     }
+    # GetNewClosure() クロージャからはローカル function が見えないため、ステータス更新専用の closure を用意する
+    $global:WT_AdminStatus = {
+        param([string]$Text,[string]$Color='#6b7280')
+        $u.StatusText.Text = $Text
+        $u.StatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+    }.GetNewClosure()
 
     function _ToHash {
         param($Obj)
@@ -816,8 +822,8 @@ function Show-AdminDialog {
     $u.JsonTargetCombo.Add_SelectionChanged({ & $global:WT_DoJsonLoad })
     $u.JsonReloadBtn.Add_Click({ & $global:WT_DoJsonLoad })
     $u.JsonValidateBtn.Add_Click({
-        try { [void]($u.JsonBox.Text | ConvertFrom-Json); _Status 'JSON OK' '#059669' }
-        catch { _Status "JSON 構文エラー: $_" '#dc2626' }
+        try { [void]($u.JsonBox.Text | ConvertFrom-Json); & $global:WT_AdminStatus 'JSON OK' '#059669' }
+        catch { & $global:WT_AdminStatus "JSON 構文エラー: $_" '#dc2626' }
     })
     $u.JsonApplyBtn.Add_Click({
         $t = $u.JsonTargetCombo.SelectedItem.Content
@@ -870,15 +876,15 @@ function Show-AdminDialog {
                     }
                 }
             }
-            _Status "$t を JSON から適用 (保存は別途)" '#059669'
-        } catch { _Status "JSON 適用失敗: $_" '#dc2626' }
+            & $global:WT_AdminStatus "$t を JSON から適用 (保存は別途)" '#059669'
+        } catch { & $global:WT_AdminStatus "JSON 適用失敗: $_" '#dc2626' }
     })
 
     # ---- 共通 ローカル保存処理 (Save / Send 両方が呼ぶ) ----
     # 戻り値: $true=成功, $false=失敗 (例外は内部で MessageBox/Status 表示)
     $global:WT_AdminLocalSave = {
         try {
-            _Status '保存中...' '#db2777'
+            & $global:WT_AdminStatus '保存中...' '#db2777'
             $win.Cursor = [System.Windows.Input.Cursors]::Wait
 
             $authorName  = [string]$MemberName
@@ -945,13 +951,11 @@ function Show-AdminDialog {
             $where = 'Save-MasterHolidays'
             Save-MasterHolidays -Source $Source -Data $holsOut -AuthorName $authorName -AuthorEmail $authorEmail
 
-            _Status 'ローカル保存完了 (5 マスタ)' '#059669'
-            # 保存後にマスタを再読込して一覧表示を最新化 (タスクパターン名等の編集反映)
-            Load-All
+            & $global:WT_AdminStatus 'ローカル保存完了 (5 マスタ)' '#059669'
             return $true
         } catch {
             $detail = "場所: $where`n`n$($_.Exception.Message)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
-            _Status "保存失敗 (詳細はダイアログ)" '#dc2626'
+            & $global:WT_AdminStatus "保存失敗 (詳細はダイアログ)" '#dc2626'
             [System.Windows.MessageBox]::Show($detail, 'マスタ保存失敗', 'OK', 'Error') | Out-Null
             return $false
         } finally {
@@ -963,6 +967,8 @@ function Show-AdminDialog {
     $u.SaveBtn.Add_Click({
         $ok = & $global:WT_AdminLocalSave
         if ($ok) {
+            # 保存後にマスタを再読込して一覧表示を最新化 (タスクパターン名等の編集反映)
+            Load-All
             [System.Windows.MessageBox]::Show("ローカルにマスタを保存しました。`n(Gitlab には反映されていません — 反映するには「📤 送信」を押してください)", '保存完了', 'OK', 'Information') | Out-Null
         }
     })
@@ -971,12 +977,13 @@ function Show-AdminDialog {
     $u.SendBtn.Add_Click({
         $ok = & $global:WT_AdminLocalSave
         if (-not $ok) { return }
+        Load-All
         if (-not $Source.RemoteCtx) {
             [System.Windows.MessageBox]::Show("スタンドアローンモードのためローカル保存のみで完了しました。`n(リモート push は行いません)", '保存完了', 'OK', 'Information') | Out-Null
             return
         }
         try {
-            _Status 'リモートへ送信中...' '#db2777'
+            & $global:WT_AdminStatus 'リモートへ送信中...' '#db2777'
             $win.Cursor = [System.Windows.Input.Cursors]::Wait
             $authorName  = [string]$MemberName
             $authorEmail = "$([string]$MemberId)@worktime-tracker.local"
@@ -984,14 +991,14 @@ function Show-AdminDialog {
             $msg = "保存 → 送信 完了`n  ローカル保存: 5 マスタ`n  リモート push: $($pushResult.Pushed)`n  エラー: $($pushResult.Errors.Count)"
             if ($pushResult.Errors.Count -gt 0) {
                 $msg += "`n`n[リモート push エラー]`n" + (($pushResult.Errors | Select-Object -First 5) -join "`n")
-                _Status "ローカル保存完了 / リモート push 失敗" '#dc2626'
+                & $global:WT_AdminStatus "ローカル保存完了 / リモート push 失敗" '#dc2626'
                 [System.Windows.MessageBox]::Show($msg, '送信エラー', 'OK', 'Warning') | Out-Null
             } else {
-                _Status 'ローカル保存 + リモート送信 完了。各クライアントの取得で反映。' '#059669'
+                & $global:WT_AdminStatus 'ローカル保存 + リモート送信 完了。各クライアントの取得で反映。' '#059669'
                 [System.Windows.MessageBox]::Show($msg, '送信完了', 'OK', 'Information') | Out-Null
             }
         } catch {
-            _Status "送信失敗: $_" '#dc2626'
+            & $global:WT_AdminStatus "送信失敗: $_" '#dc2626'
             [System.Windows.MessageBox]::Show("リモート送信に失敗:`n$_", '送信エラー', 'OK', 'Error') | Out-Null
         } finally {
             $win.Cursor = $null
