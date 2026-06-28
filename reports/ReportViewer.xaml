@@ -57,6 +57,7 @@
             <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -101,7 +102,7 @@
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="14"/>
             <Setter Property="Margin" Value="8"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
@@ -154,9 +155,9 @@
                             ToolTip="ローカルから全データ再読込"/>
                     <Button x:Name="ReloadBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"
                             ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
-                    <Button x:Name="ApplyBtn"  Content="フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"/>
+                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"/>
                     <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="160"/>
-                    <Button x:Name="AdminBtn"  Content="🔧 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
+                    <Button x:Name="AdminBtn"  Content="🛠 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
             </DockPanel>
         </Border>

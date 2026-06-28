@@ -58,6 +58,7 @@
             <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -97,20 +98,33 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Muted}"/>
         </Style>
     </Window.Resources>
 
     <DockPanel Margin="20">
-        <TextBlock DockPanel.Dock="Top" Text="接続設定" FontSize="18" FontWeight="Bold" Foreground="{StaticResource EmeraldD}" Margin="0,0,0,16"/>
+        <Border DockPanel.Dock="Top" Background="#064e3b" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
+            <StackPanel>
+                <TextBlock Text="⚙ 接続設定" FontSize="18" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="保存先と同期方法を設定します" FontSize="12" Foreground="#a7f3d0" Margin="0,6,0,0"/>
+            </StackPanel>
+        </Border>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="TestBtn"   Content="🔌 接続テスト"/>
-            <Button x:Name="CancelBtn" Content="キャンセル"/>
-            <Button x:Name="SaveBtn"   Content="✓ 保存して開始" Style="{StaticResource Primary}" MinWidth="160"/>
+            <Button x:Name="CancelBtn" Content="✕ キャンセル"/>
+            <Button x:Name="SaveBtn"   Content="💾 保存して開始" Style="{StaticResource Primary}" MinWidth="160"/>
         </StackPanel>
 
+        <Border Style="{StaticResource Card}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
@@ -175,5 +189,6 @@
 
             <TextBlock Grid.Row="16" Grid.Column="0" Grid.ColumnSpan="3" x:Name="StatusText" FontSize="12" Margin="0,14,0,0" TextWrapping="Wrap"/>
         </Grid>
+        </Border>
     </DockPanel>
 </Window>

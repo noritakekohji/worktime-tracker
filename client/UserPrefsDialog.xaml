@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="個人設定 - WorkTime Tracker"
@@ -7,31 +7,39 @@
     ResizeMode="NoResize"
     Background="#f6faf8"
     FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
-    FontSize="13">
+    FontSize="13"
+    TextOptions.TextFormattingMode="Display"
+    TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <SolidColorBrush x:Key="Surface" Color="#ffffff"/>
-        <SolidColorBrush x:Key="Border"  Color="#cdebd6"/>
-        <SolidColorBrush x:Key="Text"    Color="#1f2937"/>
-        <SolidColorBrush x:Key="Muted"   Color="#6b7280"/>
-        <SolidColorBrush x:Key="Emerald" Color="#10b981"/>
-        <SolidColorBrush x:Key="EmeraldD" Color="#059669"/>
+        <SolidColorBrush x:Key="Bg"        Color="#f6faf8"/>
+        <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#ecfdf5"/>
+        <SolidColorBrush x:Key="Border"    Color="#cdebd6"/>
+        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
+        <SolidColorBrush x:Key="Muted"     Color="#6b7280"/>
+        <SolidColorBrush x:Key="Emerald"   Color="#10b981"/>
+        <SolidColorBrush x:Key="EmeraldD"  Color="#059669"/>
+        <SolidColorBrush x:Key="EmeraldL"  Color="#a7f3d0"/>
 
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="4,3"/>
-        </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Margin" Value="6,4"/>
+            <Setter Property="Padding" Value="2"/>
         </Style>
         <Style TargetType="Button">
             <Setter Property="Margin" Value="3"/>
             <Setter Property="Padding" Value="14,6"/>
             <Setter Property="MinHeight" Value="34"/>
-            <Setter Property="Background" Value="#ecfdf5"/>
+            <Setter Property="Background" Value="{StaticResource Surface2}"/>
             <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -45,6 +53,13 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="#d1fae5"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldL}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#f3f4f6"/>
+                                <Setter Property="Foreground" Value="#9ca3af"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -66,27 +81,43 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#047857"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
     </Window.Resources>
 
     <DockPanel Margin="20">
-        <TextBlock DockPanel.Dock="Top" Text="⭐ 個人設定" FontSize="18" FontWeight="Bold" Foreground="{StaticResource EmeraldD}" Margin="0,0,0,8"/>
-        <TextBlock DockPanel.Dock="Top" x:Name="MemberLabel" Text="" Margin="0,0,0,16"/>
+        <Border DockPanel.Dock="Top" Background="#064e3b" CornerRadius="8" Padding="16,12" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="⭐ 個人設定" FontSize="18" FontWeight="Bold" Foreground="White"/>
+                <TextBlock x:Name="MemberLabel" Text="" Margin="0,6,0,0" Foreground="#a7f3d0"/>
+            </StackPanel>
+        </Border>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button x:Name="CancelBtn" Content="キャンセル"/>
-            <Button x:Name="SaveBtn"   Content="✓ 保存" Style="{StaticResource Primary}" MinWidth="120"/>
+            <Button x:Name="CancelBtn" Content="✕ キャンセル"/>
+            <Button x:Name="SaveBtn"   Content="💾 保存" Style="{StaticResource Primary}" MinWidth="120"/>
         </StackPanel>
 
         <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Text="お気に入りプロジェクト  (チェックしたプロジェクトはプロジェクト一覧の先頭に ⭐ 付きで表示されます)" Margin="0,0,0,8"/>
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8">
+            <TextBlock DockPanel.Dock="Top"
+                       Text="お気に入りプロジェクトを選択してください。選択したプロジェクトはプロジェクト一覧の先頭に表示されます。"
+                       Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <Border Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="ProjectsList" Margin="6"/>
+                    <ItemsControl x:Name="ProjectsList" Margin="2"/>
                 </ScrollViewer>
             </Border>
         </DockPanel>

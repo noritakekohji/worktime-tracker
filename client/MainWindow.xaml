@@ -75,6 +75,7 @@
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -154,7 +155,7 @@
         <!-- カードコンテナ -->
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="8"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
@@ -325,7 +326,7 @@
                     <TextBlock x:Name="FormHeader" Text="✏ 新規エントリ" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top"/>
 
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button x:Name="ClearBtn" Content="✖ クリア"/>
+                        <Button x:Name="ClearBtn" Content="✕ クリア"/>
                         <Button x:Name="UpdateBtn" Content="✓ 更新" Style="{StaticResource Warning}" Visibility="Collapsed" MinWidth="100"/>
                         <Button x:Name="AddBtn" Content="＋ 追加" Style="{StaticResource Secondary}" MinWidth="100"/>
                     </StackPanel>
@@ -334,8 +335,8 @@
                         <Label Content="日付  (バックデートOK)" Margin="0,2,0,0"/>
                         <StackPanel Orientation="Horizontal">
                             <DatePicker x:Name="EntryDate" Width="180"/>
-                            <Button x:Name="TodayBtn" Content="今日" MinWidth="56" Margin="4,1,0,1" MinHeight="26" Padding="6,2"/>
-                            <Button x:Name="YesterdayBtn" Content="昨日" MinWidth="56" Margin="2,1,0,1" MinHeight="26" Padding="6,2"/>
+                            <Button x:Name="TodayBtn" Content="📅 今日" MinWidth="68" Margin="4,1,0,1" MinHeight="26" Padding="6,2"/>
+                            <Button x:Name="YesterdayBtn" Content="↩ 昨日" MinWidth="68" Margin="2,1,0,1" MinHeight="26" Padding="6,2"/>
                         </StackPanel>
 
                         <CheckBox x:Name="IsLeaveChk" Content="🏖 休暇 (プロジェクト/工程/タスク不要)"

@@ -27,3 +27,13 @@ client/local.config.json
 ~$*
 tests/results/
 .claude/
+
+# === 共通最低限ルール (追記) ===
+# 秘密情報
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.*
+secrets.*

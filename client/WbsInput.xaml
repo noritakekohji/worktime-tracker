@@ -11,10 +11,13 @@
     <Window.Resources>
         <SolidColorBrush x:Key="Emerald"  Color="#10b981"/>
         <SolidColorBrush x:Key="EmeraldD" Color="#059669"/>
+        <SolidColorBrush x:Key="Bg"       Color="#f6faf8"/>
         <SolidColorBrush x:Key="Surface"  Color="#ffffff"/>
+        <SolidColorBrush x:Key="Surface2" Color="#ecfdf5"/>
         <SolidColorBrush x:Key="Border"   Color="#cdebd6"/>
         <SolidColorBrush x:Key="Text"     Color="#1f2937"/>
         <SolidColorBrush x:Key="Muted"    Color="#6b7280"/>
+        <SolidColorBrush x:Key="Soft"     Color="#d1fae5"/>
         <SolidColorBrush x:Key="Weekend"  Color="#b45309"/>
 
         <Style TargetType="Label">
@@ -26,6 +29,23 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+        </Style>
+        <Style TargetType="DatePicker">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
         <Style TargetType="Button">
             <Setter Property="Margin" Value="3"/>
@@ -35,6 +55,7 @@
             <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -85,13 +106,20 @@
             <Setter Property="Padding" Value="2,2"/>
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
         </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
     </Window.Resources>
 
     <DockPanel>
         <!-- ===== ヘッダバー ===== -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource EmeraldD}" Padding="14,10">
+        <Border DockPanel.Dock="Top" Background="#064e3b" Padding="18,14">
             <WrapPanel VerticalAlignment="Center">
-                <TextBlock Text="📊 WBS 実績入力" FontSize="17" FontWeight="Bold"
+                <TextBlock Text="📊 WBS 実績入力" FontSize="18" FontWeight="Bold"
                            Foreground="White" VerticalAlignment="Center" Margin="0,0,18,0"/>
                 <Label Content="プロジェクト:"/>
                 <!-- A3: IsEditable で型入れ検索可能 (TextSearch でマッチした項目へジャンプ) -->
@@ -108,13 +136,12 @@
                         ToolTip="ローカルから読込のみ"/>
                 <Button x:Name="PullBtn"  Content="📥 取得" Style="{StaticResource Primary}" Margin="4,0,0,0"
                         ToolTip="Gitlab からマスタ + 自分の当月実績を取得 → ローカルから読込"/>
-                <Button x:Name="AdminBtn" Content="🔧 管理者" Margin="6,0,0,0" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
+                <Button x:Name="AdminBtn" Content="🛠 管理者" Margin="6,0,0,0" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
             </WrapPanel>
         </Border>
 
         <!-- ===== フッタ (ステータス + 保存) ===== -->
-        <Border DockPanel.Dock="Bottom" Background="#f0fdf4"
-                BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="12,7">
+        <Border DockPanel.Dock="Bottom" Background="#064e3b" Padding="18,14">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"/>
@@ -124,12 +151,12 @@
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Left" x:Name="VersionText"
                            Margin="0,0,12,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource Muted}" FontSize="11"
+                           Foreground="#6ee7b7" FontSize="11"
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <TextBlock x:Name="StatusText"
                            Text="プロジェクトと月を選択して「読込」を押してください"
-                           VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+                           VerticalAlignment="Center" Foreground="#a7f3d0"/>
             </DockPanel>
         </Border>
 
@@ -142,8 +169,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- 左: WBS 階層ツリー -->
-            <Border Grid.Column="0" Background="{StaticResource Surface}"
-                    BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="8">
                 <DockPanel Margin="8">
                     <TextBlock DockPanel.Dock="Top" Text="🗂 WBS 階層" FontWeight="Bold"
                                Foreground="{StaticResource EmeraldD}" Margin="0,0,0,8"/>
@@ -161,7 +187,7 @@
                           Background="{StaticResource Border}" Cursor="SizeWE"/>
 
             <!-- 右: 上=WBSグリッド+ガント / 下=タスクビュー -->
-            <Grid Grid.Column="2" Background="{StaticResource Surface}">
+            <Grid Grid.Column="2" Background="{StaticResource Bg}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" MinHeight="180"/>
                     <RowDefinition Height="5"/>
@@ -169,7 +195,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- 右上: WBSグリッド (タスクレベル 1 行 + 計画ガント) -->
-                <Border Grid.Row="0" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                <Border Grid.Row="0" Style="{StaticResource Card}" Margin="8,8,8,4">
                     <DockPanel Margin="4">
                         <TextBlock DockPanel.Dock="Top" x:Name="GridTitle"
                                    Text="プロジェクトを選択して「読込」を押してください"

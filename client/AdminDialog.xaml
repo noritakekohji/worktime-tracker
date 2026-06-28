@@ -64,6 +64,7 @@
             <Setter Property="Foreground" Value="{StaticResource SakuraD}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -115,7 +116,7 @@
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="14"/>
             <Setter Property="Margin" Value="6"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
@@ -154,7 +155,7 @@
                 <TextBlock Text="🌸 マスタ編集" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                 <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="#fbcfe8"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="ReloadBtn" Content="🔄 再読込" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
+                    <Button x:Name="ReloadBtn" Content="📋 再読込" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -163,7 +164,7 @@
             <DockPanel>
                 <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#fbcfe8" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="CloseBtn" Content="閉じる" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
+                    <Button x:Name="CloseBtn" Content="✕ 閉じる" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"
                             ToolTip="ローカルにマスタを保存 (リモートへの送信は別ボタン)"/>
                     <Button x:Name="SendBtn" Content="📤 送信" Style="{StaticResource Primary}" MinWidth="100" Margin="6,3,3,3"
@@ -386,7 +387,7 @@
                                 <ComboBox x:Name="OtherYearCombo" MinWidth="90" Margin="6,0"/>
                                 <Label Content="月:" VerticalAlignment="Center"/>
                                 <ComboBox x:Name="OtherMonthCombo" MinWidth="60" Margin="6,0"/>
-                                <Button x:Name="OtherReloadBtn" Content="🔄 読込" Margin="12,0,0,0"/>
+                                <Button x:Name="OtherReloadBtn" Content="📋 読込" Margin="12,0,0,0"/>
                                 <TextBlock x:Name="OtherStatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
                             </StackPanel>
                         </Border>
@@ -444,9 +445,9 @@
                                 <ComboBoxItem Content="task_patterns"/>
                                 <ComboBoxItem Content="categories"/>
                             </ComboBox>
-                            <Button x:Name="JsonReloadBtn"   Content="🔄 リロード"/>
-                            <Button x:Name="JsonValidateBtn" Content="JSON 検証"/>
-                            <Button x:Name="JsonApplyBtn"    Content="編集内容に適用" Style="{StaticResource Primary}"/>
+                            <Button x:Name="JsonReloadBtn"   Content="📋 リロード"/>
+                            <Button x:Name="JsonValidateBtn" Content="✓ JSON 検証"/>
+                            <Button x:Name="JsonApplyBtn"    Content="↪ 編集内容に適用" Style="{StaticResource Primary}"/>
                         </StackPanel>
                         <TextBox x:Name="JsonBox" AcceptsReturn="True" AcceptsTab="True"
                                  TextWrapping="NoWrap"
