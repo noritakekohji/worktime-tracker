@@ -175,9 +175,59 @@ function _BuildPatternNameMap {
     $Script:_PatternNameCache = $m
     return $m
 }
-function Resolve-ProcessName    { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("process|$Code")) { return $m["process|$Code"] }; return '' }
-function Resolve-TaskGroupName  { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("group|$Code"))   { return $m["group|$Code"]   }; return '' }
-function Resolve-TaskName       { param([string]$Code); $m = _BuildPatternNameMap; if ($Code -and $m.ContainsKey("task|$Code"))    { return $m["task|$Code"]    }; return '' }
+function Resolve-ProjectTaskPattern {
+    param([string]$ProjectCode)
+    if (-not $ProjectCode) { return $null }
+    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $ProjectCode } | Select-Object -First 1
+    if (-not $p -or -not $p.task_pattern_id) { return $null }
+    return $Script:TaskPatterns | Where-Object { [string]$_.id -eq [string]$p.task_pattern_id } | Select-Object -First 1
+}
+function Resolve-ProcessName {
+    param([string]$Code, [string]$ProjectCode)
+    if (-not $Code) { return '' }
+    $pt = Resolve-ProjectTaskPattern $ProjectCode
+    if ($pt) {
+        $pr = @($pt.processes) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
+        if ($pr -and $pr.name) { return [string]$pr.name }
+    }
+    $m = _BuildPatternNameMap
+    if ($m.ContainsKey("process|$Code")) { return $m["process|$Code"] }
+    return ''
+}
+function Resolve-TaskGroupName {
+    param([string]$Code, [string]$ProjectCode, [string]$ProcessCode)
+    if (-not $Code) { return '' }
+    $pt = Resolve-ProjectTaskPattern $ProjectCode
+    if ($pt) {
+        foreach ($pr in @($pt.processes)) {
+            if ($ProcessCode -and [string]$pr.code -ne $ProcessCode) { continue }
+            $tg = @($pr.task_groups) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
+            if ($tg -and $tg.name) { return [string]$tg.name }
+        }
+    }
+    $m = _BuildPatternNameMap
+    if ($m.ContainsKey("group|$Code")) { return $m["group|$Code"] }
+    return ''
+}
+function Resolve-TaskName {
+    param([string]$Code, [string]$ProjectCode, [string]$ProcessCode, [string]$TaskGroupCode)
+    if (-not $Code) { return '' }
+    if ($Code -eq '-') { return 'タスクグループ全体' }
+    $pt = Resolve-ProjectTaskPattern $ProjectCode
+    if ($pt) {
+        foreach ($pr in @($pt.processes)) {
+            if ($ProcessCode -and [string]$pr.code -ne $ProcessCode) { continue }
+            foreach ($tg in @($pr.task_groups)) {
+                if ($TaskGroupCode -and [string]$tg.code -ne $TaskGroupCode) { continue }
+                $tk = @($tg.tasks) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
+                if ($tk -and $tk.name) { return [string]$tk.name }
+            }
+        }
+    }
+    $m = _BuildPatternNameMap
+    if ($m.ContainsKey("task|$Code")) { return $m["task|$Code"] }
+    return ''
+}
 function _MergeCodeName {
     param([string]$Code, [string]$Name)
     if (-not $Code) { return '' }
@@ -192,7 +242,7 @@ $win = [Windows.Markup.XamlReader]::Load($reader)
 $win.Title = Format-WindowTitle -ScreenName 'Report'
 # (フッタ VersionText は FindName 後にセット)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -284,17 +334,81 @@ function _RefreshMemberFilter {
 }
 _RefreshMemberFilter
 
+function _RefreshGlobalFilters {
+    if (-not $u.SystemFilter -or -not $u.WorkTypeFilter -or -not $u.ProjectFilter) { return }
+    if ($Script:_RefreshingGlobalFilters) { return }
+    $Script:_RefreshingGlobalFilters = $true
+    try {
+
+    $curSys  = [string]$u.SystemFilter.SelectedValue
+    $curType = [string]$u.WorkTypeFilter.SelectedValue
+    $curProj = [string]$u.ProjectFilter.SelectedValue
+
+    $sysSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+    $typeSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+    foreach ($p in @($Script:Projects)) {
+        if (-not $p) { continue }
+        if ($null -ne $p.active -and -not $p.active) { continue }
+        $sys = [string]$p.target_system
+        $typ = [string]$p.work_type
+        if ($sys) { [void]$sysSet.Add($sys) }
+        if ($typ) { [void]$typeSet.Add($typ) }
+    }
+
+    $sysItems = New-Object 'System.Collections.Generic.List[object]'
+    [void]$sysItems.Add([pscustomobject]@{ key=''; display='(全システム)' })
+    foreach ($s in $sysSet) { [void]$sysItems.Add([pscustomobject]@{ key=$s; display=$s }) }
+
+    $typeItems = New-Object 'System.Collections.Generic.List[object]'
+    [void]$typeItems.Add([pscustomobject]@{ key=''; display='(全業務種別)' })
+    foreach ($t in $typeSet) { [void]$typeItems.Add([pscustomobject]@{ key=$t; display=$t }) }
+
+    $projItems = New-Object 'System.Collections.Generic.List[object]'
+    [void]$projItems.Add([pscustomobject]@{ key=''; display='(全プロジェクト)' })
+    foreach ($p in @($Script:Projects | Sort-Object unit_code)) {
+        if (-not $p) { continue }
+        if ($null -ne $p.active -and -not $p.active) { continue }
+        if ($curSys -and [string]$p.target_system -ne $curSys) { continue }
+        if ($curType -and [string]$p.work_type -ne $curType) { continue }
+        [void]$projItems.Add([pscustomobject]@{
+            key     = [string]$p.unit_code
+            display = (Resolve-ProjectDisplay ([string]$p.unit_code))
+        })
+    }
+
+    $u.SystemFilter.ItemsSource = $sysItems
+    $u.WorkTypeFilter.ItemsSource = $typeItems
+    $u.ProjectFilter.ItemsSource = $projItems
+
+    $u.SystemFilter.SelectedValue = $curSys
+    if ($u.SystemFilter.SelectedIndex -lt 0) { $u.SystemFilter.SelectedIndex = 0 }
+    $u.WorkTypeFilter.SelectedValue = $curType
+    if ($u.WorkTypeFilter.SelectedIndex -lt 0) { $u.WorkTypeFilter.SelectedIndex = 0 }
+    $u.ProjectFilter.SelectedValue = $curProj
+    if ($u.ProjectFilter.SelectedIndex -lt 0) { $u.ProjectFilter.SelectedIndex = 0 }
+    } finally {
+        $Script:_RefreshingGlobalFilters = $false
+    }
+}
+_RefreshGlobalFilters
+
 # ---- 業務種別比率タブ専用フィルタ (システム / プロジェクト) ----
 function _RefreshWorkTypeFilters {
     if (-not $u.WorkTypeSystemFilter -or -not $u.WorkTypeProjectFilter) { return }
+    if ($Script:_RefreshingWorkTypeFilters) { return }
+    $Script:_RefreshingWorkTypeFilters = $true
+    try {
     # システム一覧 (target_system のユニーク集合)
     $sysSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+    $curSys  = if ($u.WorkTypeSystemFilter)  { [string]$u.WorkTypeSystemFilter.SelectedValue }  else { '' }
+    $curProj = if ($u.WorkTypeProjectFilter) { [string]$u.WorkTypeProjectFilter.SelectedValue } else { '' }
     $projItems = New-Object 'System.Collections.Generic.List[object]'
     foreach ($p in @($Script:Projects)) {
         if (-not $p) { continue }
         if ($null -ne $p.active -and -not $p.active) { continue }
         $sys = [string]$p.target_system
         if ($sys) { [void]$sysSet.Add($sys) }
+        if ($curSys -and $sys -ne $curSys) { continue }
         [void]$projItems.Add([pscustomobject]@{
             key     = [string]$p.unit_code
             display = (Resolve-ProjectDisplay ([string]$p.unit_code))
@@ -309,12 +423,13 @@ function _RefreshWorkTypeFilters {
     [void]$projAll.Add([pscustomobject]@{ key=''; display='(全プロジェクト)' })
     foreach ($pi in ($projItems | Sort-Object key)) { [void]$projAll.Add($pi) }
 
-    $curSys  = if ($u.WorkTypeSystemFilter)  { $u.WorkTypeSystemFilter.SelectedValue }  else { '' }
-    $curProj = if ($u.WorkTypeProjectFilter) { $u.WorkTypeProjectFilter.SelectedValue } else { '' }
     $u.WorkTypeSystemFilter.ItemsSource  = $sysItems
     $u.WorkTypeProjectFilter.ItemsSource = $projAll
     if ($curSys)  { $u.WorkTypeSystemFilter.SelectedValue  = $curSys;  if ($u.WorkTypeSystemFilter.SelectedIndex  -lt 0) { $u.WorkTypeSystemFilter.SelectedIndex  = 0 } } else { $u.WorkTypeSystemFilter.SelectedIndex  = 0 }
     if ($curProj) { $u.WorkTypeProjectFilter.SelectedValue = $curProj; if ($u.WorkTypeProjectFilter.SelectedIndex -lt 0) { $u.WorkTypeProjectFilter.SelectedIndex = 0 } } else { $u.WorkTypeProjectFilter.SelectedIndex = 0 }
+    } finally {
+        $Script:_RefreshingWorkTypeFilters = $false
+    }
 }
 _RefreshWorkTypeFilters
 
@@ -362,6 +477,9 @@ function Apply-Filters {
     $to   = $u.ToDate.SelectedDate
     # ヘッダのメンバーフィルタ ((全メンバー) = 空文字)
     $mid  = if ($u.MemberFilter) { [string]$u.MemberFilter.SelectedValue } else { '' }
+    $sysSel  = if ($u.SystemFilter)   { [string]$u.SystemFilter.SelectedValue }   else { '' }
+    $typeSel = if ($u.WorkTypeFilter) { [string]$u.WorkTypeFilter.SelectedValue } else { '' }
+    $projSel = if ($u.ProjectFilter)  { [string]$u.ProjectFilter.SelectedValue }  else { '' }
 
     $rows = $Script:AllEntries | ForEach-Object {
         $dStr = _Str $_.date
@@ -375,16 +493,29 @@ function Apply-Filters {
         if ($from -and $d -lt $from) { $ok = $false }
         if ($to   -and $d -gt $to)   { $ok = $false }
         if ($mid  -and $memberId -ne $mid) { $ok = $false }
+        if ($projSel -and $projectCode -ne $projSel) { $ok = $false }
+        if ($sysSel -and (Resolve-ProjectTargetSystem $projectCode) -ne $sysSel) { $ok = $false }
+        if ($typeSel -and (_ProjectWorkType $projectCode) -ne $typeSel) { $ok = $false }
         if (-not $ok) { return }
 
+        $processCode = _Str $_.process_code
+        $groupCode = _Str $_.task_group_code
+        $taskCode = _Str $_.task_code
+        $catCode = _Str $_.category
         [pscustomobject]@{
             date            = $dStr
             member_id       = $memberId
+            member_display  = Resolve-MemberDisplay $memberId
             project_code    = $projectCode
-            process_code    = _Str $_.process_code
-            task_group_code = _Str $_.task_group_code
-            task_code       = _Str $_.task_code
-            category        = _Str $_.category
+            project_display = Resolve-ProjectDisplay $projectCode
+            process_code    = $processCode
+            process_display = _MergeCodeName $processCode (Resolve-ProcessName $processCode $projectCode)
+            task_group_code = $groupCode
+            task_group_display = _MergeCodeName $groupCode (Resolve-TaskGroupName $groupCode $projectCode $processCode)
+            task_code       = $taskCode
+            task_display    = _MergeCodeName $taskCode (Resolve-TaskName $taskCode $projectCode $processCode $groupCode)
+            category        = $catCode
+            category_display = Resolve-CategoryDisplay $catCode
             hours           = _Num $_.hours
             comment         = _Str $_.comment
         }
@@ -661,14 +792,13 @@ function Build-Heatmap {
             $colKey  = 'project_code'
             $rowDisp = { param($v) $m = $Script:Members | Where-Object { [string]$_.id -eq [string]$v } | Select-Object -First 1
                          if ($m) { "$($m.id)  $($m.name)" } else { [string]$v } }
-            $colDisp = { param($v) $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq [string]$v } | Select-Object -First 1
-                         if ($p) { [string]$p.unit_code } else { [string]$v } }
-            $colW = 80
+            $colDisp = { param($v) Resolve-ProjectDisplay ([string]$v) }
+            $colW = 120
         }
         default {
             $rowKey  = 'project_code'
             $colKey  = 'date'
-            $rowDisp = { param($v) [string]$v }
+            $rowDisp = { param($v) Resolve-ProjectDisplay ([string]$v) }
             $colDisp = { param($v) $d = [datetime]::MinValue
                          if ([datetime]::TryParse([string]$v, [ref]$d)) { $d.ToString('M/d') } else { [string]$v } }
             $colW = 22
@@ -751,9 +881,10 @@ function Build-Anomalies {
     foreach ($g in $byMemberDay) {
         $sum = 0.0; foreach ($r in $g.Group) { $sum += [double]$r.hours }
         if ($sum -gt 12.0) {
+            $sample = $g.Group | Select-Object -First 1
             $items.Add([pscustomobject]@{
                 kind    = '⚠ 過剰入力'
-                target  = $g.Name
+                target  = ("{0} / {1}" -f (Resolve-MemberDisplay ([string]$sample.member_id)), ([string]$sample.date))
                 hours   = [Math]::Round($sum, 1)
                 message = ("1日に {0:N1} h は通常を超える可能性があります" -f $sum)
             })
@@ -768,7 +899,7 @@ function Build-Anomalies {
         if ($sum -gt 200.0) {
             $items.Add([pscustomobject]@{
                 kind    = '🔥 高負荷'
-                target  = $g.Name
+                target  = Resolve-ProjectDisplay ([string]$g.Name)
                 hours   = [Math]::Round($sum, 1)
                 message = ("プロジェクト合計 {0:N1} h: スコープ見直しを検討" -f $sum)
             })
@@ -791,7 +922,7 @@ function Build-Anomalies {
             if ($missing -ge 3) {
                 $items.Add([pscustomobject]@{
                     kind    = '📭 入力漏れ候補'
-                    target  = $mg.Name
+                    target  = Resolve-MemberDisplay ([string]$mg.Name)
                     hours   = 0
                     message = ("平日 {0} 日分の実績入力が見当たりません" -f $missing)
                 })
@@ -934,13 +1065,13 @@ function Build-Analysis {
     $panel.Children.Add( (_AnalysisCard '👥 メンバー Top 5' $memRows) ) | Out-Null
 
     # 工程別
-    $topProc = $rowsArr | Group-Object process_code | ForEach-Object {
+    $topProc = $rowsArr | Group-Object process_display | ForEach-Object {
         $h = ($_.Group | Measure-Object hours -Sum).Sum
-        [pscustomobject]@{ code = $_.Name; h = $h; cnt = $_.Count }
+        [pscustomobject]@{ display = $_.Name; h = $h; cnt = $_.Count }
     } | Sort-Object h -Descending
     $procRows = foreach ($p in $topProc) {
         $pct = if ($totalHours -gt 0) { ($p.h / $totalHours) * 100 } else { 0 }
-        (_AnalysisRow ("{0}:" -f $p.code) ("{0,6:N1} h  ({1:N1}%)" -f $p.h, $pct))
+        (_AnalysisRow ("{0}:" -f $p.display) ("{0,6:N1} h  ({1:N1}%)" -f $p.h, $pct))
     }
     $panel.Children.Add( (_AnalysisCard '⚙ 工程別工数' $procRows) ) | Out-Null
 }
@@ -949,12 +1080,12 @@ function _GroupKey {
     param($Row, [string]$Axis)
     $dt = [datetime]::MinValue
     switch ($Axis) {
-        'プロジェクト'    { return [string]$Row.project_code }
-        '工程'            { return [string]$Row.process_code }
-        'タスクグループ'  { return [string]$Row.task_group_code }
-        'タスク'          { return [string]$Row.task_code }
-        'カテゴリ'        { return [string]$Row.category }
-        'メンバー'        { return [string]$Row.member_id }
+        'プロジェクト'    { return [string]$Row.project_display }
+        '工程'            { return [string]$Row.process_display }
+        'タスクグループ'  { return [string]$Row.task_group_display }
+        'タスク'          { return [string]$Row.task_display }
+        'カテゴリ'        { return [string]$Row.category_display }
+        'メンバー'        { return [string]$Row.member_display }
         '日付'            {
             if ([datetime]::TryParse([string]$Row.date, [ref]$dt)) { return $dt.ToString('yyyy-MM-dd') }
             return ''
@@ -1180,6 +1311,7 @@ function Reload-Masters {
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
         _RefreshMemberFilter
+        _RefreshGlobalFilters
         _RefreshWorkTypeFilters
     } catch {
         $u.SummaryText.Text = "マスタ再読込失敗: $_"
@@ -1242,6 +1374,20 @@ $u.PeriodPrevMonthBtn.Add_Click({ _SetPeriodPrevMonth; if ($Script:AllEntries) {
 $u.PeriodThisFYBtn.Add_Click({    _SetPeriodThisFY;    if ($Script:AllEntries) { _SafeApplyFilters } })
 # メンバーフィルタ変更 → 即フィルタ適用
 $u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.SystemFilter.Add_SelectionChanged({
+    if ($Script:_RefreshingGlobalFilters) { return }
+    _RefreshGlobalFilters
+    if ($Script:AllEntries) { _SafeApplyFilters }
+})
+$u.WorkTypeFilter.Add_SelectionChanged({
+    if ($Script:_RefreshingGlobalFilters) { return }
+    _RefreshGlobalFilters
+    if ($Script:AllEntries) { _SafeApplyFilters }
+})
+$u.ProjectFilter.Add_SelectionChanged({
+    if ($Script:_RefreshingGlobalFilters) { return }
+    if ($Script:AllEntries) { _SafeApplyFilters }
+})
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
@@ -1329,8 +1475,14 @@ $u.ExportBtn.Add_Click({
         [System.Windows.MessageBox]::Show('エクスポート対象のデータがありません。', 'CSV', 'OK', 'Information') | Out-Null
         return
     }
-    $allCols = @('date','member_id','project_code','process_code','task_group_code','task_code','category','hours','comment')
-    $preset  = if ($Script:LastExportCols) { $Script:LastExportCols } else { $allCols }
+    $allCols = @(
+        'date',
+        'member_display','project_display','process_display','task_group_display','task_display','category_display',
+        'member_id','project_code','process_code','task_group_code','task_code','category',
+        'hours','comment'
+    )
+    $defaultCols = @('date','member_display','project_display','process_display','task_group_display','task_display','category_display','hours','comment')
+    $preset  = if ($Script:LastExportCols) { $Script:LastExportCols } else { $defaultCols }
     $picked  = Show-ColumnPicker -AllColumns $allCols -Selected $preset
     if (-not $picked -or $picked.Count -eq 0) { return }
     $Script:LastExportCols = $picked
@@ -1595,7 +1747,7 @@ function Build-MemberProjectMatrix {
         $tot = 0.0
         foreach ($pc in $projs) {
             $h = if ($matrix.ContainsKey($mid) -and $matrix[$mid].ContainsKey($pc)) { [double]$matrix[$mid][$pc] } else { 0.0 }
-            $row[$pc] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
+            $row[(Resolve-ProjectDisplay $pc)] = if ($h -gt 0) { "{0:N1}" -f $h } else { '' }
             $tot += $h
         }
         $row['合計'] = "{0:N1}" -f $tot
@@ -1611,7 +1763,7 @@ function Build-MemberProjectMatrix {
                 $sum += [double]$matrix[$mid][$pc]
             }
         }
-        $footer[$pc] = "{0:N1}" -f $sum
+        $footer[(Resolve-ProjectDisplay $pc)] = "{0:N1}" -f $sum
         $grand += $sum
     }
     $footer['合計'] = "{0:N1}" -f $grand
@@ -2287,15 +2439,20 @@ if ($u.OpsAxisCombo) {
 }
 # 業務種別比率タブ内 専用 フィルタ変更 → 3 集計を再描画
 if ($u.WorkTypeSystemFilter) {
-    $u.WorkTypeSystemFilter.Add_SelectionChanged({ _SafeRun 'WorkTypeFilter' {
+    $u.WorkTypeSystemFilter.Add_SelectionChanged({
+        if ($Script:_RefreshingWorkTypeFilters) { return }
+        _RefreshWorkTypeFilters
+        _SafeRun 'WorkTypeFilter' {
         $r = _ApplyWorkTypeFilters $Script:ChartRows
         Build-WorkTypeMix    -Rows $r
         Build-CaseAnalysis   -Rows $r
         Build-OpsAnalysis    -Rows $r
-    } })
+        }
+    })
 }
 if ($u.WorkTypeProjectFilter) {
     $u.WorkTypeProjectFilter.Add_SelectionChanged({ _SafeRun 'WorkTypeFilter' {
+        if ($Script:_RefreshingWorkTypeFilters) { return }
         $r = _ApplyWorkTypeFilters $Script:ChartRows
         Build-WorkTypeMix    -Rows $r
         Build-CaseAnalysis   -Rows $r

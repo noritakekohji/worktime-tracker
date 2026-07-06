@@ -19,6 +19,20 @@
 
 ---
 
+## [1.2.0] - 2026-07-06
+
+### Added
+- ReportViewer の共通フィルタにシステム / 業務種別 / プロジェクトを追加し、全タブの集計母集団へ反映
+
+### Changed
+- ReportViewer の明細、グラフ、ヒートマップ、メンバー×PJ、異常検知、CSV 出力をコード表示中心から名称併記中心へ変更
+- ReportViewer の工程 / タスクグループ / タスク名称解決で、プロジェクトの `task_pattern_id` を優先
+
+### Fixed
+- 業務種別比率タブで、システム選択後も関係ないプロジェクトが候補表示される問題を修正
+
+---
+
 ## [1.1.0] - 2026-06-20
 
 ### Added
@@ -91,5 +105,7 @@
 - ReportViewer ハンドラ内未捕捉例外でウインドウ消滅 → `_SafeRun` 全包み
 - Categoryなど summary grid が AutoGen=False + Columns 未定義で空表
 
-[Unreleased]: https://github.com/noritakekohji/worktime-tracker/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/noritakekohji/worktime-tracker/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/noritakekohji/worktime-tracker/releases/tag/v1.2.0
+[1.1.0]: https://github.com/noritakekohji/worktime-tracker/releases/tag/v1.1.0
 [1.0.0]: https://github.com/noritakekohji/worktime-tracker/releases/tag/v1.0.0

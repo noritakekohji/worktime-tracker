@@ -162,9 +162,9 @@
             </DockPanel>
         </Border>
 
-        <!-- 期間フィルタ + クイック選択 + メンバーフィルタ -->
+        <!-- 期間フィルタ + クイック選択 + 集計軸フィルタ -->
         <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal">
                 <Label Content="期間:" VerticalAlignment="Center"/>
                 <DatePicker x:Name="FromDate" Width="140" VerticalAlignment="Center"/>
                 <Label Content="〜" Margin="6,0" VerticalAlignment="Center"/>
@@ -178,7 +178,20 @@
                 <ComboBox x:Name="MemberFilter" MinWidth="200" Margin="4,0,0,0" VerticalAlignment="Center"
                           DisplayMemberPath="display" SelectedValuePath="id"
                           ToolTip="(全メンバー) で絞り込み解除"/>
-            </StackPanel>
+                <Border Width="1" Background="{StaticResource Border}" Margin="16,2"/>
+                <Label Content="システム:" VerticalAlignment="Center"/>
+                <ComboBox x:Name="SystemFilter" MinWidth="180" Margin="4,0,0,0" VerticalAlignment="Center"
+                          DisplayMemberPath="display" SelectedValuePath="key"
+                          ToolTip="(全システム) で絞り込み解除"/>
+                <Label Content="業務種別:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <ComboBox x:Name="WorkTypeFilter" MinWidth="140" Margin="4,0,0,0" VerticalAlignment="Center"
+                          DisplayMemberPath="display" SelectedValuePath="key"
+                          ToolTip="(全業務種別) で絞り込み解除"/>
+                <Label Content="プロジェクト:" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <ComboBox x:Name="ProjectFilter" MinWidth="220" Margin="4,0,0,0" VerticalAlignment="Center"
+                          DisplayMemberPath="display" SelectedValuePath="key"
+                          ToolTip="(全プロジェクト) で絞り込み解除"/>
+            </WrapPanel>
         </Border>
 
         <!-- 本体: タブ -->
@@ -213,12 +226,12 @@
                         </DataGrid.Resources>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="日付" Binding="{Binding date}" Width="100"/>
-                            <DataGridTextColumn Header="メンバー" Binding="{Binding member_id}" Width="100"/>
-                            <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_code}" Width="110"/>
-                            <DataGridTextColumn Header="工程" Binding="{Binding process_code}" Width="90"/>
-                            <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_code}" Width="100"/>
-                            <DataGridTextColumn Header="タスク" Binding="{Binding task_code}" Width="100"/>
-                            <DataGridTextColumn Header="カテゴリ" Binding="{Binding category}" Width="100"/>
+                            <DataGridTextColumn Header="メンバー" Binding="{Binding member_display}" Width="150"/>
+                            <DataGridTextColumn Header="プロジェクト" Binding="{Binding project_display}" Width="180"/>
+                            <DataGridTextColumn Header="工程" Binding="{Binding process_display}" Width="130"/>
+                            <DataGridTextColumn Header="ﾀｽｸｸﾞﾙｰﾌﾟ" Binding="{Binding task_group_display}" Width="150"/>
+                            <DataGridTextColumn Header="タスク" Binding="{Binding task_display}" Width="150"/>
+                            <DataGridTextColumn Header="カテゴリ" Binding="{Binding category_display}" Width="130"/>
                             <DataGridTextColumn Header="工数" Binding="{Binding hours, StringFormat=N1}" Width="70"/>
                             <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
                         </DataGrid.Columns>
