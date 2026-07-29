@@ -22,6 +22,7 @@
 - Gitlab 同期の**差分同期**。tree API が返す blob SHA を `local_store/.sync_state.json` に記録し、変更のないファイルはダウンロードしない
 - Report の「📥 取得」に進捗表示 (`(n/N) パス`) を追加。変更がなければ「最新です」と表示する
 - `tests/lib/SyncState.Tests.ps1` — 同期状態の読み書き・ハッシュ・戻り値スキーマの回帰防止 (17 ケース)
+- `tests/unit/ReportResolvers.Tests.ps1` — Report の名称解決と集計ヘルパの回帰防止 (22 ケース)。`ReportViewer.ps1` は読み込むと WPF ウインドウが起動するため、AST から対象関数の定義だけを取り出して検証する
 
 ### Changed
 - **同期の高速化**。`Sync-Pull-Masters` / `Sync-Pull-AllData` は「変更なし」なら tree 取得の 1 リクエストで完了する (従来はファイル数ぶんの GET を毎回直列実行)
@@ -30,6 +31,10 @@
 - `ServicePointManager` の接続数上限を 16 に引き上げ、Nagle と `Expect: 100-continue` を無効化
 - 全 HTTP 関数で `$ProgressPreference` を抑止 (PS 5.1 は進捗バー描画にリクエスト本体より長い時間を使う)
 - 起動時のマスタ取得ダイアログの文言を差分同期に合わせた (更新 0 件を「失敗」と誤解させない)
+
+- **Report の高速化**。`Resolve-*` の線形検索 (`Where-Object`) をマスタ索引 (hashtable) + 解決結果のメモ化に置き換えた。従来は 1 明細行あたり 6〜8 回の線形検索が走り、行数 × 呼出回数 × マスタ件数の比較が発生していた
+- 日付を `Reload-Entries` で 1 度だけ解決して保持。フィルタ変更のたびに全行を `TryParse` し直さない
+- 集計を `Group-Object` から hashtable の 1 パス集計 (`_SumBy`) に置き換え。明細行の生成もパイプラインから `foreach` + `List` に変更
 
 ### Fixed
 - `_ContentHash` の到達しない `$null` 判定を除去 (`[string]` 型指定により `$null` は空文字に変換されるため)

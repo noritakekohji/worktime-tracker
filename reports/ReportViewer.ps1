@@ -99,134 +99,198 @@ $Script:AllEntries    = @()
 # ---- 名称解決ヘルパ ----
 # Report は ID/Code を集計キーに使うが、画面表示には名称を併記する。
 # パターン経由の名称 (process/task_group/task) は project_code から特定。
+# ---- マスタ索引 (性能上の要) ----
+# Apply-Filters は 1 明細行あたり Resolve-* を 6〜8 回呼ぶ。素朴に
+# Where-Object で線形検索すると「行数 × 呼出回数 × マスタ件数」の比較が走り、
+# 数万行では数百万回の文字列比較になって体感が一気に落ちる。
+# マスタは Reload-Masters のときしか変わらないので、索引を 1 度だけ作って使う。
+# 解決済みの表示文字列もメモ化する (同じ project_code が何千行にも現れるため)。
+$Script:_Idx = $null
+
+function _BuildMasterIndexes {
+    if ($null -ne $Script:_Idx) { return $Script:_Idx }
+    $ix = @{
+        Member      = @{}   # member_id  → member オブジェクト
+        Project     = @{}   # unit_code  → project オブジェクト
+        Category    = @{}   # code       → category オブジェクト
+        ProjPattern = @{}   # unit_code  → task pattern (未紐付けは $null)
+        FallbackNm  = @{}   # 'process|code' / 'group|code' / 'task|code' → 名称
+        Memo        = @{}   # 解決結果のメモ (表示文字列・名称)
+    }
+    foreach ($m in @($Script:Members)) {
+        if ($m -and $m.id) { $ix.Member[[string]$m.id] = $m }
+    }
+    foreach ($p in @($Script:Projects)) {
+        if ($p -and $p.unit_code) { $ix.Project[[string]$p.unit_code] = $p }
+    }
+    foreach ($c in @($Script:Categories)) {
+        if ($c -and $c.code) { $ix.Category[[string]$c.code] = $c }
+    }
+    # パターン id → パターン、および「どのパターンでもよい」名称フォールバック表
+    $byId = @{}
+    foreach ($pt in @($Script:TaskPatterns)) {
+        if (-not $pt) { continue }
+        if ($pt.id) { $byId[[string]$pt.id] = $pt }
+        foreach ($pr in @($pt.processes)) {
+            if (-not $pr -or -not $pr.code) { continue }
+            $ix.FallbackNm["process|$([string]$pr.code)"] = [string]$pr.name
+            foreach ($tg in @($pr.task_groups)) {
+                if (-not $tg -or -not $tg.code) { continue }
+                $ix.FallbackNm["group|$([string]$tg.code)"] = [string]$tg.name
+                foreach ($tk in @($tg.tasks)) {
+                    if (-not $tk -or -not $tk.code) { continue }
+                    $ix.FallbackNm["task|$([string]$tk.code)"] = [string]$tk.name
+                }
+            }
+        }
+    }
+    # プロジェクト → パターンを事前解決 (毎行 2 回の線形検索を消す)
+    foreach ($code in $ix.Project.Keys) {
+        $p = $ix.Project[$code]
+        # $pid は PS の自動変数 (プロセス ID) なので使わない
+        $patId = [string]$p.task_pattern_id
+        $ix.ProjPattern[$code] = if ($patId -and $byId.ContainsKey($patId)) { $byId[$patId] } else { $null }
+    }
+    $Script:_Idx = $ix
+    return $ix
+}
+
 function Resolve-MemberName {
     param([string]$Id)
     if (-not $Id) { return '' }
-    $m = $Script:Members | Where-Object { [string]$_.id -eq $Id } | Select-Object -First 1
+    $m = (_BuildMasterIndexes).Member[$Id]
     if ($m -and $m.name) { return [string]$m.name }
     return ''
 }
 function Resolve-MemberDisplay {
     param([string]$Id)
     if (-not $Id) { return '' }
+    $ix = _BuildMasterIndexes
+    $k = "md|$Id"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
     $n = Resolve-MemberName $Id
-    if ($n) { return "$Id  $n" } else { return $Id }
+    $v = if ($n) { "$Id  $n" } else { $Id }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function Resolve-ProjectName {
     param([string]$Code)
     if (-not $Code) { return '' }
-    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $Code } | Select-Object -First 1
+    $p = (_BuildMasterIndexes).Project[$Code]
     if ($p -and $p.project_name) { return [string]$p.project_name }
     return ''
 }
 function Resolve-ProjectDisplay {
     param([string]$Code)
     if (-not $Code) { return '' }
+    $ix = _BuildMasterIndexes
+    $k = "pd|$Code"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
     $n = Resolve-ProjectName $Code
-    if ($n) { return "$Code  $n" } else { return $Code }
+    $v = if ($n) { "$Code  $n" } else { $Code }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function Resolve-MemberCompany {
     param([string]$Id)
     if (-not $Id) { return '' }
-    $m = $Script:Members | Where-Object { [string]$_.id -eq $Id } | Select-Object -First 1
+    $m = (_BuildMasterIndexes).Member[$Id]
     if ($m -and $m.company) { return [string]$m.company }
     return ''
 }
 function Resolve-ProjectTargetSystem {
     param([string]$Code)
     if (-not $Code) { return '' }
-    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $Code } | Select-Object -First 1
+    $p = (_BuildMasterIndexes).Project[$Code]
     if ($p -and $p.target_system) { return [string]$p.target_system }
     return ''
 }
 function Resolve-CategoryName {
     param([string]$Code)
     if (-not $Code) { return '' }
-    $c = $Script:Categories | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
+    $c = (_BuildMasterIndexes).Category[$Code]
     if ($c -and $c.name) { return [string]$c.name }
     return ''
 }
 function Resolve-CategoryDisplay {
     param([string]$Code)
     if (-not $Code) { return '' }
+    $ix = _BuildMasterIndexes
+    $k = "cd|$Code"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
     $n = Resolve-CategoryName $Code
-    if ($n) { return "$Code  $n" } else { return $Code }
-}
-# task pattern 経由: process_code → name (どこかのパターンで一致したらそれを採用)
-$Script:_PatternNameCache = $null
-function _BuildPatternNameMap {
-    if ($null -ne $Script:_PatternNameCache) { return $Script:_PatternNameCache }
-    $m = @{}  # 'process|code' / 'group|code' / 'task|code' → name
-    foreach ($pt in @($Script:TaskPatterns)) {
-        if (-not $pt) { continue }
-        foreach ($pr in @($pt.processes)) {
-            if (-not $pr -or -not $pr.code) { continue }
-            $m["process|$([string]$pr.code)"] = [string]$pr.name
-            foreach ($tg in @($pr.task_groups)) {
-                if (-not $tg -or -not $tg.code) { continue }
-                $m["group|$([string]$tg.code)"] = [string]$tg.name
-                foreach ($tk in @($tg.tasks)) {
-                    if (-not $tk -or -not $tk.code) { continue }
-                    $m["task|$([string]$tk.code)"] = [string]$tk.name
-                }
-            }
-        }
-    }
-    $Script:_PatternNameCache = $m
-    return $m
+    $v = if ($n) { "$Code  $n" } else { $Code }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function Resolve-ProjectTaskPattern {
     param([string]$ProjectCode)
     if (-not $ProjectCode) { return $null }
-    $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $ProjectCode } | Select-Object -First 1
-    if (-not $p -or -not $p.task_pattern_id) { return $null }
-    return $Script:TaskPatterns | Where-Object { [string]$_.id -eq [string]$p.task_pattern_id } | Select-Object -First 1
+    return (_BuildMasterIndexes).ProjPattern[$ProjectCode]
 }
 function Resolve-ProcessName {
     param([string]$Code, [string]$ProjectCode)
     if (-not $Code) { return '' }
+    $ix = _BuildMasterIndexes
+    $k = "pn|$ProjectCode|$Code"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
+    $v = ''
     $pt = Resolve-ProjectTaskPattern $ProjectCode
     if ($pt) {
-        $pr = @($pt.processes) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
-        if ($pr -and $pr.name) { return [string]$pr.name }
+        foreach ($pr in @($pt.processes)) {
+            if ([string]$pr.code -eq $Code) { if ($pr.name) { $v = [string]$pr.name }; break }
+        }
     }
-    $m = _BuildPatternNameMap
-    if ($m.ContainsKey("process|$Code")) { return $m["process|$Code"] }
-    return ''
+    if (-not $v -and $ix.FallbackNm.ContainsKey("process|$Code")) { $v = $ix.FallbackNm["process|$Code"] }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function Resolve-TaskGroupName {
     param([string]$Code, [string]$ProjectCode, [string]$ProcessCode)
     if (-not $Code) { return '' }
+    $ix = _BuildMasterIndexes
+    $k = "gn|$ProjectCode|$ProcessCode|$Code"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
+    $v = ''
     $pt = Resolve-ProjectTaskPattern $ProjectCode
     if ($pt) {
         foreach ($pr in @($pt.processes)) {
             if ($ProcessCode -and [string]$pr.code -ne $ProcessCode) { continue }
-            $tg = @($pr.task_groups) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
-            if ($tg -and $tg.name) { return [string]$tg.name }
+            foreach ($tg in @($pr.task_groups)) {
+                if ([string]$tg.code -eq $Code) { if ($tg.name) { $v = [string]$tg.name }; break }
+            }
+            if ($v) { break }
         }
     }
-    $m = _BuildPatternNameMap
-    if ($m.ContainsKey("group|$Code")) { return $m["group|$Code"] }
-    return ''
+    if (-not $v -and $ix.FallbackNm.ContainsKey("group|$Code")) { $v = $ix.FallbackNm["group|$Code"] }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function Resolve-TaskName {
     param([string]$Code, [string]$ProjectCode, [string]$ProcessCode, [string]$TaskGroupCode)
     if (-not $Code) { return '' }
     if ($Code -eq '-') { return 'タスクグループ全体' }
+    $ix = _BuildMasterIndexes
+    $k = "tn|$ProjectCode|$ProcessCode|$TaskGroupCode|$Code"
+    if ($ix.Memo.ContainsKey($k)) { return $ix.Memo[$k] }
+    $v = ''
     $pt = Resolve-ProjectTaskPattern $ProjectCode
     if ($pt) {
         foreach ($pr in @($pt.processes)) {
             if ($ProcessCode -and [string]$pr.code -ne $ProcessCode) { continue }
             foreach ($tg in @($pr.task_groups)) {
                 if ($TaskGroupCode -and [string]$tg.code -ne $TaskGroupCode) { continue }
-                $tk = @($tg.tasks) | Where-Object { [string]$_.code -eq $Code } | Select-Object -First 1
-                if ($tk -and $tk.name) { return [string]$tk.name }
+                foreach ($tk in @($tg.tasks)) {
+                    if ([string]$tk.code -eq $Code) { if ($tk.name) { $v = [string]$tk.name }; break }
+                }
+                if ($v) { break }
             }
+            if ($v) { break }
         }
     }
-    $m = _BuildPatternNameMap
-    if ($m.ContainsKey("task|$Code")) { return $m["task|$Code"] }
-    return ''
+    if (-not $v -and $ix.FallbackNm.ContainsKey("task|$Code")) { $v = $ix.FallbackNm["task|$Code"] }
+    $ix.Memo[$k] = $v
+    return $v
 }
 function _MergeCodeName {
     param([string]$Code, [string]$Name)
@@ -516,6 +580,19 @@ function Reload-Entries {
     try {
         $u.SummaryText.Text = ("ローカルから読込中...")
         $Script:AllEntries = @(Load-AllEntries-Local -Source $Script:Source)
+        # 日付をここで 1 度だけ解決して _dt に持たせる。
+        # Apply-Filters はフィルタ変更のたびに全行を走るため、そこで毎回
+        # TryParse すると行数ぶんの無駄が繰り返し発生する。
+        # 解析できない/空の行は _dt = $null となり Apply-Filters 側で除外される。
+        foreach ($e in $Script:AllEntries) {
+            $dt = $null
+            $s = _Str $e.date
+            if (-not [string]::IsNullOrWhiteSpace($s)) {
+                $tmp = [datetime]::MinValue
+                if ([datetime]::TryParse($s, [ref]$tmp)) { $dt = $tmp }
+            }
+            Add-Member -InputObject $e -NotePropertyName '_dt' -NotePropertyValue $dt -Force
+        }
         $u.SummaryText.Text = "ローカル読込: $($Script:AllEntries.Count) 件"
         Apply-Filters
     } catch {
@@ -529,6 +606,39 @@ function _Sc { param($v) if ($v -is [array]) { if ($v.Count -gt 0) { $v[0] } els
 function _Str { param($v) [string](_Sc $v) }
 function _Num { param($v) $s = (_Sc $v); $d = 0.0; [void][double]::TryParse([string]$s, [ref]$d); $d }
 
+# 件数と工数の集計ヘルパ。
+# Group-Object は 1 グループごとに GroupInfo を組み立てるため、行数が増えると
+# 集計そのものより遅くなる。ハッシュテーブルで 1 パス集計する。
+#   Key      : プロパティ名 (文字列) または 行 → キー を返す ScriptBlock
+#   KeyLabel : 出力オブジェクトの 1 列目のプロパティ名 (画面の見出しになる)
+#   Display  : キー → 表示文字列 の ScriptBlock (省略時はキーをそのまま表示)
+function _SumBy {
+    param($Rows, $Key, [string]$KeyLabel, $Display)
+    $counts = @{}
+    $sums   = @{}
+    $isProp = ($Key -is [string])
+    foreach ($r in $Rows) {
+        $k = if ($isProp) { [string]$r.$Key } else { [string](& $Key $r) }
+        if ($counts.ContainsKey($k)) {
+            $counts[$k] = $counts[$k] + 1
+            $sums[$k]   = $sums[$k]   + [double]$r.hours
+        } else {
+            $counts[$k] = 1
+            $sums[$k]   = [double]$r.hours
+        }
+    }
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($k in $counts.Keys) {
+        $label = if ($Display) { [string](& $Display $k) } else { $k }
+        [void]$out.Add([pscustomobject]@{
+            $KeyLabel = $label
+            件数      = $counts[$k]
+            工数      = [Math]::Round($sums[$k], 2)
+        })
+    }
+    return @($out | Sort-Object -Property 工数 -Descending)
+}
+
 function Apply-Filters {
     $from = $u.FromDate.SelectedDate
     $to   = $u.ToDate.SelectedDate
@@ -539,30 +649,30 @@ function Apply-Filters {
     $typeSel = if ($u.WorkTypeFilter) { [string]$u.WorkTypeFilter.SelectedValue } else { '' }
     $projSel = if ($u.ProjectFilter)  { [string]$u.ProjectFilter.SelectedValue }  else { '' }
 
-    $rows = $Script:AllEntries | ForEach-Object {
-        $dStr = _Str $_.date
-        if ([string]::IsNullOrWhiteSpace($dStr)) { return }
-        $d = [datetime]::MinValue
-        if (-not [datetime]::TryParse($dStr, [ref]$d)) { return }
-        $memberId    = _Str $_.member_id
-        $projectCode = _Str $_.project_code
+    # パイプライン + ForEach-Object はスクリプトブロック呼出のオーバーヘッドが
+    # 1 行ごとに乗るため、行数が増えると効いてくる。foreach + List で組む。
+    $list = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($e in $Script:AllEntries) {
+        # 日付は Reload-Entries で解決済み (_EntryDate) を使い、再パースを避ける
+        $d = $e._dt
+        if ($null -eq $d) { continue }
+        $memberId    = _Str $e.member_id
+        $projectCode = _Str $e.project_code
 
-        $ok = $true
-        if ($from -and $d -lt $from) { $ok = $false }
-        if ($to   -and $d -gt $to)   { $ok = $false }
-        if ($mid  -and $memberId -ne $mid) { $ok = $false }
-        if ($coSel -and -not (_MemberInCompany $memberId $coSel)) { $ok = $false }
-        if ($projSel -and $projectCode -ne $projSel) { $ok = $false }
-        if ($sysSel -and (Resolve-ProjectTargetSystem $projectCode) -ne $sysSel) { $ok = $false }
-        if ($typeSel -and (_ProjectWorkType $projectCode) -ne $typeSel) { $ok = $false }
-        if (-not $ok) { return }
+        if ($from -and $d -lt $from) { continue }
+        if ($to   -and $d -gt $to)   { continue }
+        if ($mid  -and $memberId -ne $mid) { continue }
+        if ($coSel -and -not (_MemberInCompany $memberId $coSel)) { continue }
+        if ($projSel -and $projectCode -ne $projSel) { continue }
+        if ($sysSel -and (Resolve-ProjectTargetSystem $projectCode) -ne $sysSel) { continue }
+        if ($typeSel -and (_ProjectWorkType $projectCode) -ne $typeSel) { continue }
 
-        $processCode = _Str $_.process_code
-        $groupCode = _Str $_.task_group_code
-        $taskCode = _Str $_.task_code
-        $catCode = _Str $_.category
-        [pscustomobject]@{
-            date            = $dStr
+        $processCode = _Str $e.process_code
+        $groupCode = _Str $e.task_group_code
+        $taskCode = _Str $e.task_code
+        $catCode = _Str $e.category
+        [void]$list.Add([pscustomobject]@{
+            date            = _Str $e.date
             member_id       = $memberId
             member_display  = Resolve-MemberDisplay $memberId
             project_code    = $projectCode
@@ -575,11 +685,11 @@ function Apply-Filters {
             task_display    = _MergeCodeName $taskCode (Resolve-TaskName $taskCode $projectCode $processCode $groupCode)
             category        = $catCode
             category_display = Resolve-CategoryDisplay $catCode
-            hours           = _Num $_.hours
-            comment         = _Str $_.comment
-        }
+            hours           = _Num $e.hours
+            comment         = _Str $e.comment
+        })
     }
-    $rows = @($rows)
+    $rows = $list.ToArray()
 
     $u.DetailGrid.ItemsSource = $rows
 
@@ -587,50 +697,12 @@ function Apply-Filters {
     foreach ($r in $rows) { $total += [double]$r.hours }
     $u.SummaryText.Text = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f $total
 
-    # メンバー別 (ID + 氏名)
-    $byMember = $rows | Group-Object member_id | ForEach-Object {
-        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ メンバー = (Resolve-MemberDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property 工数 -Descending
-    $u.MemberSummaryGrid.ItemsSource = @($byMember)
-
-    # プロジェクト別 (Code + 名称)
-    $byProject = $rows | Group-Object project_code | ForEach-Object {
-        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ プロジェクト = (Resolve-ProjectDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property 工数 -Descending
-    $u.ProjectSummaryGrid.ItemsSource = @($byProject)
-
-    # カテゴリ別 (Code + 名称)
-    $byCat = $rows | Group-Object category | ForEach-Object {
-        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ カテゴリ = (Resolve-CategoryDisplay $_.Name); 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property 工数 -Descending
-    $u.CategorySummaryGrid.ItemsSource = @($byCat)
-
-    # システム別 (projects.target_system 解決)
-    $sysRows = $rows | ForEach-Object {
-        $sys = Resolve-ProjectTargetSystem ([string]$_.project_code)
-        if (-not $sys) { $sys = '(未設定)' }
-        [pscustomobject]@{ _sys = $sys; hours = $_.hours }
-    }
-    $bySys = $sysRows | Group-Object _sys | ForEach-Object {
-        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ 対象システム = $_.Name; 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property 工数 -Descending
-    $u.SystemSummaryGrid.ItemsSource = @($bySys)
-
-    # 会社別 (members.company 解決)
-    $coRows = $rows | ForEach-Object {
-        $co = Resolve-MemberCompany ([string]$_.member_id)
-        if (-not $co) { $co = '(未設定)' }
-        [pscustomobject]@{ _co = $co; hours = $_.hours }
-    }
-    $byCo = $coRows | Group-Object _co | ForEach-Object {
-        $sum = 0.0; foreach ($r in $_.Group) { $sum += [double]$r.hours }
-        [pscustomobject]@{ 会社 = $_.Name; 件数 = $_.Count; 工数 = [Math]::Round($sum, 2) }
-    } | Sort-Object -Property 工数 -Descending
-    $u.CompanySummaryGrid.ItemsSource = @($byCo)
+    $u.MemberSummaryGrid.ItemsSource  = _SumBy $rows 'member_id'    'メンバー'     { param($k) Resolve-MemberDisplay $k }
+    $u.ProjectSummaryGrid.ItemsSource = _SumBy $rows 'project_code' 'プロジェクト' { param($k) Resolve-ProjectDisplay $k }
+    $u.CategorySummaryGrid.ItemsSource= _SumBy $rows 'category'     'カテゴリ'     { param($k) Resolve-CategoryDisplay $k }
+    # システム別 / 会社別は集計キー自体をマスタから解決する
+    $u.SystemSummaryGrid.ItemsSource  = _SumBy $rows { param($r) $s = Resolve-ProjectTargetSystem ([string]$r.project_code); if ($s) { $s } else { '(未設定)' } } '対象システム'
+    $u.CompanySummaryGrid.ItemsSource = _SumBy $rows { param($r) $c = Resolve-MemberCompany ([string]$r.member_id);        if ($c) { $c } else { '(未設定)' } } '会社'
 
     # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
     function _Trace {
@@ -1368,7 +1440,7 @@ function Reload-Masters {
         $Script:Projects   = @(Get-MasterProjects   -Source $Script:Source)
         $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
-        $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
+        $Script:_Idx = $null   # マスタ索引 + 名称メモを破棄 (次回参照時に再構築)
         _RefreshCompanyFilter
         _RefreshMemberFilter
         _RefreshGlobalFilters
