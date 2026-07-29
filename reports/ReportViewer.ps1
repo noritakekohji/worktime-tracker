@@ -1412,13 +1412,30 @@ $u.ReloadBtn.Add_Click({
     }
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     try {
-        $u.SummaryText.Text = 'Gitlab から取得中...'
-        $pullM = Sync-Pull-Masters -Source $Script:Source
-        $pullD = Sync-Pull-AllData -Source $Script:Source
-        _Diag ("取得 master={0}/{1} data={2} errors_m={3} errors_d={4}" -f $pullM.Pulled, $pullM.Missing, $pullD.Pulled, $pullM.Errors.Count, $pullD.Errors.Count)
+        # 差分同期の進捗を SummaryText に出す。ダウンロードが発生したファイルだけ
+        # コールバックが呼ばれるため、変更がなければ表示は一瞬で終わる。
+        $onProg = {
+            param($Index, $Total, $Path)
+            $u.SummaryText.Text = ("Gitlab から取得中... ({0}/{1}) {2}" -f $Index, $Total, $Path)
+            # 同期ループ中でも UI を描画させる (PS 5.1 の DoEvents 相当)
+            $u.SummaryText.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
+        }
+        $u.SummaryText.Text = 'Gitlab の更新を確認中...'
+        $pullM = Sync-Pull-Masters -Source $Script:Source -OnProgress $onProg
+        $pullD = Sync-Pull-AllData -Source $Script:Source -OnProgress $onProg
+        _Diag ("取得 master={0}/skip={1}/miss={2} data={3}/skip={4}/total={5} errors_m={6} errors_d={7}" -f `
+               $pullM.Pulled, $pullM.Skipped, $pullM.Missing, $pullD.Pulled, $pullD.Skipped, $pullD.Total, `
+               $pullM.Errors.Count, $pullD.Errors.Count)
         Reload-Masters
         Reload-Entries
-        $u.SummaryText.Text = ("取得完了: master={0} / data={1} 件 → ローカル読込 ({2} 件)" -f $pullM.Pulled, $pullD.Pulled, $Script:AllEntries.Count)
+        $changed = [int]$pullM.Pulled + [int]$pullD.Pulled
+        if ($changed -eq 0) {
+            $u.SummaryText.Text = ("最新です (変更なし: master {0} / data {1} ファイル) → ローカル読込 {2} 件" -f `
+                                   $pullM.Skipped, $pullD.Skipped, $Script:AllEntries.Count)
+        } else {
+            $u.SummaryText.Text = ("取得完了: 更新 master={0} / data={1} (据置 {2}) → ローカル読込 {3} 件" -f `
+                                   $pullM.Pulled, $pullD.Pulled, ([int]$pullM.Skipped + [int]$pullD.Skipped), $Script:AllEntries.Count)
+        }
     } catch {
         $u.SummaryText.Text = ("取得失敗: $($_.Exception.Message)")
         [System.Windows.MessageBox]::Show("Gitlab からの取得に失敗:`n$($_.Exception.Message)", '取得エラー', 'OK', 'Error') | Out-Null

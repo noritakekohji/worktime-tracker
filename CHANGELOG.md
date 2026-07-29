@@ -19,6 +19,20 @@
 - ReportViewer の共通フィルタに **会社** を追加。`members.json` の `company` から選択肢を生成し、全タブの集計母集団に反映する
 - 会社を選ぶとメンバーフィルタの一覧もその会社所属者だけに絞られる (会社 → メンバーのファネル)
 - `company` 未設定のメンバーを絞り込むための `(未設定)` 選択肢
+- Gitlab 同期の**差分同期**。tree API が返す blob SHA を `local_store/.sync_state.json` に記録し、変更のないファイルはダウンロードしない
+- Report の「📥 取得」に進捗表示 (`(n/N) パス`) を追加。変更がなければ「最新です」と表示する
+- `tests/lib/SyncState.Tests.ps1` — 同期状態の読み書き・ハッシュ・戻り値スキーマの回帰防止 (17 ケース)
+
+### Changed
+- **同期の高速化**。`Sync-Pull-Masters` / `Sync-Pull-AllData` は「変更なし」なら tree 取得の 1 リクエストで完了する (従来はファイル数ぶんの GET を毎回直列実行)
+- `Sync-Push-MyData` の往復を 1 ファイル 3 → 最大 2 リクエストに削減。`files/:path` が `content` と `last_commit_id` を同時に返すことを利用し、raw 取得とメタ取得を 1 回にまとめた
+- `Sync-Push-MyData` / `Sync-Push-Masters` は前回 push 時と内容が同一のファイルを**通信なし**で飛ばす (空コミットの抑止も兼ねる)
+- `ServicePointManager` の接続数上限を 16 に引き上げ、Nagle と `Expect: 100-continue` を無効化
+- 全 HTTP 関数で `$ProgressPreference` を抑止 (PS 5.1 は進捗バー描画にリクエスト本体より長い時間を使う)
+- 起動時のマスタ取得ダイアログの文言を差分同期に合わせた (更新 0 件を「失敗」と誤解させない)
+
+### Fixed
+- `_ContentHash` の到達しない `$null` 判定を除去 (`[string]` 型指定により `$null` は空文字に変換されるため)
 
 ---
 

@@ -382,27 +382,130 @@ function Load-AllEntries {
     Load-AllEntries-Local -Source $Source
 }
 
+# ---- 同期状態 (差分同期用) ----
+# リモートの blob SHA を覚えておき、次回 pull で変化のないファイルの
+# ダウンロードを丸ごと省く。tree API は 1 リクエストで全ファイルの blob SHA を
+# 返すため、「変更なし」なら 1 リクエストで同期が完了する。
+#
+# 形式:
+#   { "pull": { "<rel path>": "<blob sha>" },
+#     "push": { "<rel path>": "<pushed content hash>" } }
+#
+# local_store 直下に置く。master/ data/ の外なので push 対象にはならない。
+
+function _SyncStatePath {
+    param($Source)
+    return (Join-Path $Source.LocalRoot '.sync_state.json')
+}
+
+function _LoadSyncState {
+    param($Source)
+    $empty = @{ pull = @{}; push = @{} }
+    $p = _SyncStatePath -Source $Source
+    if (-not (Test-Path -LiteralPath $p)) { return $empty }
+    try {
+        $doc = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($p, [System.Text.UTF8Encoding]::new($false)))
+        foreach ($sec in @('pull','push')) {
+            if ($doc.PSObject.Properties[$sec] -and $doc.$sec) {
+                foreach ($prop in $doc.$sec.PSObject.Properties) { $empty[$sec][$prop.Name] = [string]$prop.Value }
+            }
+        }
+    } catch {
+        # 壊れていても同期は続行できる (全件ダウンロードに退化するだけ)
+    }
+    return $empty
+}
+
+function _SaveSyncState {
+    param($Source, $State)
+    try {
+        $json = ([pscustomobject]@{ pull = $State.pull; push = $State.push } | ConvertTo-Json -Depth 4)
+        [System.IO.File]::WriteAllText((_SyncStatePath -Source $Source), $json, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        # 保存に失敗しても次回は全件ダウンロードになるだけなので握りつぶす
+    }
+}
+
+function _ContentHash {
+    # [string] 型指定により $null は空文字に強制変換される ($null 判定は不要)。
+    param([string]$Text)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Text))
+        return [System.BitConverter]::ToString($bytes).Replace('-','')
+    } finally { $sha.Dispose() }
+}
+
+# tree API の結果から blob だけを {path -> id} で返す
+function _RemoteBlobMap {
+    param($Source, [string]$Path)
+    $map = @{}
+    foreach ($item in @(Get-GitLabTree -Ctx $Source.RemoteCtx -Path $Path)) {
+        if ($item.type -ne 'blob') { continue }
+        if (-not ([string]$item.path).EndsWith('.json')) { continue }
+        $map[[string]$item.path] = [string]$item.id
+    }
+    return $map
+}
+
+# blob SHA が前回と同じ かつ ローカル実体が在るならダウンロードを省く共通ロジック。
+# 戻り値: @{ Pulled; Skipped; Errors }
+function _PullBlobs {
+    param($Source, $BlobMap, $State, $OnProgress)
+    $pulled = 0; $skipped = 0; $errors = @()
+    $paths = @($BlobMap.Keys | Sort-Object)
+    $total = $paths.Count
+    $i = 0
+    foreach ($rel in $paths) {
+        $i++
+        $sha = [string]$BlobMap[$rel]
+        $dst = Join-Path $Source.LocalRoot $rel
+        if ($State.pull[$rel] -eq $sha -and (Test-Path -LiteralPath $dst)) {
+            $skipped++
+            continue
+        }
+        if ($OnProgress) { & $OnProgress $i $total $rel }
+        try {
+            $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $rel
+            if ($null -eq $raw) { continue }
+            _EnsureDir (Split-Path -Parent $dst)
+            [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
+            $State.pull[$rel] = $sha
+            $pulled++
+        } catch {
+            $errors += "$rel : $($_.Exception.Message)"
+        }
+    }
+    return @{ Pulled = $pulled; Skipped = $skipped; Errors = $errors }
+}
+
 # ---- 同期: マスタ pull (リモート → local_store) ----
 
 function Sync-Pull-Masters {
-    param([Parameter(Mandatory)]$Source)
+    param(
+        [Parameter(Mandatory)]$Source,
+        [switch]$Force,
+        $OnProgress
+    )
     if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
-        return [pscustomobject]@{ Pulled = 0; Missing = 0; Errors = @() }
+        return [pscustomobject]@{ Pulled = 0; Skipped = 0; Missing = 0; Errors = @() }
     }
-    $pulled = 0; $missing = 0; $errors = @()
-    foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
-        try {
-            $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path "master/$name"
-            if (-not $raw) { $missing++; continue }
-            $dst = Join-Path $Source.LocalRoot "master/$name"
-            _EnsureDir (Split-Path -Parent $dst)
-            [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
-            $pulled++
-        } catch {
-            $errors += "master/$name : $($_.Exception.Message)"
-        }
+    $known = @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')
+    $state = _LoadSyncState -Source $Source
+    if ($Force) { foreach ($n in $known) { $state.pull.Remove("master/$n") } }
+
+    try {
+        $blobs = _RemoteBlobMap -Source $Source -Path 'master'
+    } catch {
+        return [pscustomobject]@{ Pulled = 0; Skipped = 0; Missing = 0; Errors = @("tree(master): $($_.Exception.Message)") }
     }
-    return [pscustomobject]@{ Pulled = $pulled; Missing = $missing; Errors = $errors }
+    # マスタは 5 ファイル固定。リモートに無いものは Missing として数える。
+    $missing = 0
+    foreach ($n in $known) { if (-not $blobs.ContainsKey("master/$n")) { $missing++ } }
+
+    $r = _PullBlobs -Source $Source -BlobMap $blobs -State $state -OnProgress $OnProgress
+    _SaveSyncState -Source $Source -State $state
+    return [pscustomobject]@{ Pulled = $r.Pulled; Skipped = $r.Skipped; Missing = $missing; Errors = $r.Errors }
 }
 
 # ---- 同期: 自分の月次データ pull (リモート → local_store) ----
@@ -433,54 +536,60 @@ function Sync-Pull-MyData {
 }
 
 # ---- 同期: 全データ pull (Report の「取得」用) ----
-# data/ 配下の全 *.json をリモートから取って local_store に書き戻す。
-# 件数が多いと時間がかかるため呼出側で UI 表示を考慮すること。
+# data/ 配下の *.json をリモートから取って local_store に書き戻す。
+# tree API が返す blob SHA を前回値と突き合わせ、変更のないファイルは
+# ダウンロードしない。全員が更新していない限り、実 GET は数件で済む。
 function Sync-Pull-AllData {
-    param([Parameter(Mandatory)]$Source)
+    param(
+        [Parameter(Mandatory)]$Source,
+        [switch]$Force,
+        $OnProgress
+    )
     if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
-        return [pscustomobject]@{ Pulled = 0; Errors = @() }
+        return [pscustomobject]@{ Pulled = 0; Skipped = 0; Total = 0; Errors = @() }
     }
-    $pulled = 0; $errors = @()
+    $state = _LoadSyncState -Source $Source
+    if ($Force) {
+        foreach ($k in @($state.pull.Keys)) { if ($k -like 'data/*') { $state.pull.Remove($k) } }
+    }
     try {
-        $tree = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
-        foreach ($item in $tree) {
-            if ($item.type -ne 'blob') { continue }
-            if (-not $item.path.EndsWith('.json')) { continue }
-            try {
-                $raw = Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $item.path
-                if ($raw) {
-                    $dst = Join-Path $Source.LocalRoot $item.path
-                    _EnsureDir (Split-Path -Parent $dst)
-                    [System.IO.File]::WriteAllText($dst, $raw, [System.Text.UTF8Encoding]::new($false))
-                    $pulled++
-                }
-            } catch { $errors += "$($item.path) : $($_.Exception.Message)" }
-        }
-    } catch { $errors += "tree: $($_.Exception.Message)" }
-    return [pscustomobject]@{ Pulled = $pulled; Errors = $errors }
+        $blobs = _RemoteBlobMap -Source $Source -Path 'data'
+    } catch {
+        return [pscustomobject]@{ Pulled = 0; Skipped = 0; Total = 0; Errors = @("tree(data): $($_.Exception.Message)") }
+    }
+    $r = _PullBlobs -Source $Source -BlobMap $blobs -State $state -OnProgress $OnProgress
+    _SaveSyncState -Source $Source -State $state
+    return [pscustomobject]@{ Pulled = $r.Pulled; Skipped = $r.Skipped; Total = $blobs.Count; Errors = $r.Errors }
 }
 
 # ---- 同期: マスタ push (local_store → リモート) ----
 
 function Sync-Push-Masters {
-    param([Parameter(Mandatory)]$Source, $AuthorName, $AuthorEmail)
+    param([Parameter(Mandatory)]$Source, $AuthorName, $AuthorEmail, [switch]$Force)
     if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
-        return [pscustomobject]@{ Pushed = 0; Errors = @() }
+        return [pscustomobject]@{ Pushed = 0; SkippedNoDiff = 0; Errors = @() }
     }
-    $pushed = 0; $errors = @()
+    $pushed = 0; $noDiff = 0; $errors = @()
+    $state = _LoadSyncState -Source $Source
     foreach ($name in @('members.json','projects.json','categories.json','task_patterns.json','holidays.json')) {
-        $local = Join-Path $Source.LocalRoot "master/$name"
+        $rel   = "master/$name"
+        $local = Join-Path $Source.LocalRoot $rel
         if (-not (Test-Path -LiteralPath $local)) { continue }
         try {
             $content = [System.IO.File]::ReadAllText($local, [System.Text.UTF8Encoding]::new($false))
-            $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path "master/$name" -Content $content `
+            # 前回 push 時と同一内容なら空コミットを作らずに飛ばす
+            $hash = _ContentHash $content
+            if (-not $Force -and $state.push[$rel] -eq $hash) { $noDiff++; continue }
+            $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content $content `
                                    -CommitMessage "sync master: $name" -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+            $state.push[$rel] = $hash
             $pushed++
         } catch {
             $errors += "master/$name : $($_.Exception.Message)"
         }
     }
-    return [pscustomobject]@{ Pushed = $pushed; Errors = $errors }
+    _SaveSyncState -Source $Source -State $state
+    return [pscustomobject]@{ Pushed = $pushed; SkippedNoDiff = $noDiff; Errors = $errors }
 }
 
 # ---- 同期: 自分のデータ push (local_store → リモート, 全期間) ----
@@ -493,41 +602,56 @@ function Sync-Push-Masters {
 #       - リモート無し → POST
 #   3. 結果サマリを返す
 
-function _GetRemoteEntryDoc {
-    param($Source, [string]$RelPath)
-    try { return Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $RelPath }
-    catch { return $null }
-}
-
 function Sync-Push-MyData {
     param(
         [Parameter(Mandatory)]$Source,
         [Parameter(Mandatory)][string]$MemberId,
         $AuthorName,
-        $AuthorEmail
+        $AuthorEmail,
+        [switch]$Force,
+        $OnProgress
     )
     if ($Source.Mode -eq 'local' -or -not $Source.RemoteCtx) {
         throw 'Sync-Push-MyData: リモート未設定のため送信できません'
     }
     $result = [pscustomobject]@{
-        Pushed       = 0
-        SkippedNewer = 0    # リモートが新しいためスキップ
-        SkippedSame  = 0
-        Errors       = @()
-        Conflicts    = @()  # @{ path; local_updated; remote_updated }
+        Pushed        = 0
+        SkippedNewer  = 0    # リモートが新しいためスキップ
+        SkippedSame   = 0
+        SkippedNoDiff = 0    # 前回 push 以降ローカルが変わっていない (通信なし)
+        Errors        = @()
+        Conflicts     = @()  # @{ path; local_updated; remote_updated }
     }
     $dataRoot = Join-Path $Source.LocalRoot 'data'
     if (-not (Test-Path -LiteralPath $dataRoot)) { return $result }
 
-    $myFiles = Get-ChildItem -Path $dataRoot -Recurse -Filter "$MemberId.json"
+    $state = _LoadSyncState -Source $Source
+    $myFiles = @(Get-ChildItem -Path $dataRoot -Recurse -Filter "$MemberId.json")
+    $total = $myFiles.Count
+    $i = 0
     foreach ($f in $myFiles) {
+        $i++
         $rel = $f.FullName.Substring($Source.LocalRoot.Length).TrimStart('\','/') -replace '\\','/'
         try {
             $localText = [System.IO.File]::ReadAllText($f.FullName, [System.Text.UTF8Encoding]::new($false))
+
+            # 前回 push した内容と同一なら通信そのものを省く
+            $localHash = _ContentHash $localText
+            if (-not $Force -and $state.push[$rel] -eq $localHash) {
+                $result.SkippedNoDiff++
+                continue
+            }
+            if ($OnProgress) { & $OnProgress $i $total $rel }
+
             $localDoc  = $localText | ConvertFrom-Json
             $localTs   = [string]$localDoc.updated_at
 
-            $remoteText = _GetRemoteEntryDoc -Source $Source -RelPath $rel
+            # files/:path は content と last_commit_id を同時に返すので、
+            # 「リモート内容の取得」と「楽観排他用メタ」を 1 往復でまかなう。
+            $remoteMeta = $null
+            try { $remoteMeta = Get-GitLabFileMeta -Ctx $Source.RemoteCtx -Path $rel } catch { }
+            $remoteText = Get-GitLabFileMetaContent -Meta $remoteMeta
+
             $shouldPush = $true
             if ($remoteText) {
                 try {
@@ -550,6 +674,8 @@ function Sync-Push-MyData {
                             } elseif ($rR -eq $rL) {
                                 $shouldPush = $false
                                 $result.SkippedSame++
+                                # 同一と確認できたので次回は通信なしで飛ばせる
+                                $state.push[$rel] = $localHash
                                 continue
                             }
                         }
@@ -560,14 +686,18 @@ function Sync-Push-MyData {
             }
             if ($shouldPush) {
                 $commitMsg = ('upload: {0}' -f $rel)
+                # 直前に取得済みの meta を渡し、Set-GitLabFile 内でのメタ再取得を省く
                 $null = Set-GitLabFile -Ctx $Source.RemoteCtx -Path $rel -Content $localText `
-                                       -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+                                       -CommitMessage $commitMsg -AuthorName $AuthorName -AuthorEmail $AuthorEmail `
+                                       -KnownMeta $remoteMeta -MetaResolved
+                $state.push[$rel] = $localHash
                 $result.Pushed++
             }
         } catch {
             $result.Errors += "$rel : $($_.Exception.Message)"
         }
     }
+    _SaveSyncState -Source $Source -State $state
     return $result
 }
 

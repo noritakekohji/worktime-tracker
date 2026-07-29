@@ -55,9 +55,14 @@ function Initialize-DataContext {
         if ($r -eq 'Yes') {
             try {
                 $pull = Sync-Pull-Masters -Source $source
-                [System.Windows.MessageBox]::Show(
-                    ("マスタ取得完了: pulled={0} missing={1} errors={2}" -f $pull.Pulled, $pull.Missing, $pull.Errors.Count),
-                    $AppName, 'OK', 'Information') | Out-Null
+                # 差分同期のため、変更がなければ Pulled=0 / Skipped>0 になる。
+                # 「0 件 = 失敗」と誤解されないよう文言を分ける。
+                $msg = if ([int]$pull.Pulled -eq 0 -and [int]$pull.Errors.Count -eq 0) {
+                    ("マスタは最新です (変更なし: {0} ファイル)" -f $pull.Skipped)
+                } else {
+                    ("マスタ取得完了: 更新={0} 据置={1} 未登録={2} エラー={3}" -f $pull.Pulled, $pull.Skipped, $pull.Missing, $pull.Errors.Count)
+                }
+                [System.Windows.MessageBox]::Show($msg, $AppName, 'OK', 'Information') | Out-Null
             } catch {
                 [System.Windows.MessageBox]::Show(
                     "マスタ取得失敗 (ローカルキャッシュで続行):`n$($_.Exception.Message)",

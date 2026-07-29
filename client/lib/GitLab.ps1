@@ -14,6 +14,22 @@
 [System.Net.ServicePointManager]::SecurityProtocol = `
     [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+# ---- HTTP 性能チューニング ----
+# 同期は「小さいファイルを多数」という形になるため、接続確立とハンドシェイクの
+# オーバーヘッドが支配的になる。既定のままだと 1 ホスト 2 接続で直列化し、
+# Nagle + Expect: 100-continue が 1 リクエストあたり数百 ms を上乗せする。
+[System.Net.ServicePointManager]::DefaultConnectionLimit = 16
+[System.Net.ServicePointManager]::Expect100Continue      = $false
+[System.Net.ServicePointManager]::UseNagleAlgorithm      = $false
+
+# PS 5.1 の Invoke-WebRequest / Invoke-RestMethod は $ProgressPreference が
+# 'Continue' (既定) だと進捗バーの描画にリクエスト本体より長い時間を使う。
+# 全 HTTP 関数の先頭でこれを呼び、呼び出し元関数のスコープで抑止する。
+# (関数スコープの変数は、そこから呼ばれるコマンドレットにも波及する)
+function _QuietProgress {
+    Set-Variable -Name ProgressPreference -Scope 1 -Value 'SilentlyContinue'
+}
+
 function _StripCtrl { param([string]$s)
     if ($null -eq $s) { return '' }
     -join ($s.ToCharArray() | Where-Object { -not [char]::IsControl($_) })
@@ -65,6 +81,7 @@ function Get-GitLabFileRaw {
         [Parameter(Mandatory)]$Ctx,
         [Parameter(Mandatory)][string]$Path
     )
+    _QuietProgress
     $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/files/$(_EncodePath $Path)/raw?ref=$($Ctx.Branch)"
     try {
         $resp = Invoke-WebRequest -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
@@ -83,6 +100,7 @@ function Get-GitLabFileMeta {
         [Parameter(Mandatory)]$Ctx,
         [Parameter(Mandatory)][string]$Path
     )
+    _QuietProgress
     $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/files/$(_EncodePath $Path)?ref=$($Ctx.Branch)"
     try {
         return Invoke-RestMethod -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
@@ -94,18 +112,41 @@ function Get-GitLabFileMeta {
     }
 }
 
+function Get-GitLabFileMetaContent {
+    # Get-GitLabFileMeta が返す meta.content (base64) を UTF-8 文字列に復号する。
+    # files/:path エンドポイントは content と last_commit_id を同時に返すため、
+    # 「リモート内容の取得」と「楽観排他用の last_commit_id 取得」を
+    # 1 リクエストで済ませられる (raw + meta の 2 往復を 1 往復に)。
+    param($Meta)
+    if (-not $Meta) { return $null }
+    $enc = [string]$Meta.encoding
+    $c   = [string]$Meta.content
+    if (-not $c) { return '' }
+    if ($enc -eq 'base64') {
+        try { return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($c)) }
+        catch { return $null }
+    }
+    return $c
+}
+
 function Set-GitLabFile {
     # 作成または更新。存在チェックして POST/PUT を切替。
     # 楽観排他: last_commit_id を渡して衝突検知。
+    # KnownMeta: 呼出側が既に Get-GitLabFileMeta 済みならそれを渡すことで
+    #            メタ取得の往復を省ける。$null を明示的に渡す用途と区別するため
+    #            MetaResolved スイッチで「解決済み」を示す。
     param(
         [Parameter(Mandatory)]$Ctx,
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string]$Content,
         [Parameter(Mandatory)][string]$CommitMessage,
         [string]$AuthorName,
-        [string]$AuthorEmail
+        [string]$AuthorEmail,
+        $KnownMeta,
+        [switch]$MetaResolved
     )
-    $meta = Get-GitLabFileMeta -Ctx $Ctx -Path $Path
+    $meta = if ($MetaResolved) { $KnownMeta } else { Get-GitLabFileMeta -Ctx $Ctx -Path $Path }
+    _QuietProgress
     $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/files/$(_EncodePath $Path)"
     $body = [ordered]@{
         branch         = $Ctx.Branch
@@ -137,6 +178,7 @@ function Get-GitLabTree {
         [Parameter(Mandatory)]$Ctx,
         [Parameter(Mandatory)][string]$Path
     )
+    _QuietProgress
     $results = New-Object System.Collections.Generic.List[object]
     $page = 1
     do {
@@ -158,6 +200,7 @@ function Get-GitLabTree {
 function Test-GitLabConnection {
     # 認証確認用: project メタ取得
     param([Parameter(Mandatory)]$Ctx)
+    _QuietProgress
     $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)"
     return Invoke-RestMethod -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
 }
