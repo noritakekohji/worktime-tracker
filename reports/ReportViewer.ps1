@@ -242,7 +242,7 @@ $win = [Windows.Markup.XamlReader]::Load($reader)
 $win.Title = Format-WindowTitle -ScreenName 'Report'
 # (フッタ VersionText は FindName 後にセット)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','CompanyFilter','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -312,12 +312,67 @@ function _SetPeriodThisFY {
 _SetPeriodThisMonth
 
 # メンバーフィルタの items を構築 ((全メンバー) + active メンバー)
+# 会社フィルタ。members.json の company からユニーク集合を作る。
+# 会社を選ぶとメンバーフィルタもその会社に絞られる (会社 → メンバーのファネル)。
+function _RefreshCompanyFilter {
+    if (-not $u.CompanyFilter) { return }
+    if ($Script:_RefreshingCompanyFilter) { return }
+    $Script:_RefreshingCompanyFilter = $true
+    try {
+        $cur = [string]$u.CompanyFilter.SelectedValue
+        $coSet = New-Object 'System.Collections.Generic.SortedSet[string]'
+        $hasBlank = $false
+        foreach ($m in $Script:Members) {
+            if (-not $m) { continue }
+            if ($null -ne $m.active -and -not $m.active) { continue }
+            $co = [string]$m.company
+            if ($co) { [void]$coSet.Add($co) } else { $hasBlank = $true }
+        }
+        $items = New-Object 'System.Collections.Generic.List[object]'
+        [void]$items.Add([pscustomobject]@{ key = ''; display = '(全会社)' })
+        foreach ($c in $coSet) { [void]$items.Add([pscustomobject]@{ key = $c; display = $c }) }
+        # company 未設定のメンバーも明示的に絞り込めるようにする
+        if ($hasBlank) { [void]$items.Add([pscustomobject]@{ key = '(未設定)'; display = '(未設定)' }) }
+
+        $u.CompanyFilter.ItemsSource = $items
+        if ($cur) {
+            $u.CompanyFilter.SelectedValue = $cur
+            if ($u.CompanyFilter.SelectedIndex -lt 0) { $u.CompanyFilter.SelectedIndex = 0 }
+        } else {
+            $u.CompanyFilter.SelectedIndex = 0
+        }
+    } finally {
+        $Script:_RefreshingCompanyFilter = $false
+    }
+}
+
+# 選択中の会社を返す ('' = 全会社)。'(未設定)' は company 空のメンバーを指す。
+function _SelectedCompany {
+    if (-not $u.CompanyFilter) { return '' }
+    return [string]$u.CompanyFilter.SelectedValue
+}
+
+# メンバーが選択中の会社に属するか
+function _MemberInCompany {
+    param([string]$MemberId, [string]$CompanySel)
+    if (-not $CompanySel) { return $true }
+    $co = Resolve-MemberCompany $MemberId
+    if ($CompanySel -eq '(未設定)') { return (-not $co) }
+    return ($co -eq $CompanySel)
+}
+
 function _RefreshMemberFilter {
+    $coSel = _SelectedCompany
     $items = New-Object 'System.Collections.Generic.List[object]'
     [void]$items.Add([pscustomobject]@{ id = ''; display = '(全メンバー)' })
     foreach ($m in $Script:Members) {
         if (-not $m) { continue }
         if ($null -ne $m.active -and -not $m.active) { continue }
+        if ($coSel) {
+            $co = [string]$m.company
+            if ($coSel -eq '(未設定)') { if ($co) { continue } }
+            elseif ($co -ne $coSel)    { continue }
+        }
         [void]$items.Add([pscustomobject]@{
             id      = [string]$m.id
             display = "$([string]$m.id)  $([string]$m.name)"
@@ -327,11 +382,13 @@ function _RefreshMemberFilter {
     $u.MemberFilter.ItemsSource = $items
     if ($cur) {
         $u.MemberFilter.SelectedValue = $cur
+        # 会社を切り替えて選択中メンバーが一覧から消えた場合は (全メンバー) に戻す
         if ($u.MemberFilter.SelectedIndex -lt 0) { $u.MemberFilter.SelectedIndex = 0 }
     } else {
         $u.MemberFilter.SelectedIndex = 0
     }
 }
+_RefreshCompanyFilter
 _RefreshMemberFilter
 
 function _RefreshGlobalFilters {
@@ -477,6 +534,7 @@ function Apply-Filters {
     $to   = $u.ToDate.SelectedDate
     # ヘッダのメンバーフィルタ ((全メンバー) = 空文字)
     $mid  = if ($u.MemberFilter) { [string]$u.MemberFilter.SelectedValue } else { '' }
+    $coSel   = _SelectedCompany
     $sysSel  = if ($u.SystemFilter)   { [string]$u.SystemFilter.SelectedValue }   else { '' }
     $typeSel = if ($u.WorkTypeFilter) { [string]$u.WorkTypeFilter.SelectedValue } else { '' }
     $projSel = if ($u.ProjectFilter)  { [string]$u.ProjectFilter.SelectedValue }  else { '' }
@@ -493,6 +551,7 @@ function Apply-Filters {
         if ($from -and $d -lt $from) { $ok = $false }
         if ($to   -and $d -gt $to)   { $ok = $false }
         if ($mid  -and $memberId -ne $mid) { $ok = $false }
+        if ($coSel -and -not (_MemberInCompany $memberId $coSel)) { $ok = $false }
         if ($projSel -and $projectCode -ne $projSel) { $ok = $false }
         if ($sysSel -and (Resolve-ProjectTargetSystem $projectCode) -ne $sysSel) { $ok = $false }
         if ($typeSel -and (_ProjectWorkType $projectCode) -ne $typeSel) { $ok = $false }
@@ -1310,6 +1369,7 @@ function Reload-Masters {
         $Script:Categories = @(Get-MasterCategories -Source $Script:Source)
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
         $Script:_PatternNameCache = $null   # 名称キャッシュを破棄
+        _RefreshCompanyFilter
         _RefreshMemberFilter
         _RefreshGlobalFilters
         _RefreshWorkTypeFilters
@@ -1372,6 +1432,14 @@ $u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
 $u.PeriodThisMonthBtn.Add_Click({ _SetPeriodThisMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodPrevMonthBtn.Add_Click({ _SetPeriodPrevMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodThisFYBtn.Add_Click({    _SetPeriodThisFY;    if ($Script:AllEntries) { _SafeApplyFilters } })
+# 会社フィルタ変更 → メンバー一覧を絞り直してから即フィルタ適用
+if ($u.CompanyFilter) {
+    $u.CompanyFilter.Add_SelectionChanged({
+        if ($Script:_RefreshingCompanyFilter) { return }
+        _RefreshMemberFilter
+        if ($Script:AllEntries) { _SafeApplyFilters }
+    })
+}
 # メンバーフィルタ変更 → 即フィルタ適用
 $u.MemberFilter.Add_SelectionChanged({ if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.SystemFilter.Add_SelectionChanged({
