@@ -373,18 +373,14 @@
                             <DockPanel Margin="10">
                                 <TextBlock DockPanel.Dock="Top" Text="業務種別 (案件対応 / 維持運用 / その他) の稼働比率"
                                            FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
-                                <!-- 業務種別比率タブ内 専用 フィルタ -->
-                                <Border DockPanel.Dock="Top" Background="{StaticResource Surface2}" CornerRadius="8" Padding="10" Margin="0,0,0,8">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Label Content="🖥 システム:" VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="WorkTypeSystemFilter" MinWidth="180" Margin="4,0,12,0" VerticalAlignment="Center"
-                                                  DisplayMemberPath="display" SelectedValuePath="key"
-                                                  ToolTip="(全システム) で絞り込み解除"/>
-                                        <Label Content="📁 プロジェクト:" VerticalAlignment="Center"/>
-                                        <ComboBox x:Name="WorkTypeProjectFilter" MinWidth="200" Margin="4,0,0,0" VerticalAlignment="Center"
-                                                  DisplayMemberPath="display" SelectedValuePath="key"
-                                                  ToolTip="(全プロジェクト) で絞り込み解除"/>
-                                    </StackPanel>
+                                <!-- タブ内専用フィルタは廃止 (上部の共通フィルタと判定が同一で、
+                                     共通フィルタの結果をさらに絞るだけの二重適用だった)。
+                                     共通の業務種別フィルタが効いていると比率が一色になるため、
+                                     その場合だけ注意書きを出す。 -->
+                                <Border x:Name="WorkTypeNoteBox" DockPanel.Dock="Top" Background="#fef3c7" CornerRadius="8"
+                                        BorderBrush="#fbbf24" BorderThickness="1" Padding="10" Margin="0,0,0,8"
+                                        Visibility="Collapsed">
+                                    <TextBlock x:Name="WorkTypeNoteText" TextWrapping="Wrap" Foreground="#92400e"/>
                                 </Border>
                                 <TabControl>
                                     <TabItem Header="📊 概要">

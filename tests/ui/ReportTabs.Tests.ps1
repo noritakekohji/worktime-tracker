@@ -71,8 +71,7 @@ Describe 'タブのグループ構成' -Tag 'ui' {
             'HeatmapCanvas','HeatmapAxisCombo','LoadWeeklyGrid','MissingEntriesGrid',
             'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid','WorkTypePieCanvas',
             'CaseAnalysisGrid','OpsAnalysisGrid','AnomalyGrid','ChartCanvas','ChartAxisCombo',
-            'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn',
-            'WorkTypeSystemFilter','WorkTypeProjectFilter'
+            'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn'
         )
         foreach ($n in $mustExist) {
             $script:Win.FindName($n) | Should -Not -BeNullOrEmpty -Because "再編で $n が失われた"
@@ -81,6 +80,33 @@ Describe 'タブのグループ構成' -Tag 'ui' {
 
     It '未入力検知はチェックグループへ移されている' {
         $script:Win.FindName('MissingTab') | Should -Not -BeNullOrEmpty
+    }
+}
+
+Describe 'フィルタの二重定義がない' -Tag 'ui' {
+
+    # 業務種別比率タブは、上部の共通フィルタと判定が同一のシステム/プロジェクト
+    # フィルタを自前で持っていた。共通フィルタ適用後の行をさらに絞るだけで、
+    # 「共通で CRM / タブで ERP」を選ぶと必ず 0 件になる有害な二重適用だったため
+    # 削除した。同じものが復活していないか押さえる。
+    It 'タブ内専用のシステム / プロジェクトフィルタが復活していない' {
+        foreach ($n in 'WorkTypeSystemFilter','WorkTypeProjectFilter') {
+            $script:Win.FindName($n) | Should -BeNullOrEmpty `
+                -Because "$n は共通フィルタと重複するため削除済み"
+        }
+    }
+
+    It '削除した二重適用ヘルパが本番コードに残っていない' {
+        $src = Get-Content -LiteralPath $script:ViewerPath -Raw -Encoding UTF8
+        foreach ($fn in '_ApplyWorkTypeFilters','_RefreshWorkTypeFilters') {
+            $src | Should -Not -Match ([regex]::Escape($fn)) -Because "$fn は削除済み"
+        }
+    }
+
+    It '業務種別フィルタが効いている時の注意書き枠がある' {
+        # 共通の業務種別で絞ると比率が一色に潰れるため、その旨を出す
+        $script:Win.FindName('WorkTypeNoteBox')  | Should -Not -BeNullOrEmpty
+        $script:Win.FindName('WorkTypeNoteText') | Should -Not -BeNullOrEmpty
     }
 }
 

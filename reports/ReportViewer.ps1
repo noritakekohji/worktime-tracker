@@ -314,7 +314,7 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
               'MemberProjectGrid','WorkTypeKpiPanel','WorkTypeByMemberGrid','WorkTypePieCanvas','WorkTypePieLegend',
-              'WorkTypeSystemFilter','WorkTypeProjectFilter',
+              'WorkTypeNoteBox','WorkTypeNoteText',
               'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid',
               'CasePieCanvas','CasePieLegend','CaseBarCanvas',
               'OpsPieCanvas','OpsPieLegend','OpsBarCanvas') {
@@ -515,65 +515,26 @@ function _RefreshGlobalFilters {
 }
 _RefreshGlobalFilters
 
-# ---- 業務種別比率タブ専用フィルタ (システム / プロジェクト) ----
-function _RefreshWorkTypeFilters {
-    if (-not $u.WorkTypeSystemFilter -or -not $u.WorkTypeProjectFilter) { return }
-    if ($Script:_RefreshingWorkTypeFilters) { return }
-    $Script:_RefreshingWorkTypeFilters = $true
-    try {
-    # システム一覧 (target_system のユニーク集合)
-    $sysSet = New-Object 'System.Collections.Generic.SortedSet[string]'
-    $curSys  = if ($u.WorkTypeSystemFilter)  { [string]$u.WorkTypeSystemFilter.SelectedValue }  else { '' }
-    $curProj = if ($u.WorkTypeProjectFilter) { [string]$u.WorkTypeProjectFilter.SelectedValue } else { '' }
-    $projItems = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($p in @($Script:Projects)) {
-        if (-not $p) { continue }
-        if ($null -ne $p.active -and -not $p.active) { continue }
-        $sys = [string]$p.target_system
-        if ($sys) { [void]$sysSet.Add($sys) }
-        if ($curSys -and $sys -ne $curSys) { continue }
-        [void]$projItems.Add([pscustomobject]@{
-            key     = [string]$p.unit_code
-            display = (Resolve-ProjectDisplay ([string]$p.unit_code))
-        })
+# ---- 業務種別比率タブの注意書き ----
+# タブ内専用のシステム / プロジェクトフィルタは廃止した。
+# 判定が上部の共通フィルタと文字通り同一 (target_system 一致 / unit_code 一致) で、
+# しかも共通フィルタ適用後の ChartRows をさらに絞るだけの二重適用だったため、
+# 「共通で CRM、タブで ERP」を選ぶと必ず 0 件になるなど有害でしかなかった。
+#
+# 一方、共通の業務種別フィルタが効いていると、このタブが見せたい比率が
+# 一色に潰れる。それは絞り込みとして正しい動作なので止めず、注意書きを出す。
+function _UpdateWorkTypeNote {
+    if (-not $u.WorkTypeNoteBox) { return }
+    $typeSel = if ($u.WorkTypeFilter) { [string]$u.WorkTypeFilter.SelectedValue } else { '' }
+    if ($typeSel) {
+        $u.WorkTypeNoteText.Text =
+            "上部の共通フィルタで業務種別が「$typeSel」に絞られています。" +
+            "このタブの比率は $typeSel だけの内訳になります。" +
+            "全体の比率を見るには共通フィルタを (全業務種別) に戻してください。"
+        $u.WorkTypeNoteBox.Visibility = 'Visible'
+    } else {
+        $u.WorkTypeNoteBox.Visibility = 'Collapsed'
     }
-    $sysItems = New-Object 'System.Collections.Generic.List[object]'
-    [void]$sysItems.Add([pscustomobject]@{ key=''; display='(全システム)' })
-    foreach ($s in $sysSet) {
-        [void]$sysItems.Add([pscustomobject]@{ key=$s; display=$s })
-    }
-    $projAll = New-Object 'System.Collections.Generic.List[object]'
-    [void]$projAll.Add([pscustomobject]@{ key=''; display='(全プロジェクト)' })
-    foreach ($pi in ($projItems | Sort-Object key)) { [void]$projAll.Add($pi) }
-
-    $u.WorkTypeSystemFilter.ItemsSource  = $sysItems
-    $u.WorkTypeProjectFilter.ItemsSource = $projAll
-    if ($curSys)  { $u.WorkTypeSystemFilter.SelectedValue  = $curSys;  if ($u.WorkTypeSystemFilter.SelectedIndex  -lt 0) { $u.WorkTypeSystemFilter.SelectedIndex  = 0 } } else { $u.WorkTypeSystemFilter.SelectedIndex  = 0 }
-    if ($curProj) { $u.WorkTypeProjectFilter.SelectedValue = $curProj; if ($u.WorkTypeProjectFilter.SelectedIndex -lt 0) { $u.WorkTypeProjectFilter.SelectedIndex = 0 } } else { $u.WorkTypeProjectFilter.SelectedIndex = 0 }
-    } finally {
-        $Script:_RefreshingWorkTypeFilters = $false
-    }
-}
-_RefreshWorkTypeFilters
-
-# 選択中のフィルタを適用して rows を絞る
-function _ApplyWorkTypeFilters {
-    param($Rows)
-    if (-not $Rows) { return @() }
-    $sysSel  = if ($u.WorkTypeSystemFilter)  { [string]$u.WorkTypeSystemFilter.SelectedValue }  else { '' }
-    $projSel = if ($u.WorkTypeProjectFilter) { [string]$u.WorkTypeProjectFilter.SelectedValue } else { '' }
-    if (-not $sysSel -and -not $projSel) { return $Rows }
-    $filtered = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($r in $Rows) {
-        $pc = [string]$r.project_code
-        if ($projSel -and $pc -ne $projSel) { continue }
-        if ($sysSel) {
-            $s = Resolve-ProjectTargetSystem $pc
-            if ($s -ne $sysSel) { continue }
-        }
-        [void]$filtered.Add($r)
-    }
-    return $filtered.ToArray()
 }
 
 function Reload-Entries {
@@ -1428,7 +1389,6 @@ function Reload-Masters {
         _RefreshCompanyFilter
         _RefreshMemberFilter
         _RefreshGlobalFilters
-        _RefreshWorkTypeFilters
     } catch {
         $u.SummaryText.Text = "マスタ再読込失敗: $_"
     }
@@ -2629,33 +2589,12 @@ if ($u.LoadRefreshBtn) {
     $u.LoadRefreshBtn.Add_Click({          _SafeRun 'MemberLoad'     { Build-MemberLoad       -Rows $Script:ChartRows; _UpdateCheckBadge } })
 }
 if ($u.CaseAxisCombo) {
-    $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } })
+    $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows $Script:ChartRows } })
 }
 if ($u.OpsAxisCombo) {
-    $u.OpsAxisCombo.Add_SelectionChanged({  _SafeRun 'OpsAnalysis'    { Build-OpsAnalysis      -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } })
+    $u.OpsAxisCombo.Add_SelectionChanged({  _SafeRun 'OpsAnalysis'    { Build-OpsAnalysis      -Rows $Script:ChartRows } })
 }
-# 業務種別比率タブ内 専用 フィルタ変更 → 3 集計を再描画
-if ($u.WorkTypeSystemFilter) {
-    $u.WorkTypeSystemFilter.Add_SelectionChanged({
-        if ($Script:_RefreshingWorkTypeFilters) { return }
-        _RefreshWorkTypeFilters
-        _SafeRun 'WorkTypeFilter' {
-        $r = _ApplyWorkTypeFilters $Script:ChartRows
-        Build-WorkTypeMix    -Rows $r
-        Build-CaseAnalysis   -Rows $r
-        Build-OpsAnalysis    -Rows $r
-        }
-    })
-}
-if ($u.WorkTypeProjectFilter) {
-    $u.WorkTypeProjectFilter.Add_SelectionChanged({ _SafeRun 'WorkTypeFilter' {
-        if ($Script:_RefreshingWorkTypeFilters) { return }
-        $r = _ApplyWorkTypeFilters $Script:ChartRows
-        Build-WorkTypeMix    -Rows $r
-        Build-CaseAnalysis   -Rows $r
-        Build-OpsAnalysis    -Rows $r
-    } })
-}
+# (業務種別比率タブ内の専用フィルタは廃止。共通フィルタが同じ絞り込みを担う)
 
 # Apply-Filters の Step 配列を呼べないので、Apply-Filters の末尾で再描画するために
 # wrapper を新設する。元の Apply-Filters は ChartRows をセットするので、その後に
@@ -2689,9 +2628,9 @@ $Script:Views = @(
     @{ N='Chart';              At=@('GrpOverview/1'); S={ Build-Chart } },
     @{ N='Analysis';           At=@('GrpOverview/2'); S={ Build-Analysis           -Rows $Script:ChartRows } },
     @{ N='MemberProjectMatrix';At=@('GrpMember/2');   S={ Build-MemberProjectMatrix -Rows $Script:ChartRows } },
-    @{ N='WorkTypeMix';        At=@('GrpProject/2');  S={ Build-WorkTypeMix        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
-    @{ N='CaseAnalysis';       At=@('GrpProject/2');  S={ Build-CaseAnalysis       -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
-    @{ N='OpsAnalysis';        At=@('GrpProject/2');  S={ Build-OpsAnalysis        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
+    @{ N='WorkTypeMix';        At=@('GrpProject/2');  S={ Build-WorkTypeMix        -Rows $Script:ChartRows } },
+    @{ N='CaseAnalysis';       At=@('GrpProject/2');  S={ Build-CaseAnalysis       -Rows $Script:ChartRows } },
+    @{ N='OpsAnalysis';        At=@('GrpProject/2');  S={ Build-OpsAnalysis        -Rows $Script:ChartRows } },
     @{ N='Heatmap';            At=@('GrpCheck/2');    S={ Build-Heatmap            -Rows $Script:ChartRows } }
 )
 $Script:Dirty = @{}
@@ -2758,6 +2697,7 @@ function Apply-Filters {
         }
     }
     _UpdateCheckBadge
+    _UpdateWorkTypeNote
     # 重いビューは dirty にするだけ。表示中のものはこの直後に build される。
     foreach ($v in $Script:Views) { $Script:Dirty[$v.N] = $true }
     _BuildVisibleViews
