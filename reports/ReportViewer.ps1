@@ -307,6 +307,8 @@ $win.Title = Format-WindowTitle -ScreenName 'Report'
 # (フッタ VersionText は FindName 後にセット)
 $u = @{}
 foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','CompanyFilter','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
+              'MainTabs','GrpOverview','GrpMember','GrpProject','GrpCheck','GrpDetail',
+              'GrpOverviewInner','GrpMemberInner','GrpProjectInner','GrpCheckInner','GrpDetailInner','MissingTab',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
@@ -630,10 +632,13 @@ function _SumBy {
     $out = New-Object 'System.Collections.Generic.List[object]'
     foreach ($k in $counts.Keys) {
         $label = if ($Display) { [string](& $Display $k) } else { $k }
+        # _key はドリルダウン用の生キー。先頭 _ の列は
+        # _HideInternalColumns で非表示にするので画面には出ない。
         [void]$out.Add([pscustomobject]@{
             $KeyLabel = $label
             件数      = $counts[$k]
             工数      = [Math]::Round($sums[$k], 2)
+            _key      = $k
         })
     }
     return @($out | Sort-Object -Property 工数 -Descending)
@@ -704,31 +709,10 @@ function Apply-Filters {
     $u.SystemSummaryGrid.ItemsSource  = _SumBy $rows { param($r) $s = Resolve-ProjectTargetSystem ([string]$r.project_code); if ($s) { $s } else { '(未設定)' } } '対象システム'
     $u.CompanySummaryGrid.ItemsSource = _SumBy $rows { param($r) $c = Resolve-MemberCompany ([string]$r.member_id);        if ($c) { $c } else { '(未設定)' } } '会社'
 
-    # 各 Build を隔離。1つが落ちても他は続行。ログにも残す。
-    function _Trace {
-        param([string]$Tag, [string]$Msg)
-        if (-not $Script:TracePath) { return }
-        try {
-            Add-Content -LiteralPath $Script:TracePath `
-                -Value ("[{0}] {1} {2}" -f (Get-Date -Format 'HH:mm:ss.fff'), $Tag, $Msg) -Encoding UTF8
-        } catch { }
-    }
-    _Trace 'apply' ("rows=$($rows.Count)")
-    foreach ($step in @(
-        @{N='Analysis';  S={ Build-Analysis -Rows $rows; $Script:ChartRows = $rows; Build-Chart }},
-        @{N='Heatmap';   S={ Build-Heatmap -Rows $rows }},
-        @{N='Anomalies'; S={ Build-Anomalies -Rows $rows }},
-        @{N='Dashboard'; S={ Build-Dashboard -Rows $rows }}
-    )) {
-        _Trace $step.N 'begin'
-        try { & $step.S; _Trace $step.N 'ok' }
-        catch {
-            _Trace $step.N ("ERROR: $($_.Exception.Message) / $($_.ScriptStackTrace)")
-            [System.Windows.MessageBox]::Show(
-                "$($step.N) でエラー:`n$($_.Exception.Message)`n`n$($_.InvocationInfo.PositionMessage)`n`n$($_.ScriptStackTrace)",
-                "$($step.N) エラー", 'OK', 'Error') | Out-Null
-        }
-    }
+    # 以降の重い Build-* はタブ表示時に遅延実行する (ファイル末尾の
+    # Apply-Filters ラッパ / _BuildVisibleViews を参照)。ここでは共有の
+    # 行データだけ確定させる。
+    $Script:ChartRows = $rows
 }
 
 # ---- C3: ダッシュボード (KPI カード + Top 一覧) ----
@@ -1545,6 +1529,62 @@ $u.ProjectFilter.Add_SelectionChanged({
     if ($Script:_RefreshingGlobalFilters) { return }
     if ($Script:AllEntries) { _SafeApplyFilters }
 })
+# 期間の変更もその場で反映する ([🔍 フィルタ適用] を押し忘れて古い数字を
+# 見てしまう事故を防ぐ。ボタンは明示的な再計算用に残す)
+foreach ($dp in @($u.FromDate, $u.ToDate)) {
+    if ($dp) { $dp.Add_SelectedDateChanged({ if ($Script:AllEntries) { _SafeApplyFilters } }) }
+}
+
+# ---- 集計グリッドのドリルダウン ----
+# 集計セルをダブルクリックすると、その値で共通フィルタを絞って 📋 明細 へ飛ぶ。
+# 従来は明細を見るために手でフィルタを組み直す必要があった。
+# _SumBy が付ける _key (生の ID / コード) を使う。先頭 _ の列は画面に出さない。
+function _HideInternalColumns {
+    param($Grid)
+    if (-not $Grid) { return }
+    $Grid.Add_AutoGeneratingColumn({
+        param($s, $e)
+        if ([string]$e.PropertyName -like '_*') { $e.Cancel = $true }
+    })
+}
+
+function _EnableDrillDown {
+    param($Grid, $FilterCombo)
+    if (-not $Grid -or -not $FilterCombo) { return }
+    # 対応するフィルタは Tag に持たせる。GetNewClosure だとクロージャから
+    # スクリプトスコープ変数 ($u 等) が見えず silent fail する事故があるため使わない。
+    $Grid.Tag = $FilterCombo
+    $Grid.Add_MouseDoubleClick({
+        param($s, $e)
+        try {
+            $sel = $s.SelectedItem
+            if (-not $sel) { return }
+            $k = [string]$sel._key
+            if (-not $k) { return }
+            $combo = $s.Tag
+            if (-not $combo) { return }
+            # フィルタ設定 → SelectionChanged 経由で Apply-Filters が走る
+            $combo.SelectedValue = $k
+            if ($combo.SelectedIndex -lt 0) {
+                # 選択肢に無い値 (非アクティブなメンバー等) は絞り込めない
+                $u.SummaryText.Text = "「$k」はフィルタの選択肢にないため絞り込めません"
+                return
+            }
+            if ($u.MainTabs -and $u.GrpDetail) { $u.MainTabs.SelectedItem = $u.GrpDetail }
+        } catch {
+            Write-FatalLog ("drilldown: $($_.Exception.Message)")
+        }
+    })
+}
+
+foreach ($g in @($u.MemberSummaryGrid, $u.ProjectSummaryGrid, $u.CategorySummaryGrid, $u.SystemSummaryGrid, $u.CompanySummaryGrid)) {
+    _HideInternalColumns $g
+}
+# カテゴリには共通フィルタが無いのでドリルダウン対象外
+_EnableDrillDown $u.MemberSummaryGrid  $u.MemberFilter
+_EnableDrillDown $u.ProjectSummaryGrid $u.ProjectFilter
+_EnableDrillDown $u.SystemSummaryGrid  $u.SystemFilter
+_EnableDrillDown $u.CompanySummaryGrid $u.CompanyFilter
 
 function Show-ColumnPicker {
     param([string[]]$AllColumns, [string[]]$Selected)
@@ -2586,7 +2626,7 @@ if ($u.HeatmapAxisCombo) {
     $u.HeatmapAxisCombo.Add_SelectionChanged({ _SafeRun 'Heatmap'        { Build-Heatmap          -Rows $Script:ChartRows } })
 }
 if ($u.LoadRefreshBtn) {
-    $u.LoadRefreshBtn.Add_Click({          _SafeRun 'MemberLoad'     { Build-MemberLoad       -Rows $Script:ChartRows } })
+    $u.LoadRefreshBtn.Add_Click({          _SafeRun 'MemberLoad'     { Build-MemberLoad       -Rows $Script:ChartRows; _UpdateCheckBadge } })
 }
 if ($u.CaseAxisCombo) {
     $u.CaseAxisCombo.Add_SelectionChanged({ _SafeRun 'CaseAnalysis'   { Build-CaseAnalysis     -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } })
@@ -2631,28 +2671,112 @@ function _TraceMgr {
     } catch { }
 }
 
+# ---- ビューの遅延構築 ----
+# 従来はフィルタを 1 つ変えるたびに 9 つの Build-* を全部走らせていた。
+# 表示していないタブのキャンバス描画・ピボット生成まで毎回作り直すため、
+# 実際に見ている 1 タブぶんの 9 倍の仕事をしていたことになる。
+#
+# ここでは各ビューに「どのタブに置かれているか」を持たせ、
+#   フィルタ変更 → 全ビューを dirty にする (再計算はしない)
+#   タブ表示    → 表示中かつ dirty のビューだけ build する
+# とする。タブを開かなければ計算は起きない。
+#
+# 位置キーは "<外側タブ名>/<内側タブ index>"。1 つのビューが複数タブに
+# 出力する場合 (MemberLoad は稼働マトリクスと未入力検知の両方を埋める) は
+# 位置を複数持たせる。
+$Script:Views = @(
+    @{ N='Dashboard';          At=@('GrpOverview/0'); S={ Build-Dashboard          -Rows $Script:ChartRows } },
+    @{ N='Chart';              At=@('GrpOverview/1'); S={ Build-Chart } },
+    @{ N='Analysis';           At=@('GrpOverview/2'); S={ Build-Analysis           -Rows $Script:ChartRows } },
+    @{ N='MemberProjectMatrix';At=@('GrpMember/2');   S={ Build-MemberProjectMatrix -Rows $Script:ChartRows } },
+    @{ N='WorkTypeMix';        At=@('GrpProject/2');  S={ Build-WorkTypeMix        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
+    @{ N='CaseAnalysis';       At=@('GrpProject/2');  S={ Build-CaseAnalysis       -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
+    @{ N='OpsAnalysis';        At=@('GrpProject/2');  S={ Build-OpsAnalysis        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) } },
+    @{ N='Heatmap';            At=@('GrpCheck/2');    S={ Build-Heatmap            -Rows $Script:ChartRows } }
+)
+$Script:Dirty = @{}
+
+# 現在表示中のビュー位置キーを返す
+function _CurrentViewKey {
+    if (-not $u.MainTabs) { return '' }
+    $grp = $u.MainTabs.SelectedItem
+    if (-not $grp -or -not $grp.Name) { return '' }
+    $inner = $u["$($grp.Name)Inner"]
+    $idx = if ($inner -and $inner.SelectedIndex -ge 0) { $inner.SelectedIndex } else { 0 }
+    return "$($grp.Name)/$idx"
+}
+
+function _RunView {
+    param($View)
+    _TraceMgr $View.N 'begin'
+    try { & $View.S; $Script:Dirty[$View.N] = $false; _TraceMgr $View.N 'ok' }
+    catch {
+        # 1 つ落ちても他のタブは使えるようにする。ウインドウは閉じない。
+        $Script:Dirty[$View.N] = $false   # 同じ例外を切替のたびに出さない
+        _TraceMgr $View.N ("ERROR: $($_.Exception.Message) / $($_.ScriptStackTrace)")
+        Write-FatalLog ("[$($View.N)] $($_.Exception.Message)`r`n$($_.ScriptStackTrace)")
+        try { $u.SummaryText.Text = "[$($View.N)] $($_.Exception.Message)" } catch { }
+    }
+}
+
+# 表示中かつ dirty のビューだけ build する
+function _BuildVisibleViews {
+    if ($null -eq $Script:ChartRows) { return }
+    $key = _CurrentViewKey
+    if (-not $key) { return }
+    foreach ($v in $Script:Views) {
+        if ($Script:Dirty[$v.N] -and ($v.At -contains $key)) { _RunView $v }
+    }
+}
+
+# チェックタブの見出しに要対応件数を出す (開かなくても気づけるようにする)
+function _UpdateCheckBadge {
+    if (-not $u.GrpCheck) { return }
+    $a = 0; $m = 0
+    try { $a = @($u.AnomalyGrid.ItemsSource).Count } catch { }
+    try { $m = @($u.MissingEntriesGrid.ItemsSource).Count } catch { }
+    $n = $a + $m
+    $u.GrpCheck.Header = if ($n -gt 0) { "⚠ チェック  ($n)" } else { '⚠ チェック' }
+}
+
 $origApply = ${function:Apply-Filters}
 function Apply-Filters {
     & $origApply
     _TraceMgr 'wrapper' 'begin'
+    # 異常検知と負荷 (未入力検知) はグリッド生成だけで軽く、
+    # かつチェックタブのバッジ件数の元になるので常に計算する。
     foreach ($step in @(
-        @{N='MemberLoad';          S={ Build-MemberLoad          -Rows $Script:ChartRows }},
-        @{N='MemberProjectMatrix'; S={ Build-MemberProjectMatrix -Rows $Script:ChartRows }},
-        @{N='WorkTypeMix';         S={ Build-WorkTypeMix         -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }},
-        @{N='CaseAnalysis';        S={ Build-CaseAnalysis        -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }},
-        @{N='OpsAnalysis';         S={ Build-OpsAnalysis         -Rows (_ApplyWorkTypeFilters $Script:ChartRows) }}
+        @{N='Anomalies';  S={ Build-Anomalies  -Rows $Script:ChartRows }},
+        @{N='MemberLoad'; S={ Build-MemberLoad -Rows $Script:ChartRows }}
     )) {
         _TraceMgr $step.N 'begin'
         try { & $step.S; _TraceMgr $step.N 'ok' }
         catch {
             _TraceMgr $step.N ("ERROR: $($_.Exception.Message) / $($_.ScriptStackTrace)")
             Write-FatalLog ("[$($step.N)] $($_.Exception.Message)`r`n$($_.ScriptStackTrace)")
-            try {
-                $u.SummaryText.Text = "[$($step.N)] $($_.Exception.Message)"
-            } catch { }
+            try { $u.SummaryText.Text = "[$($step.N)] $($_.Exception.Message)" } catch { }
         }
     }
+    _UpdateCheckBadge
+    # 重いビューは dirty にするだけ。表示中のものはこの直後に build される。
+    foreach ($v in $Script:Views) { $Script:Dirty[$v.N] = $true }
+    _BuildVisibleViews
     _TraceMgr 'wrapper' 'end'
+}
+
+# ---- タブ切替で遅延 build を起動 ----
+# 注意: TabControl の SelectionChanged は、中に置いた ComboBox の
+# SelectionChanged までバブリングで拾ってしまう。OriginalSource が
+# その TabControl 自身のときだけ処理する。
+$tabChanged = {
+    param($s, $e)
+    if ($e.OriginalSource -ne $s) { return }
+    try { _BuildVisibleViews } catch { Write-FatalLog ("tabChanged: $($_.Exception.Message)") }
+}
+if ($u.MainTabs) { $u.MainTabs.Add_SelectionChanged($tabChanged) }
+foreach ($g in 'GrpOverview','GrpMember','GrpProject','GrpCheck','GrpDetail') {
+    $inner = $u["${g}Inner"]
+    if ($inner) { $inner.Add_SelectionChanged($tabChanged) }
 }
 
 Reload-Entries
