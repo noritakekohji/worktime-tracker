@@ -15,7 +15,15 @@
 
 ## [Unreleased]
 
-(次バージョンへの変更を記録)
+### Added
+- `scripts/import-excel-workentries.ps1` — Excel の作業実績を月次 JSON (`data/YYYY/MM/<member_id>.json`) に変換する取込スクリプト
+  - 日本語ヘッダー (日付 / 案件コード / 工程 / 工数 / コメント 等) を標準フィールドへ自動解決。`-ColumnMapPath` で JSON による列マップの上書きも可能
+  - `member_id` は列から取得、無ければファイル名から `-MemberIdPattern` で抽出
+  - 対象年月外の日付、非数値の工数、1 ファイルに複数メンバーが混在する場合はエラーで停止する
+  - `-DryRun` で書き込まずに変換結果だけ確認できる。既存ファイルの上書きには `-Force` が必要
+  - 出力先は `-OutputRoot` 配下のみ。`local_store` にも Gitlab にも書き込まない
+  - **Microsoft Excel が必要** (Excel COM を使用)。クライアント本体とは独立したオフライン変換ツール
+- `tests/unit/ExcelImport.Tests.ps1` — 列解決・変換・年月チェック・上書き防止の回帰防止 (4 ケース)
 
 ---
 
