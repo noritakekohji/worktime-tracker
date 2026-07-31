@@ -602,7 +602,16 @@ function _SumBy {
             _key      = $k
         })
     }
-    return @($out | Sort-Object -Property 工数 -Descending)
+    # PS 5.1 は関数の戻り値が単一要素配列だと展開してしまい、呼出側が
+    # PSCustomObject 1 個を受け取る。それを ItemsSource に代入すると
+    # 「PSCustomObject を IEnumerable に変換できません」で落ちる。
+    # メンバーを 1 人に絞ると集計行が 1 行になり、まさにこれが起きた。
+    #
+    # 注意: ここで Write-Output -NoEnumerate は効かない。関数の唯一の出力だと
+    # 結局展開されて PSCustomObject に戻る (検証済み)。カンマ演算子を使うこと。
+    # 呼出側は @() で囲まないこと (囲むと逆に二重ラップになる)。
+    $sorted = @($out | Sort-Object -Property 工数 -Descending)
+    return ,$sorted
 }
 
 function Apply-Filters {

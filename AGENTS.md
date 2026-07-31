@@ -74,7 +74,9 @@ if ($b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
 | AdminBtn を押しても無反応 | 旧 `.role -eq 'admin'` が残っている (roles 配列スキーマで silent return) | `Has-Role -Member $m -Role 'admin'` に置換。`tests/unit/RoleUsage.Tests.ps1` が検出 |
 | DataGrid の表が完全に空 | `AutoGenerateColumns="False"` + `<DataGrid.Columns>` 未定義 + PS で `.Columns.Add` していない | `tests/ui/DataGridColumns.Tests.ps1` が検出 |
 | `引数の型が一致しません` (AutoGen Binding) | 列名に `/` `(` `)` ` ` `~` 等が含まれ、Binding パス解析が失敗 | `Set-PivotGrid` ヘルパで内部プロパティを `col0..colN` にリネーム |
-| 単一要素配列が unwrap されて WPF が型変換失敗 | PS 5.1 で関数 return が単一要素配列を unwrap | `Write-Output -NoEnumerate -InputObject $arr` を使用 (位置引数 NG) |
+| 単一要素配列が unwrap されて WPF が型変換失敗 | PS 5.1 で関数 return が単一要素配列を unwrap | **`return ,$arr`** (カンマ演算子) を使う。`Write-Output -NoEnumerate` は関数の唯一の出力だと結局展開されて効かない (検証済み) |
+| `ItemsSource` に `PSCustomObject を IEnumerable に変換できません` | 集計結果が 1 行のときだけ関数 return が unwrap される。フィルタで 1 件に絞ったときだけ再現するため気づきにくい | 返す側を `return ,$arr` にする。呼出側は `@()` で囲まない (囲むと二重ラップ) |
+| tree API で 100 件までしか取れない | GitLab の `/repository/tree` は `X-Total-Pages` を返さない。`[int]$null` = 0 で 1 ページ目で打ち切られる | `X-Next-Page` を見る。`recursive=true` はディレクトリ項目も枠を消費する点に注意 |
 | WPF UI イベント中に PS が落ちる | ハンドラ内未捕捉例外で Dispatcher 経由ホスト終了 | 全ハンドラを try/catch で囲む。`_SafeRun` パターン参照 |
 | `$matches` を上書きしてしまう | PS 自動変数 (regex 結果) | `$hits` 等別名を使う。PSScriptAnalyzer が `PSAvoidAssignmentToAutomaticVariable` で検出 |
 | `@( (if X) {} else {} )` が parse error | PS 5.1 は `@()` 内 `if` 式を許容しない | `$x = if (...) {...} else {...}; @($x, ...)` 形式に |

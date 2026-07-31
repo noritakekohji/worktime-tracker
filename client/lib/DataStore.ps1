@@ -439,11 +439,22 @@ function _ContentHash {
 # tree API の結果から blob だけを {path -> id} で返す
 function _RemoteBlobMap {
     param($Source, [string]$Path)
+    # 重要: Get-GitLabTree は `return ,$array` で「配列を 1 個のオブジェクト」
+    # として返す。ここを @(Get-GitLabTree ...) と書くと『配列を 1 要素だけ持つ
+    # 配列』になり、foreach が配列全体を 1 件として回してしまう。
+    # しかも PS のメンバー列挙により $item.type は @('blob','blob',...) となって
+    # -ne 'blob' が False になり、[string]$item.path も空白連結された文字列が
+    # .json で終わるため、両方のガードをすり抜けて「存在しない 1 件」だけの
+    # マップができる。結果、一切ダウンロードされないのにエラーも出ない。
+    # 素の代入なら単一オブジェクトが展開されて正しい配列になる。
+    $tree = Get-GitLabTree -Ctx $Source.RemoteCtx -Path $Path
     $map = @{}
-    foreach ($item in @(Get-GitLabTree -Ctx $Source.RemoteCtx -Path $Path)) {
-        if ($item.type -ne 'blob') { continue }
-        if (-not ([string]$item.path).EndsWith('.json')) { continue }
-        $map[[string]$item.path] = [string]$item.id
+    foreach ($item in $tree) {
+        if (-not $item) { continue }
+        if ([string]$item.type -ne 'blob') { continue }
+        $p = [string]$item.path
+        if (-not $p.EndsWith('.json')) { continue }
+        $map[$p] = [string]$item.id
     }
     return $map
 }

@@ -214,7 +214,28 @@ Describe '_SumBy (Group-Object 置き換えの集計)' -Tag 'unit' {
     }
 
     It '空配列でも落ちない' {
-        @(_SumBy @() 'member_id' 'メンバー').Count | Should -Be 0
+        $r = _SumBy @() 'member_id' 'メンバー'
+        $r.Count | Should -Be 0
+    }
+
+    # 障害: メンバーを 1 人に絞ると集計が 1 行になり、PS 5.1 の戻り値展開で
+    # 呼出側が PSCustomObject 単体を受け取っていた。それを DataGrid の
+    # ItemsSource に代入すると IEnumerable へ変換できず例外になる。
+    It '結果が 1 行でも配列として返る (ItemsSource 代入で落ちない)' {
+        $one = @([pscustomobject]@{ member_id='E001'; project_code='ABC001'; hours=3.0 })
+        $r = _SumBy $one 'member_id' 'メンバー'
+        $r -is [System.Collections.IEnumerable] | Should -BeTrue
+        $r -is [string] | Should -BeFalse
+        $r.Count | Should -Be 1
+        $r[0].件数 | Should -Be 1
+    }
+
+    It '結果が 1 行のとき ItemsSource に実際に代入できる' {
+        Add-Type -AssemblyName PresentationFramework
+        $one = @([pscustomobject]@{ member_id='E001'; project_code='ABC001'; hours=3.0 })
+        $grid = New-Object System.Windows.Controls.DataGrid
+        { $grid.ItemsSource = _SumBy $one 'member_id' 'メンバー' } | Should -Not -Throw
+        @($grid.ItemsSource).Count | Should -Be 1
     }
 
     It '合計工数は元データの総和と一致する' {

@@ -172,28 +172,75 @@ function Set-GitLabFile {
         -UseBasicParsing
 }
 
+function _ResponseHeader {
+    # レスポンスヘッダを安全に取り出す。
+    # PS 5.1 の Headers は実装により Dictionary だったり Hashtable だったりし、
+    # 存在しないキーの添字アクセスが例外になることがある。
+    param($Response, [string]$Name)
+    try {
+        $h = $Response.Headers
+        if (-not $h) { return '' }
+        if ($h -is [System.Collections.IDictionary]) {
+            if (-not $h.Contains($Name)) { return '' }
+        } elseif ($h.PSObject.Methods['ContainsKey']) {
+            if (-not $h.ContainsKey($Name)) { return '' }
+        }
+        return [string]($h[$Name] | Select-Object -First 1)
+    } catch { return '' }
+}
+
 function Get-GitLabTree {
     # 指定パス配下のファイル一覧 (再帰)。配列を返す。
+    #
+    # ページング注意:
+    #   tree エンドポイントは総件数の算出コストが高いため、GitLab は
+    #   X-Total / X-Total-Pages を返さない。これを終了条件に使うと
+    #   [int]$null = 0 となって 1 ページ目 (最大 100 件) で必ず打ち切られ、
+    #   それ以降のファイルが同期対象から静かに消える。
+    #   recursive=true ではディレクトリ項目も 100 件の枠を消費するため、
+    #   10 名 × 12 ヶ月程度でも容易に上限を超える。
+    #   → X-Next-Page を見て進め、ヘッダが無い場合は
+    #     「満杯のページが返ったら次を試す」でフォールバックする。
     param(
         [Parameter(Mandatory)]$Ctx,
         [Parameter(Mandatory)][string]$Path
     )
     _QuietProgress
+    $perPage  = 100
+    $maxPages = 1000     # 暴走防止 (100,000 ファイル相当)
     $results = New-Object System.Collections.Generic.List[object]
     $page = 1
-    do {
-        $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/tree?path=$(_EncodePath $Path)&ref=$($Ctx.Branch)&recursive=true&per_page=100&page=$page"
+    while ($page -le $maxPages) {
+        $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/tree?path=$(_EncodePath $Path)&ref=$($Ctx.Branch)&recursive=true&per_page=$perPage&page=$page"
         try {
             $resp = Invoke-WebRequest -Uri $url -Headers $Ctx.Headers -UseBasicParsing -ErrorAction Stop
         } catch {
             if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 404) { break }
             throw
         }
-        $items = (_ResponseToString $resp) | ConvertFrom-Json
-        foreach ($i in $items) { $results.Add($i) }
-        $totalPages = [int]($resp.Headers['X-Total-Pages'] | Select-Object -First 1)
-        $page++
-    } while ($page -le $totalPages -and $totalPages -gt 0)
+        # 注意: PS 5.1 の ConvertFrom-Json は JSON 配列を「1 個の配列オブジェクト」
+        # としてパイプラインに流す。素の代入なら配列がそのまま入るが、
+        # @() で囲むと「配列を 1 要素だけ持つ配列」になり件数が 1 に化ける。
+        # ここは絶対に @() を付けないこと。
+        $parsed = (_ResponseToString $resp) | ConvertFrom-Json
+        $pageCount = 0
+        foreach ($i in $parsed) {
+            if ($null -eq $i) { continue }
+            [void]$results.Add($i)
+            $pageCount++
+        }
+
+        $next = _ResponseHeader -Response $resp -Name 'X-Next-Page'
+        if ($next) {
+            $n = 0
+            if ([int]::TryParse($next, [ref]$n) -and $n -gt $page) { $page = $n; continue }
+            break
+        }
+        # X-Next-Page が無い実装向けフォールバック。
+        # 満杯で返ってきたなら続きがある可能性が高いので次ページを試す。
+        if ($pageCount -ge $perPage) { $page++; continue }
+        break
+    }
     return ,$results.ToArray()
 }
 
