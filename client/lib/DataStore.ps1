@@ -158,7 +158,14 @@ function _ToPSObjectDeep {
     if ($v -is [System.Collections.IEnumerable]) {
         $list = New-Object System.Collections.Generic.List[object]
         foreach ($e in $v) { $list.Add( (_ToPSObjectDeep $e) ) }
-        return $list.ToArray()
+        # 重要: カンマ演算子で包むこと。素の `return $list.ToArray()` だと
+        # 要素が 1 個のときに PS 5.1 の戻り値展開で配列が剥がれ、
+        # ConvertTo-Json が JSON 配列ではなくスカラー / オブジェクトを出力する。
+        #   roles       = @('member')      -> "roles": "member"        (配列でない)
+        #   wbs_items   = @(1 件)          -> "wbs_items": { ... }     (配列でない)
+        #   processes / task_groups / tasks も同様に潰れる
+        # スキーマ非互換になり、他の読み手が壊れる。
+        return ,$list.ToArray()
     }
     if ($v -is [System.Management.Automation.PSObject]) {
         $o = New-Object psobject
@@ -173,15 +180,17 @@ function _ToPSObjectDeep {
 function _ToObjectArray {
     # PS 5.1: @() が List[object] of Hashtable で ArgumentException を出すケースがあるため
     # 安全に Object[] に変換するヘルパ。
+    # 戻り値はすべてカンマ演算子で包む。1 要素のときに配列が剥がれると
+    # 呼出側の .Count / インデックス参照が壊れる。
     param($v)
-    if ($null -eq $v) { return @() }
-    if ($v -is [object[]]) { return $v }
+    if ($null -eq $v) { return ,@() }
+    if ($v -is [object[]]) { return ,$v }
     if ($v -is [System.Collections.Generic.IList[object]]) {
-        try { return $v.ToArray() } catch {}
+        try { return ,$v.ToArray() } catch {}
     }
     $list = New-Object System.Collections.Generic.List[object]
     foreach ($e in $v) { $list.Add($e) }
-    return $list.ToArray()
+    return ,$list.ToArray()
 }
 
 function _SaveMasterJson {
