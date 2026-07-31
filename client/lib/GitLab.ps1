@@ -172,6 +172,36 @@ function Set-GitLabFile {
         -UseBasicParsing
 }
 
+function Remove-GitLabFile {
+    # 指定パスのファイルを削除する。存在しなければ $false を返す。
+    # 通常運用では使わない。診断スクリプトが投入した検証用ファイルを
+    # 後片付けするために用意している。
+    param(
+        [Parameter(Mandatory)]$Ctx,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$CommitMessage,
+        [string]$AuthorName,
+        [string]$AuthorEmail
+    )
+    _QuietProgress
+    $url = "$($Ctx.BaseUrl)/api/v4/projects/$($Ctx.ProjectId)/repository/files/$(_EncodePath $Path)"
+    $body = [ordered]@{
+        branch         = $Ctx.Branch
+        commit_message = $CommitMessage
+    }
+    if ($AuthorName)  { $body.author_name  = $AuthorName }
+    if ($AuthorEmail) { $body.author_email = $AuthorEmail }
+    try {
+        $null = Invoke-RestMethod -Uri $url -Method 'DELETE' -Headers $Ctx.Headers `
+            -ContentType 'application/json; charset=utf-8' `
+            -Body ($body | ConvertTo-Json -Depth 5) -UseBasicParsing
+        return $true
+    } catch {
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 404) { return $false }
+        throw
+    }
+}
+
 function _ResponseHeader {
     # レスポンスヘッダを安全に取り出す。
     # PS 5.1 の Headers は実装により Dictionary だったり Hashtable だったりし、

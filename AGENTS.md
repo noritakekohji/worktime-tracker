@@ -208,6 +208,7 @@ tests/
 | `scripts/setup.cmd` | 配布 zip 解凍後の初期セットアップ (`%LOCALAPPDATA%\worktime-tracker` にコピー + ショートカット作成) |
 | `scripts/uninstall.cmd` | InstallDir / ショートカット / `%APPDATA%` / local_store キャッシュ を段階確認で削除 |
 | `scripts/load-demo.cmd` | デモ用サンプルデータ投入 (4 メンバー × 2 ヶ月分、シード固定) |
+| `scripts/test-gitlab.cmd` | Gitlab 連携の診断。既定は読み取り専用。`-RoundTrip` で「Tracker 書込 → Gitlab 送信 → 取得 → Report フィルタ」を通しで検証 (検証用ファイルは 2099/12 に作り、終了時に自動削除) |
 
 ---
 
