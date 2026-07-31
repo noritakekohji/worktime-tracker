@@ -15,6 +15,12 @@
 
 ## [Unreleased]
 
+(次バージョンへの変更を記録)
+
+---
+
+## [1.4.0] - 2026-07-31
+
 ### Added
 - `scripts/import-excel-workentries.ps1` — Excel の作業実績を月次 JSON (`data/YYYY/MM/<member_id>.json`) に変換する取込スクリプト
   - 日本語ヘッダー (日付 / 案件コード / 工程 / 工数 / コメント 等) を標準フィールドへ自動解決。`-ColumnMapPath` で JSON による列マップの上書きも可能
