@@ -65,6 +65,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'SyncMonitor.ps1')
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'UserPrefs.ps1')
@@ -188,8 +189,8 @@ function Initialize-AppContext {
         # No : ローカルキャッシュのみで起動 (オフライン可)
         if ($source.RemoteCtx) {
             $pullChoice = [System.Windows.MessageBox]::Show(
-                "Gitlab からマスタを取得しますか?`n`n  [はい] リモートから取得 → ローカルから読込 (最新)`n  [いいえ] ローカルから読込 (オフラインキャッシュ)",
-                'WorkTime Tracker  起動', 'YesNo', 'Question')
+                "共有マスタは作業入力の候補と権限に影響します。最新情報の取得を強く推奨します。`n`n  [はい] GitLab からマスタを取得 → ローカルから読込 (最新)`n  [いいえ] ローカルキャッシュで開始 (更新がある場合は後で通知)",
+                'WorkTime Tracker  起動 - マスタ更新を推奨', 'YesNo', 'Warning')
             if ($pullChoice -eq 'Yes') {
                 try {
                     $pullResult = Sync-Pull-Masters -Source $source
@@ -320,7 +321,7 @@ $Script:Window.Title = Format-WindowTitle -ScreenName '日次入力'
 # UI フッタにバージョンを表示 (FindName 後にセット)
 
 $names = @(
-    'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText',
+    'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText','RemoteNoticeText','SyncProgress',
     'EntryDate','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
@@ -369,6 +370,32 @@ function Set-Status {
     param([string]$Text, [string]$Color = '#f9e2af')
     $ui.StatusText.Text = $Text
     $ui.StatusText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+}
+
+function Set-SyncBusy {
+    param([bool]$Busy, [string]$Text = '')
+    $ui.PushBtn.IsEnabled = -not $Busy
+    $ui.PullBtn.IsEnabled = -not $Busy
+    $ui.SyncProgress.Visibility = if ($Busy) { 'Visible' } else { 'Collapsed' }
+    if ($Text) { Set-Status $Text '#f9e2af' }
+    $ui.StatusText.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
+}
+
+function Get-MonitorDataPath {
+    $member = Get-SelectedMember
+    if (-not $member) { return '' }
+    return ('data/{0:D4}/{1:D2}' -f [int]$ui.YearCombo.SelectedItem, [int]$ui.MonthCombo.SelectedItem)
+}
+
+function Show-RemoteUpdateNotice {
+    param($Result)
+    if (-not $Result) { return }
+    $items = @()
+    if ($Result.MasterChanged) { $items += 'マスタ' }
+    if ($Result.DataChanged) { $items += '自分の表示月の実績' }
+    if ($items.Count -eq 0) { return }
+    $ui.RemoteNoticeText.Text = ('⚠ GitLab に新しい{0}があります。［📥 取得］で反映してください。' -f ($items -join '・'))
+    $ui.RemoteNoticeText.Visibility = 'Visible'
 }
 
 # ---- 配列強制 ----
@@ -975,6 +1002,8 @@ $ui.PullBtn.Add_Click({
             $r = Sync-Pull-MyData -Source $Script:Source -MemberId $mid -Year $vy -Month $vm
             Write-FatalLog ("My data pull: pulled={0} missing={1} errors={2}" -f $r.Pulled, $r.Missing, $r.Errors.Count)
         }
+        Clear-RemoteUpdateNotice -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+        $ui.RemoteNoticeText.Visibility = 'Collapsed'
         Load-ViewMonth
         Set-Status 'リモートから取得 → ローカル読込 完了' '#10b981'
     } catch {
@@ -1100,6 +1129,7 @@ $ui.PushBtn.Add_Click({
     if (-not $m) { return }
 
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+    Set-SyncBusy $true '送信を準備しています…'
     try {
         # Step 1: ローカル保存
         Set-Status '送信: ローカル保存中...' '#f9e2af'
@@ -1116,8 +1146,12 @@ $ui.PushBtn.Add_Click({
         Set-Status '送信: Gitlab へ push 中...' '#f9e2af'
         $midStr  = $saveResult.MemberId
         $nameStr = $saveResult.MemberName
+        $onProgress = {
+            param($Index, $Total, $Path)
+            Set-SyncBusy $true ("GitLab へ送信中… ({0}/{1}) {2}" -f $Index, $Total, $Path)
+        }
         $result = Sync-Push-MyData -Source $Script:Source -MemberId $midStr `
-                                   -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local"
+                                   -AuthorName $nameStr -AuthorEmail "$midStr@worktime-tracker.local" -OnProgress $onProgress
         $summary = "保存 → 送信 完了`n  保存: {0} 件 ({1}/{2})`n  push: {3}`n  リモートが新しいためスキップ: {4}`n  変更なし: {5}`n  エラー: {6}" -f `
             $saveResult.Count, $saveResult.Year, $saveResult.Month, `
             $result.Pushed, $result.SkippedNewer, $result.SkippedSame, $result.Errors.Count
@@ -1129,6 +1163,8 @@ $ui.PushBtn.Add_Click({
             $summary += "`n`n[エラー]`n" + (($result.Errors | Select-Object -First 5) -join "`n")
         }
         Write-FatalLog "PUSH: $summary"
+        Suppress-RemoteUpdateNotice -Source $Script:Source -DataPath (Get-MonitorDataPath)
+        $ui.RemoteNoticeText.Visibility = 'Collapsed'
         Set-Status ("送信完了 (保存={0} push={1})" -f $saveResult.Count, $result.Pushed) '#10b981'
         if ($result.Errors.Count -gt 0 -or $result.Conflicts.Count -gt 0) {
             Show-ErrorDialog -Title '送信結果' -Message '送信を実行しました (詳細)' -Detail $summary
@@ -1141,12 +1177,42 @@ $ui.PushBtn.Add_Click({
         Set-Status "送信失敗 (詳細はダイアログ)" '#f38ba8'
         Show-ErrorDialog -Title '送信失敗' -Message '送信に失敗しました。' -Detail $detail
     } finally {
+        Set-SyncBusy $false
         $Script:Window.Cursor = $null
     }
 })
 
 # ---- 初回ロード ----
 Load-ViewMonth
+
+# 5 分ごとに、画面を止めず GitLab の blob ID だけを照会する。取得・上書きはしない。
+if ($Script:Source.RemoteCtx) {
+    $Script:RemoteUpdateProbe = $null
+    $Script:RemoteUpdatePollTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdatePollTimer.Interval = [timespan]::FromSeconds(1)
+    $Script:RemoteUpdatePollTimer.Add_Tick({
+        $result = Complete-RemoteUpdateProbe -Probe $Script:RemoteUpdateProbe
+        if ($result) {
+            $Script:RemoteUpdateProbe = $null
+            Show-RemoteUpdateNotice $result
+        }
+    })
+    $Script:RemoteUpdatePollTimer.Start()
+    $Script:RemoteUpdateTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdateTimer.Interval = [timespan]::FromMinutes(5)
+    $Script:RemoteUpdateTimer.Add_Tick({
+        if (-not $Script:RemoteUpdateProbe) {
+            $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+        }
+    })
+    $Script:RemoteUpdateTimer.Start()
+    $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+    $Script:Window.Add_Closed({
+        $Script:RemoteUpdateTimer.Stop()
+        $Script:RemoteUpdatePollTimer.Stop()
+        if ($Script:RemoteUpdateProbe) { $Script:RemoteUpdateProbe.Shell.Dispose() }
+    })
+}
 
 # ---- キーボードショートカット (A2) ----
 # Ctrl+S = 保存 / Ctrl+R = 再読込 / F5 = 再読込

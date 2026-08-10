@@ -34,6 +34,12 @@ BeforeAll {
         return [System.IO.File]::ReadAllText((Join-Path $Ctx.Dir "master\$Name"),
                                              [System.Text.UTF8Encoding]::new($false))
     }
+    # 壊れた形の生 JSON を直接書き込む (本番に既にあるファイルの再現用)
+    function Write-RawMaster {
+        param($Ctx, [string]$Name, [string]$Json)
+        [System.IO.File]::WriteAllText((Join-Path $Ctx.Dir "master\$Name"), $Json,
+                                       [System.Text.UTF8Encoding]::new($false))
+    }
     # JSON 上で指定プロパティが配列 ([) になっているか
     function Test-JsonPropIsArray {
         param([string]$Json, [string]$Prop)
@@ -159,6 +165,139 @@ Describe '旧スキーマ (role 単一文字列) との互換' -Tag 'lib','schem
         $m = @(Get-MasterMembers -Source $script:ctx.Source)[0]
         { Get-MemberRoles -Member $m } | Should -Not -Throw
         (Has-Role -Member $m -Role 'admin') | Should -BeFalse
+    }
+}
+
+Describe '本番に既に存在する壊れた形を読めること (後方互換の担保)' -Tag 'lib','schema','compat' {
+
+    # 保存側の不具合により、本番のマスタには要素 1 個の配列が
+    # 文字列 / オブジェクトとして書かれたファイルが既に存在する。
+    # 保存側を直しても既存ファイルは残るため、読込がこれを吸収できなければ
+    # 本番が動かなくなる。実際に壊れた JSON を書いて読ませる。
+
+    BeforeEach { $script:ctx = New-TempDataSource }
+    AfterEach  { Remove-TempDataSource $script:ctx }
+
+    It 'roles が文字列で保存されていても配列として読める' {
+        Write-RawMaster -Ctx $script:ctx -Name 'members.json' `
+            -Json '[{"id":"M1","name":"壊れ","roles":"admin","active":true}]'
+        $m = @(Get-MasterMembers -Source $script:ctx.Source)[0]
+        ($m.roles -is [System.Array]) | Should -BeTrue
+        @($m.roles).Count | Should -Be 1
+        @($m.roles)[0] | Should -Be 'admin'
+    }
+
+    It 'roles が文字列でも Has-Role が正しく効く (管理者モードが開ける)' {
+        Write-RawMaster -Ctx $script:ctx -Name 'members.json' `
+            -Json '[{"id":"A","name":"管理","roles":"admin","active":true},{"id":"B","name":"一般","roles":"member","active":true}]'
+        $loaded = @(Get-MasterMembers -Source $script:ctx.Source)
+        (Has-Role -Member ($loaded | Where-Object { $_.id -eq 'A' }) -Role 'admin') | Should -BeTrue
+        (Has-Role -Member ($loaded | Where-Object { $_.id -eq 'B' }) -Role 'admin') | Should -BeFalse
+    }
+
+    It 'wbs_items がオブジェクトで保存されていても配列として読める' {
+        Write-RawMaster -Ctx $script:ctx -Name 'projects.json' `
+            -Json '[{"unit_code":"P1","project_name":"PJ1","active":true,"wbs_items":{"process_code":"DSN","task_group_code":"DB","task_code":"ERD","alias":"ER図","status":"未着手"}}]'
+        $p = @(Get-MasterProjects -Source $script:ctx.Source)[0]
+        ($p.wbs_items -is [System.Array]) | Should -BeTrue
+        @($p.wbs_items).Count | Should -Be 1
+        @($p.wbs_items)[0].task_code | Should -Be 'ERD'
+    }
+
+    It 'processes / task_groups / tasks がオブジェクトでも全階層を配列として辿れる' {
+        Write-RawMaster -Ctx $script:ctx -Name 'task_patterns.json' -Json @'
+[{"id":"PT1","processes":{"code":"DSN","name":"設計","task_groups":{"code":"DB","name":"DB設計","tasks":{"code":"ERD","name":"ER図"}}}}]
+'@
+        $pt = @(Get-MasterTaskPatterns -Source $script:ctx.Source)[0]
+        ($pt.processes -is [System.Array]) | Should -BeTrue
+        ($pt.processes[0].task_groups -is [System.Array]) | Should -BeTrue
+        ($pt.processes[0].task_groups[0].tasks -is [System.Array]) | Should -BeTrue
+        $pt.processes[0].task_groups[0].tasks[0].code | Should -Be 'ERD'
+    }
+
+    It '壊れた形と正しい形が混在していても両方読める' {
+        Write-RawMaster -Ctx $script:ctx -Name 'members.json' -Json @'
+[{"id":"OLD","name":"旧","role":"admin","active":true},
+ {"id":"BAD","name":"壊れ","roles":"leader","active":true},
+ {"id":"OK","name":"正常","roles":["admin","member"],"active":true}]
+'@
+        $loaded = @(Get-MasterMembers -Source $script:ctx.Source)
+        $loaded.Count | Should -Be 3
+        (Has-Role -Member ($loaded | Where-Object { $_.id -eq 'OLD' }) -Role 'admin')  | Should -BeTrue
+        (Has-Role -Member ($loaded | Where-Object { $_.id -eq 'BAD' }) -Role 'leader') | Should -BeTrue
+        (Has-Role -Member ($loaded | Where-Object { $_.id -eq 'OK'  }) -Role 'member') | Should -BeTrue
+    }
+
+    It '壊れたファイルを読んで保存し直すと正しい配列に自己修復する' {
+        Write-RawMaster -Ctx $script:ctx -Name 'members.json' `
+            -Json '[{"id":"M1","name":"壊れ","roles":"admin","active":true}]'
+        $loaded = @(Get-MasterMembers -Source $script:ctx.Source)
+        Save-MasterMembers -Source $script:ctx.Source -Data $loaded -AuthorName 'ut' -AuthorEmail 'ut@local'
+        $raw = Get-RawMaster -Ctx $script:ctx -Name 'members.json'
+        $raw | Should -Not -Match '"roles"\s*:\s*"'
+        (Test-JsonPropIsArray -Json $raw -Prop 'roles') | Should -BeTrue
+    }
+
+    It '壊れた wbs_items を読んで保存し直すと配列に戻る' {
+        Write-RawMaster -Ctx $script:ctx -Name 'projects.json' `
+            -Json '[{"unit_code":"P1","project_name":"PJ1","active":true,"wbs_items":{"process_code":"DSN","task_group_code":"DB","task_code":"ERD","alias":"","status":"未着手"}}]'
+        $loaded = @(Get-MasterProjects -Source $script:ctx.Source)
+        Save-MasterProjects -Source $script:ctx.Source -Data $loaded -AuthorName 'ut' -AuthorEmail 'ut@local'
+        (Get-RawMaster -Ctx $script:ctx -Name 'projects.json') | Should -Not -Match '"wbs_items"\s*:\s*\{'
+    }
+
+    It 'roles が空文字でも例外にならない' {
+        Write-RawMaster -Ctx $script:ctx -Name 'members.json' `
+            -Json '[{"id":"E","name":"空","roles":"","active":true}]'
+        $m = @(Get-MasterMembers -Source $script:ctx.Source)[0]
+        { Get-MemberRoles -Member $m } | Should -Not -Throw
+        (Has-Role -Member $m -Role 'admin') | Should -BeFalse
+    }
+
+    It 'wbs_items / processes が null でも落ちない' {
+        Write-RawMaster -Ctx $script:ctx -Name 'projects.json' `
+            -Json '[{"unit_code":"P1","project_name":"PJ1","active":true,"wbs_items":null}]'
+        Write-RawMaster -Ctx $script:ctx -Name 'task_patterns.json' `
+            -Json '[{"id":"PT1","processes":null}]'
+        { @(Get-MasterProjects     -Source $script:ctx.Source) } | Should -Not -Throw
+        { @(Get-MasterTaskPatterns -Source $script:ctx.Source) } | Should -Not -Throw
+        @((@(Get-MasterProjects -Source $script:ctx.Source)[0]).wbs_items).Count | Should -Be 0
+    }
+}
+
+Describe '_AsArray (壊れた形を配列に揃えるヘルパ)' -Tag 'lib','schema','compat' {
+
+    It '文字列は 1 要素の配列にする (char 分解しない)' {
+        $r = _AsArray 'admin'
+        ($r -is [System.Array]) | Should -BeTrue
+        @($r).Count | Should -Be 1
+        @($r)[0] | Should -Be 'admin'
+    }
+
+    It '空文字も 1 要素として扱う' {
+        $r = _AsArray ''
+        @($r).Count | Should -Be 1
+    }
+
+    It '$null は空配列' {
+        $r = _AsArray $null
+        ($r -is [System.Array]) | Should -BeTrue
+        @($r).Count | Should -Be 0
+    }
+
+    It '既に配列ならそのまま件数を保つ' {
+        # _AsArray は ,$arr を返すため、呼出結果を @() で囲むと二重ラップになる。
+        # 必ず一度変数で受けること。
+        $r3 = _AsArray @('a','b','c')
+        @($r3).Count | Should -Be 3
+        $r0 = _AsArray @()
+        @($r0).Count | Should -Be 0
+    }
+
+    It '単一オブジェクトは 1 要素の配列にする' {
+        $r = _AsArray ([pscustomobject]@{ code = 'X' })
+        @($r).Count | Should -Be 1
+        @($r)[0].code | Should -Be 'X'
     }
 }
 

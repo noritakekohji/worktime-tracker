@@ -94,6 +94,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'SyncMonitor.ps1')
 . (Join-Path $libDir 'UserPrefs.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'Bootstrap.ps1')
@@ -147,7 +148,7 @@ $Script:Window.Title = Format-WindowTitle -ScreenName 'WBS入力'
 
 $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','AdminBtn',
-                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText','VersionText',
+                  'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText','RemoteNoticeText','SyncProgress','VersionText',
                   'DelRowBtn','ShowDoneChk','FilterStatusText',
                   # タスクビュー (右下)
                   'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
@@ -166,6 +167,30 @@ function Set-Status {
     param([string]$Msg, [string]$Color = '#6b7280')
     $ui.StatusText.Text = $Msg
     $ui.StatusText.Foreground = $Color
+}
+
+function Set-SyncBusy {
+    param([bool]$Busy, [string]$Text = '')
+    $ui.PushBtn.IsEnabled = -not $Busy
+    $ui.PullBtn.IsEnabled = -not $Busy
+    $ui.SyncProgress.Visibility = if ($Busy) { 'Visible' } else { 'Collapsed' }
+    if ($Text) { Set-Status $Text '#f9e2af' }
+    $ui.StatusText.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
+}
+
+function Get-MonitorDataPath {
+    return ('data/{0:D4}/{1:D2}' -f [int]$ui.YearCombo.SelectedItem, [int]$ui.MonthCombo.SelectedItem)
+}
+
+function Show-RemoteUpdateNotice {
+    param($Result)
+    if (-not $Result) { return }
+    $items = @()
+    if ($Result.MasterChanged) { $items += 'マスタ' }
+    if ($Result.DataChanged) { $items += '自分の表示月の実績' }
+    if ($items.Count -eq 0) { return }
+    $ui.RemoteNoticeText.Text = ('⚠ GitLab に新しい{0}があります。［📥 取得］で反映してください。' -f ($items -join '・'))
+    $ui.RemoteNoticeText.Visibility = 'Visible'
 }
 
 # ---- 初期 UI セット ----
@@ -840,6 +865,8 @@ $ui.PullBtn.Add_Click({
         if ($mid -and $vy -gt 0 -and $vm -gt 0) {
             [void](Sync-Pull-MyData -Source $Script:Source -MemberId $mid -Year $vy -Month $vm)
         }
+        Clear-RemoteUpdateNotice -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+        $ui.RemoteNoticeText.Visibility = 'Collapsed'
         # ローカルからマスタを再読込
         _LoadMasters
         # ローカルから WBS データ表示
@@ -1143,17 +1170,25 @@ $ui.SaveBtn.Add_Click({
 
 $ui.PushBtn.Add_Click({
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+    Set-SyncBusy $true '送信を準備しています…'
     try {
         $r = _DoSave
         Set-Status "リモートへ送信中…" '#f9e2af'
         # 個人実績データを push
+        $onProgress = {
+            param($Index, $Total, $Path)
+            Set-SyncBusy $true ("GitLab へ送信中… ({0}/{1}) {2}" -f $Index, $Total, $Path)
+        }
         Sync-Push-MyData -Source $Script:Source -MemberId $r.MemberId `
-                         -AuthorName $r.MemberId -AuthorEmail "$($r.MemberId)@worktime-tracker.local"
+                         -AuthorName $r.MemberId -AuthorEmail "$($r.MemberId)@worktime-tracker.local" -OnProgress $onProgress
         # プロジェクト定義 (wbs_items 込み) を push — 他メンバーに共有するため
         if ($Script:Source.RemoteCtx) {
+            Set-SyncBusy $true 'GitLab へマスタを送信中…'
             Sync-Push-Masters -Source $Script:Source `
                               -AuthorName $r.MemberId -AuthorEmail "$($r.MemberId)@worktime-tracker.local" | Out-Null
         }
+        Suppress-RemoteUpdateNotice -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+        $ui.RemoteNoticeText.Visibility = 'Collapsed'
         Set-Status ("送信完了: {0} 件エントリ + プロジェクト定義" -f $r.NewCount) '#10b981'
         [System.Windows.MessageBox]::Show("Gitlab に送信しました (個人実績 + プロジェクト定義)。", '送信完了', 'OK', 'Information') | Out-Null
         Load-WbsData
@@ -1161,6 +1196,7 @@ $ui.PushBtn.Add_Click({
         Set-Status "送信失敗: $_" '#ef4444'
         [System.Windows.MessageBox]::Show("送信に失敗しました:`n$_", '送信失敗', 'OK', 'Error') | Out-Null
     } finally {
+        Set-SyncBusy $false
         $Script:Window.Cursor = $null
     }
 })
@@ -1327,5 +1363,34 @@ $Script:Window.Add_Closing({
         }
     } catch { }
 })
+
+# 5 分ごとに更新有無だけを専用 runspace で確認し、ローカル作業は変更しない。
+if ($Script:Source.RemoteCtx) {
+    $Script:RemoteUpdateProbe = $null
+    $Script:RemoteUpdatePollTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdatePollTimer.Interval = [timespan]::FromSeconds(1)
+    $Script:RemoteUpdatePollTimer.Add_Tick({
+        $result = Complete-RemoteUpdateProbe -Probe $Script:RemoteUpdateProbe
+        if ($result) {
+            $Script:RemoteUpdateProbe = $null
+            Show-RemoteUpdateNotice $result
+        }
+    })
+    $Script:RemoteUpdatePollTimer.Start()
+    $Script:RemoteUpdateTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdateTimer.Interval = [timespan]::FromMinutes(5)
+    $Script:RemoteUpdateTimer.Add_Tick({
+        if (-not $Script:RemoteUpdateProbe) {
+            $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+        }
+    })
+    $Script:RemoteUpdateTimer.Start()
+    $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
+    $Script:Window.Add_Closed({
+        $Script:RemoteUpdateTimer.Stop()
+        $Script:RemoteUpdatePollTimer.Stop()
+        if ($Script:RemoteUpdateProbe) { $Script:RemoteUpdateProbe.Shell.Dispose() }
+    })
+}
 
 [void]$Script:Window.ShowDialog()

@@ -144,6 +144,8 @@
         <Border DockPanel.Dock="Bottom" Background="#064e3b" Padding="18,14">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <ProgressBar x:Name="SyncProgress" Width="96" Height="8" Margin="8,0,2,0" VerticalAlignment="Center"
+                                 Visibility="Collapsed" IsIndeterminate="True" Foreground="#6ee7b7"/>
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"/>
                     <Button x:Name="PushBtn" Content="📤 送信" Style="{StaticResource Primary}"
                             MinWidth="100" Margin="6,3,3,3"
@@ -154,9 +156,11 @@
                            Foreground="#6ee7b7" FontSize="11"
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
-                <TextBlock x:Name="StatusText"
-                           Text="プロジェクトと月を選択して「読込」を押してください"
-                           VerticalAlignment="Center" Foreground="#a7f3d0"/>
+                <StackPanel>
+                    <TextBlock x:Name="StatusText" Text="プロジェクトと月を選択して「読込」を押してください"
+                               VerticalAlignment="Center" Foreground="#a7f3d0"/>
+                    <TextBlock x:Name="RemoteNoticeText" Visibility="Collapsed" Foreground="#fef08a" FontWeight="Bold"/>
+                </StackPanel>
             </DockPanel>
         </Border>
 

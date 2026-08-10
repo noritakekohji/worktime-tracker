@@ -133,10 +133,98 @@ function Set-DataFile {
 
 # ---- マスタ ----
 
-function Get-MasterMembers      { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/members.json' }
-function Get-MasterProjects     { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/projects.json' }
+# ---- 読込時のスキーマ正規化 (本番互換) ----
+# 過去に保存されたファイルには、要素が 1 個の配列が配列でなく
+# 文字列 / オブジェクトとして書かれているものがある (保存側の不具合)。
+#   "roles": "member"          本来は ["member"]
+#   "wbs_items": { ... }       本来は [ { ... } ]
+#   "processes": { ... }       本来は [ { ... } ]  (task_groups / tasks も同様)
+# 保存側は修正済みだが、既存ファイルはそのまま残る。
+# 全消費者に @() を書いて回るのは漏れが出るため、読込時にここで配列へ揃える。
+# 一度でも保存し直せばファイル自体も正しい配列に戻る。
+
+function _AsArray {
+    # 何が来ても Object[] にして返す。string は 1 要素として扱う
+    # (string は IEnumerable だが char 配列に分解してはいけない)。
+    param($v)
+    if ($null -eq $v) { return ,@() }
+    if ($v -is [string]) { return ,@($v) }
+    if ($v -is [System.Collections.IEnumerable]) {
+        $l = New-Object System.Collections.Generic.List[object]
+        foreach ($e in $v) { $l.Add($e) }
+        return ,$l.ToArray()
+    }
+    return ,@($v)
+}
+
+function _SetProp {
+    # PSCustomObject / Hashtable のどちらでもプロパティを差し替える
+    param($Obj, [string]$Name, $Value)
+    if ($null -eq $Obj) { return }
+    if ($Obj -is [System.Collections.IDictionary]) { $Obj[$Name] = $Value; return }
+    if ($Obj.PSObject.Properties[$Name]) { $Obj.PSObject.Properties[$Name].Value = $Value }
+    else { Add-Member -InputObject $Obj -NotePropertyName $Name -NotePropertyValue $Value -Force }
+}
+
+function _HasProp {
+    param($Obj, [string]$Name)
+    if ($null -eq $Obj) { return $false }
+    if ($Obj -is [System.Collections.IDictionary]) { return $Obj.Contains($Name) }
+    return [bool]$Obj.PSObject.Properties[$Name]
+}
+
+function _NormalizeMember {
+    param($m)
+    if ($null -eq $m) { return $m }
+    if (_HasProp $m 'roles') { _SetProp $m 'roles' (_AsArray $m.roles) }
+    return $m
+}
+
+function _NormalizeProject {
+    param($p)
+    if ($null -eq $p) { return $p }
+    if (_HasProp $p 'wbs_items') { _SetProp $p 'wbs_items' (_AsArray $p.wbs_items) }
+    return $p
+}
+
+function _NormalizeTaskPattern {
+    param($pt)
+    if ($null -eq $pt) { return $pt }
+    if (-not (_HasProp $pt 'processes')) { return $pt }
+    $procs = _AsArray $pt.processes
+    foreach ($pr in $procs) {
+        if ($null -eq $pr) { continue }
+        if (-not (_HasProp $pr 'task_groups')) { continue }
+        $tgs = _AsArray $pr.task_groups
+        foreach ($tg in $tgs) {
+            if ($null -eq $tg) { continue }
+            if (_HasProp $tg 'tasks') { _SetProp $tg 'tasks' (_AsArray $tg.tasks) }
+        }
+        _SetProp $pr 'task_groups' $tgs
+    }
+    _SetProp $pt 'processes' $procs
+    return $pt
+}
+
+function Get-MasterMembers {
+    param($Source)
+    foreach ($m in (_ReadJsonArray -Source $Source -RelPath 'master/members.json')) {
+        Write-Output (_NormalizeMember $m)
+    }
+}
+function Get-MasterProjects {
+    param($Source)
+    foreach ($p in (_ReadJsonArray -Source $Source -RelPath 'master/projects.json')) {
+        Write-Output (_NormalizeProject $p)
+    }
+}
 function Get-MasterCategories   { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/categories.json' }
-function Get-MasterTaskPatterns { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/task_patterns.json' }
+function Get-MasterTaskPatterns {
+    param($Source)
+    foreach ($pt in (_ReadJsonArray -Source $Source -RelPath 'master/task_patterns.json')) {
+        Write-Output (_NormalizeTaskPattern $pt)
+    }
+}
 function Get-MasterHolidays     { param($Source) _ReadJsonArray -Source $Source -RelPath 'master/holidays.json' }
 
 function _ToPSObjectDeep {
@@ -345,41 +433,72 @@ function Save-EntriesGrouped {
 
 # ---- 全件取得 (Report 用) ----
 
+function _GetMemberIdFromDataPath {
+    # data/YYYY/MM/<member_id>.json から member_id を取り出す。
+    # 旧データや手動作成データでトップレベル member_id が欠けても、
+    # ファイル配置が正しければ Report で集計できるようにする。
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return '' }
+    $normalized = $Path -replace '\\','/'
+    if ($normalized -match '(?:^|/)data/\d{4}/\d{2}/([^/]+)\.json$') {
+        return [System.IO.Path]::GetFileNameWithoutExtension($matches[1])
+    }
+    return [System.IO.Path]::GetFileNameWithoutExtension($Path)
+}
+
+function _EmitEntriesFromJson {
+    param([string]$Raw, [string]$FallbackMemberId)
+    $doc = ConvertFrom-Json -InputObject ([string]$Raw)
+    $mid = _AsScalarStr $doc.member_id
+    if ([string]::IsNullOrWhiteSpace($mid)) { $mid = _AsScalarStr $FallbackMemberId }
+    foreach ($e in @($doc.entries)) {
+        $row = [ordered]@{ member_id = $mid }
+        foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
+        Write-Output ([pscustomobject]$row)
+    }
+}
+
 function Load-AllEntries-Local {
     param([Parameter(Mandatory)]$Source)
+    $Script:LastLoadAllEntriesErrors = @()
     $dataRoot = Join-Path $Source.LocalRoot 'data'
     if (-not (Test-Path $dataRoot)) { return }
     Get-ChildItem -Path $dataRoot -Recurse -Filter '*.json' | ForEach-Object {
+        $fullName = $_.FullName
         try {
-            $raw = [System.IO.File]::ReadAllText($_.FullName, [System.Text.UTF8Encoding]::new($false))
-            $doc = ConvertFrom-Json -InputObject $raw
-            foreach ($e in @($doc.entries)) {
-                $row = [ordered]@{ member_id = $doc.member_id }
-                foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                Write-Output ([pscustomobject]$row)
+            $raw = [System.IO.File]::ReadAllText($fullName, [System.Text.UTF8Encoding]::new($false))
+            _EmitEntriesFromJson -Raw $raw -FallbackMemberId (_GetMemberIdFromDataPath $fullName)
+        } catch {
+            $Script:LastLoadAllEntriesErrors += [pscustomobject]@{
+                path    = $fullName
+                message = [string]$_.Exception.Message
             }
-        } catch { Write-Warning "skip $($_.FullName): $_" }
+            Write-Warning "skip ${fullName}: $_"
+        }
     }
 }
 
 function Load-AllEntries-Remote {
     # リモートから全件取得 (他人のデータも含めて Report 用)
     param([Parameter(Mandatory)]$Source)
+    $Script:LastLoadAllEntriesErrors = @()
     if (-not $Source.RemoteCtx) { throw 'Load-AllEntries-Remote: リモート未設定' }
     $tree   = Get-GitLabTree -Ctx $Source.RemoteCtx -Path 'data'
     $getter = { param($p) Get-GitLabFileRaw -Ctx $Source.RemoteCtx -Path $p }
     foreach ($item in $tree) {
         if ($item.type -ne 'blob') { continue }
-        if (-not $item.path.EndsWith('.json')) { continue }
+        $path = [string]$item.path
+        if (-not $path.EndsWith('.json')) { continue }
         try {
-            $raw = & $getter $item.path
-            $doc = ConvertFrom-Json -InputObject ([string]$raw)
-            foreach ($e in @($doc.entries)) {
-                $row = [ordered]@{ member_id = $doc.member_id }
-                foreach ($p in $e.PSObject.Properties) { $row[$p.Name] = $p.Value }
-                Write-Output ([pscustomobject]$row)
+            $raw = & $getter $path
+            _EmitEntriesFromJson -Raw ([string]$raw) -FallbackMemberId (_GetMemberIdFromDataPath $path)
+        } catch {
+            $Script:LastLoadAllEntriesErrors += [pscustomobject]@{
+                path    = $path
+                message = [string]$_.Exception.Message
             }
-        } catch { Write-Warning "skip $($item.path): $_" }
+            Write-Warning "skip ${path}: $_"
+        }
     }
 }
 

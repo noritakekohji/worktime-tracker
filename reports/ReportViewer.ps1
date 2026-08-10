@@ -80,6 +80,7 @@ $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'SyncMonitor.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'Bootstrap.ps1')
 
@@ -309,7 +310,7 @@ $u = @{}
 foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','CompanyFilter','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'MainTabs','GrpOverview','GrpMember','GrpProject','GrpCheck','GrpDetail',
               'GrpOverviewInner','GrpMemberInner','GrpProjectInner','GrpCheckInner','GrpDetailInner','MissingTab',
-              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','AnalysisPanel',
+              'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','RemoteNoticeText','AnalysisPanel',
               'ChartAxisCombo','ChartTypeCombo','ChartSortCombo','ChartTopCombo','ChartRedrawBtn','ChartCanvas',
               'HeatmapCanvas','HeatmapAxisCombo','HeatmapDescText','AnomalyGrid','DashboardPanel',
               'LoadOverThresholdTxt','LoadTargetTxt','LoadRefreshBtn','LoadWeeklyGrid','MissingEntriesGrid',
@@ -352,6 +353,17 @@ $u.StatusText.Text = "保存先: {0}  |  local={1}{2}" -f $Script:Config.mode, $
     'gitlab' { " | remote=$($Script:Config.gitlab_url)/$($Script:Config.project_id) @ $($Script:Config.branch)" }
     default  { '' }
 })
+
+function Show-ReportRemoteUpdateNotice {
+    param($Result)
+    if (-not $Result) { return }
+    $items = @()
+    if ($Result.MasterChanged) { $items += 'マスタ' }
+    if ($Result.DataChanged) { $items += 'チーム実績' }
+    if ($items.Count -eq 0) { return }
+    $u.RemoteNoticeText.Text = ('⚠ GitLab に新しい{0}があります。［📥 取得］で反映してください。' -f ($items -join '・'))
+    $u.RemoteNoticeText.Visibility = 'Visible'
+}
 
 # 既定期間: 当月
 # 期間クイック選択ヘルパ
@@ -556,7 +568,12 @@ function Reload-Entries {
             }
             Add-Member -InputObject $e -NotePropertyName '_dt' -NotePropertyValue $dt -Force
         }
-        $u.SummaryText.Text = "ローカル読込: $($Script:AllEntries.Count) 件"
+        $loadErrorCount = @($Script:LastLoadAllEntriesErrors).Count
+        if ($loadErrorCount -gt 0) {
+            $u.SummaryText.Text = "ローカル読込: $($Script:AllEntries.Count) 件 / 読み込み失敗 $loadErrorCount ファイル"
+        } else {
+            $u.SummaryText.Text = "ローカル読込: $($Script:AllEntries.Count) 件"
+        }
         Apply-Filters
     } catch {
         $u.SummaryText.Text = "読込失敗: $_"
@@ -1448,6 +1465,8 @@ $u.ReloadBtn.Add_Click({
         $u.SummaryText.Text = 'Gitlab の更新を確認中...'
         $pullM = Sync-Pull-Masters -Source $Script:Source -OnProgress $onProg
         $pullD = Sync-Pull-AllData -Source $Script:Source -OnProgress $onProg
+        Clear-RemoteUpdateNotice -Source $Script:Source -Master -DataPath 'data'
+        $u.RemoteNoticeText.Visibility = 'Collapsed'
         _Diag ("取得 master={0}/skip={1}/miss={2} data={3}/skip={4}/total={5} errors_m={6} errors_d={7}" -f `
                $pullM.Pulled, $pullM.Skipped, $pullM.Missing, $pullD.Pulled, $pullD.Skipped, $pullD.Total, `
                $pullM.Errors.Count, $pullD.Errors.Count)
@@ -2729,5 +2748,34 @@ foreach ($g in 'GrpOverview','GrpMember','GrpProject','GrpCheck','GrpDetail') {
 }
 
 Reload-Entries
+
+# The report checks master and the full data tree every five minutes in a separate runspace.
+if ($Script:Source.RemoteCtx) {
+    $Script:RemoteUpdateProbe = $null
+    $Script:RemoteUpdatePollTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdatePollTimer.Interval = [timespan]::FromSeconds(1)
+    $Script:RemoteUpdatePollTimer.Add_Tick({
+        $result = Complete-RemoteUpdateProbe -Probe $Script:RemoteUpdateProbe
+        if ($result) {
+            $Script:RemoteUpdateProbe = $null
+            Show-ReportRemoteUpdateNotice $result
+        }
+    })
+    $Script:RemoteUpdatePollTimer.Start()
+    $Script:RemoteUpdateTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:RemoteUpdateTimer.Interval = [timespan]::FromMinutes(5)
+    $Script:RemoteUpdateTimer.Add_Tick({
+        if (-not $Script:RemoteUpdateProbe) {
+            $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath 'data'
+        }
+    })
+    $Script:RemoteUpdateTimer.Start()
+    $Script:RemoteUpdateProbe = Start-RemoteUpdateProbe -Source $Script:Source -Master -DataPath 'data'
+    $win.Add_Closed({
+        $Script:RemoteUpdateTimer.Stop()
+        $Script:RemoteUpdatePollTimer.Stop()
+        if ($Script:RemoteUpdateProbe) { $Script:RemoteUpdateProbe.Shell.Dispose() }
+    })
+}
 
 [void]$win.ShowDialog()

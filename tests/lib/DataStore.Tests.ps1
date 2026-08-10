@@ -121,6 +121,47 @@ Describe 'DataStore 月次エントリ I/O' -Tag 'lib','integration' {
     }
 }
 
+Describe 'DataStore 全件取得 (Report 用)' -Tag 'lib','integration' {
+
+    BeforeEach { $script:ctx = New-TempDataSource }
+    AfterEach  { Remove-TempDataSource $script:ctx }
+
+    It 'トップレベル member_id が空でもファイル名から補完して集計対象にする' {
+        $dir = Join-Path $script:ctx.Dir 'data\2026\05'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $json = @'
+{
+  "year": 2026,
+  "month": 5,
+  "entries": [
+    { "date": "2026-05-01", "project_code": "P1", "hours": 2.5, "comment": "" }
+  ]
+}
+'@
+        [System.IO.File]::WriteAllText((Join-Path $dir 'new-member.json'), $json, [System.Text.UTF8Encoding]::new($false))
+
+        $loaded = @(Load-AllEntries-Local -Source $script:ctx.Source)
+        $loaded.Count | Should -Be 1
+        [string]$loaded[0].member_id | Should -Be 'new-member'
+        [double]$loaded[0].hours | Should -Be 2.5
+    }
+
+    It '壊れた JSON は他ファイルの読込を止めず、失敗情報を残す' {
+        $dir = Join-Path $script:ctx.Dir 'data\2026\05'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Save-MonthEntries -Source $script:ctx.Source -MemberId 'ok' -Year 2026 -Month 5 `
+            -Entries @([pscustomobject]@{ date='2026-05-01'; project_code='P1'; hours=1.0; comment='' }) `
+            -AuthorName 'ut' -AuthorEmail 'ut@local'
+        [System.IO.File]::WriteAllText((Join-Path $dir 'broken.json'), '{"member_id":"broken","entries":[{"comment":"unterminated}]', [System.Text.UTF8Encoding]::new($false))
+
+        $loaded = @(Load-AllEntries-Local -Source $script:ctx.Source)
+        $loaded.Count | Should -Be 1
+        [string]$loaded[0].member_id | Should -Be 'ok'
+        @($script:LastLoadAllEntriesErrors).Count | Should -Be 1
+        [string]$script:LastLoadAllEntriesErrors[0].path | Should -Match 'broken\.json$'
+    }
+}
+
 Describe 'Get/Set-DataFile (生 I/O)' -Tag 'lib' {
 
     BeforeEach { $script:ctx = New-TempDataSource }
