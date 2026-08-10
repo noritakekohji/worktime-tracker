@@ -4,7 +4,8 @@
 # 必要なのは zip 展開先のフォルダのみ。追加モジュール・git CLI は不要。
 
 param(
-    [string]$InstallDir = "$env:LOCALAPPDATA\worktime-tracker"
+    [string]$InstallDir = "$env:LOCALAPPDATA\worktime-tracker",
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,8 +22,10 @@ if (-not (Test-Path (Join-Path $srcDir 'client/WorkTimeTracker.ps1'))) {
 
 # 2. インストール先にコピー
 if (Test-Path $InstallDir) {
-    $r = Read-Host "$InstallDir は既に存在します。上書きしますか? (y/n)"
-    if ($r -ne 'y') { exit 0 }
+    if (-not $Force) {
+        $r = Read-Host "$InstallDir は既に存在します。上書きしますか? (y/n)"
+        if ($r -ne 'y') { exit 0 }
+    }
 } else {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }

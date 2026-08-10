@@ -66,6 +66,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'SyncMonitor.ps1')
+. (Join-Path $libDir 'AutoUpdate.ps1')
 . (Join-Path $libDir 'ConfigDialog.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'UserPrefs.ps1')
@@ -1213,6 +1214,10 @@ if ($Script:Source.RemoteCtx) {
         if ($Script:RemoteUpdateProbe) { $Script:RemoteUpdateProbe.Shell.Dispose() }
     })
 }
+
+$autoUpdateEnabled = if ($Script:Config.PSObject.Properties['auto_update_enabled']) { [bool]$Script:Config.auto_update_enabled } else { $true }
+Register-AutoUpdate -Window $Script:Window -Source $Script:Source -AppRoot (Split-Path $PSScriptRoot -Parent) `
+                    -CurrentVersion $Script:AppVersion -Enabled $autoUpdateEnabled
 
 # ---- キーボードショートカット (A2) ----
 # Ctrl+S = 保存 / Ctrl+R = 再読込 / F5 = 再読込

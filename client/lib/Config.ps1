@@ -24,6 +24,7 @@ function New-DefaultConfig {
         local_store  = (Get-DefaultLocalStore)
         local_root   = ''                         # (旧設定; 互換)
         log_dir      = ''                         # ログ出力先フォルダ (空文字 = 出力なし)
+        auto_update_enabled = $true               # GitLab 上のアプリ更新を起動時に自動適用
     }
 }
 

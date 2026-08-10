@@ -81,6 +81,7 @@ $libDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'client/lib'
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
 . (Join-Path $libDir 'SyncMonitor.ps1')
+. (Join-Path $libDir 'AutoUpdate.ps1')
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'Bootstrap.ps1')
 
@@ -2777,5 +2778,9 @@ if ($Script:Source.RemoteCtx) {
         if ($Script:RemoteUpdateProbe) { $Script:RemoteUpdateProbe.Shell.Dispose() }
     })
 }
+
+$autoUpdateEnabled = if ($Script:Config.PSObject.Properties['auto_update_enabled']) { [bool]$Script:Config.auto_update_enabled } else { $true }
+Register-AutoUpdate -Window $win -Source $Script:Source -AppRoot (Split-Path $PSScriptRoot -Parent) `
+                    -CurrentVersion $Script:AppVersion -Enabled $autoUpdateEnabled
 
 [void]$win.ShowDialog()

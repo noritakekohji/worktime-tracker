@@ -15,6 +15,16 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-10
+
+### Added
+- **GitLab アーカイブによるクライアント自動アップデート**。Git CLI を要求せず、GitLab モードで同じリポジトリの `client/lib/Version.ps1` を起動時に確認する
+  - リモート版が新しい場合だけ、GitLab のブランチアーカイブを一時フォルダへ取得して展開する
+  - 実行中アプリを直接上書きせず、別プロセスが終了待機後に `scripts\setup.cmd /force /quiet` を実行し、更新後に再起動する
+  - 更新用のZIP・展開フォルダは完了後に削除し、アーカイブに `scripts\setup.cmd` がない場合は更新を中止する
+  - `config.json` の `auto_update_enabled` で無効化可能（既定は有効）。開発チェックアウトでは実行しない
+- `tests/lib/AutoUpdate.Tests.ps1` — バージョン比較、新版検出、壊れたリモート版ファイルの無視を検証
+
 ## [1.5.0] - 2026-08-10
 
 ### Fixed
