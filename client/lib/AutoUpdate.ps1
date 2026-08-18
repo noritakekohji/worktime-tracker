@@ -142,13 +142,13 @@ function Register-AutoUpdate {
         } catch {
             [System.Windows.MessageBox]::Show("自動アップデートに失敗しました。`n$($_.Exception.Message)", '更新エラー', 'OK', 'Warning') | Out-Null
         }
-    })
+    }.GetNewClosure())
     $pollTimer.Start()
     $Window.Add_Loaded({
         if (-not $script:AutoUpdateProbe) { $script:AutoUpdateProbe = Start-AutoUpdateProbe -Source $Source -CurrentVersion $CurrentVersion }
-    })
+    }.GetNewClosure())
     $Window.Add_Closed({
         $pollTimer.Stop()
         if ($script:AutoUpdateProbe) { $script:AutoUpdateProbe.Shell.Dispose() }
-    })
+    }.GetNewClosure())
 }

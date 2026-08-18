@@ -71,19 +71,6 @@ try {
     $Script:LogPath = Join-Path $earlyLogDir 'last_error.log'
 } catch { }
 
-# UI スレッドの例外は既定ではプロセス終了につながる。内容は端末内ログだけに残し、
-# 利用者へ通知して画面を即時終了させない。
-[System.Windows.Threading.Dispatcher]::CurrentDispatcher.add_UnhandledException({
-    param($sender, $eventArgs)
-    $detail = "$($eventArgs.Exception.Message)`r`n$($eventArgs.Exception.StackTrace)"
-    Write-FatalLog "UI UNHANDLED: $detail"
-    try {
-        Show-FatalDialog -Title 'WorkTime Tracker - 画面エラー' `
-                         -Message ("画面処理でエラーが発生しました。アプリは終了せずに続行します。`n`n{0}" -f $eventArgs.Exception.Message)
-    } catch { }
-    $eventArgs.Handled = $true
-})
-
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'Config.ps1')

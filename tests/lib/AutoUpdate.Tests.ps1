@@ -6,6 +6,13 @@ BeforeAll {
 }
 
 Describe 'Auto update version checks' -Tag 'lib' {
+    It 'keeps Register-AutoUpdate parameters in delayed WPF event handlers' {
+        $scriptText = Get-Content -LiteralPath (Join-Path $script:RepoRoot 'client/lib/AutoUpdate.ps1') -Raw -Encoding UTF8
+        $scriptText | Should -Match '(?s)\$Window\.Add_Loaded\(\{.*?-CurrentVersion \$CurrentVersion.*?\}\.GetNewClosure\(\)\)'
+        $scriptText | Should -Match '(?s)\$pollTimer\.Add_Tick\(\{.*?\}\.GetNewClosure\(\)\)'
+        $scriptText | Should -Match '(?s)\$Window\.Add_Closed\(\{.*?\}\.GetNewClosure\(\)\)'
+    }
+
     It 'compares semantic versions numerically' {
         (Compare-AppVersion -Current '1.5.0' -Candidate '1.10.0') | Should -BeGreaterThan 0
         (Compare-AppVersion -Current '1.5.0' -Candidate '1.5.0') | Should -Be 0
