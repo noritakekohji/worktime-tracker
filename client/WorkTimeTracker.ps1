@@ -71,6 +71,19 @@ try {
     $Script:LogPath = Join-Path $earlyLogDir 'last_error.log'
 } catch { }
 
+# UI スレッドの例外は既定ではプロセス終了につながる。内容は端末内ログだけに残し、
+# 利用者へ通知して画面を即時終了させない。
+[System.Windows.Threading.Dispatcher]::CurrentDispatcher.add_UnhandledException({
+    param($sender, $eventArgs)
+    $detail = "$($eventArgs.Exception.Message)`r`n$($eventArgs.Exception.StackTrace)"
+    Write-FatalLog "UI UNHANDLED: $detail"
+    try {
+        Show-FatalDialog -Title 'WorkTime Tracker - 画面エラー' `
+                         -Message ("画面処理でエラーが発生しました。アプリは終了せずに続行します。`n`n{0}" -f $eventArgs.Exception.Message)
+    } catch { }
+    $eventArgs.Handled = $true
+})
+
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'Config.ps1')
@@ -1229,7 +1242,27 @@ $ui.PushBtn.Add_Click({
 })
 
 # ---- 初回ロード ----
-Load-ViewMonth
+# 画面を一度描画してから実績を読み込む。初期データ読込・名称解決で時間が掛かっても、
+# 白画面のまま応答なしに見えることを防ぐ。
+$Script:InitialViewLoadStarted = $false
+$Script:InitialViewLoadTimer = New-Object System.Windows.Threading.DispatcherTimer
+$Script:InitialViewLoadTimer.Interval = [timespan]::FromMilliseconds(100)
+$Script:InitialViewLoadTimer.Add_Tick({
+    $Script:InitialViewLoadTimer.Stop()
+    try {
+        Write-FatalLog 'UI rendered; initial month load started'
+        Load-ViewMonth
+        Write-FatalLog 'Initial month load completed'
+    } catch {
+        Write-FatalLog "Initial month load failed: $($_.Exception.Message)`r`n$($_.ScriptStackTrace)"
+        Set-Status '初期読込に失敗しました。詳細はログを確認してください。' '#f38ba8'
+    }
+})
+$Script:Window.Add_ContentRendered({
+    if ($Script:InitialViewLoadStarted) { return }
+    $Script:InitialViewLoadStarted = $true
+    $Script:InitialViewLoadTimer.Start()
+})
 
 # 5 分ごとに、画面を止めず GitLab の blob ID だけを照会する。取得・上書きはしない。
 if ($Script:Source.RemoteCtx) {

@@ -6,6 +6,13 @@ BeforeAll {
 }
 
 Describe 'WorkTime Tracker 起動スモークテスト' -Tag 'integration','ui','smoke' {
+    It '初回データ読込を最初の画面描画後に開始する' {
+        $scriptText = Get-Content -LiteralPath $script:TrackerScript -Raw -Encoding UTF8
+        $scriptText | Should -Match 'Add_ContentRendered'
+        $scriptText | Should -Match 'InitialViewLoadTimer'
+        $scriptText | Should -Not -Match '(?m)^Load-ViewMonth\s*$'
+    }
+
     It '設定データに依存せず MainWindow を実表示して正常終了する' {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = 'powershell.exe'
