@@ -38,6 +38,22 @@ Describe 'Get-MemberRoles' -Tag 'lib','unit','roles' {
         }
     }
 
+    Context '旧 UI フラグ形式 (is_*)' {
+        It 'is_admin=true を admin として扱う' {
+            $m = [pscustomobject]@{ id='E1'; is_admin=$true; is_leader=$false; is_member=$true }
+            $r = Get-MemberRoles -Member $m
+            $r | Should -Contain 'admin'
+            $r | Should -Contain 'member'
+            $r | Should -Not -Contain 'leader'
+        }
+        It '文字列 false を true と誤判定しない' {
+            $m = [pscustomobject]@{ id='E1'; is_admin='false'; is_member='true' }
+            $r = Get-MemberRoles -Member $m
+            $r | Should -Not -Contain 'admin'
+            $r | Should -Contain 'member'
+        }
+    }
+
     Context 'roles と role 両方持つ' {
         It 'roles を優先' {
             $m = [pscustomobject]@{ id='E1'; role='member'; roles=@('admin','leader') }

@@ -35,7 +35,8 @@ Describe 'DataStore マスタ I/O' -Tag 'lib','integration' {
         $loaded = @(Get-MasterMembers -Source $script:ctx.Source)
         $loaded.Count | Should -Be 2
         $loaded[0].name | Should -Be '山田太郎'
-        [string]$loaded[1].role | Should -Be 'member'
+        @($loaded[1].roles).Count | Should -Be 1
+        @($loaded[1].roles)[0] | Should -Be 'member'
     }
 
     It 'Holidays: 書込→読込で同一データ' {

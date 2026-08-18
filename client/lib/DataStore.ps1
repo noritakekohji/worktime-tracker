@@ -15,17 +15,59 @@
 # ---- ロール判定 (member / leader / admin の複数選択対応) ----
 # 全画面 (WorkTimeTracker / WbsInput / ReportViewer / AdminDialog) が DataStore を
 # dot-source するため、共通ヘルパとしてここに定義する。
-# 新スキーマ: members.json の各要素に "roles": ["admin","leader","member"] 配列
-# 旧スキーマ: "role": "admin" / "member" の単一文字列 (後方互換で受理)
+# 正規保存スキーマ: members.json の各要素に
+#   "roles": ["admin","leader","member"]
+# を使用する。UI の is_admin / is_leader / is_member は画面表示専用であり、
+# JSON には保存しない。
+#
+# 読込互換: 次の旧形式を受理する。
+#   "role": "admin"                         (単一文字列)
+#   "roles": "admin"                        (過去の単一要素配列の崩れ)
+#   "is_admin": true, "is_leader": false   (旧 UI 形式)
+# 読み込んだだけではファイルを書き換えず、次回の明示保存時にだけ正規形式へ移行する。
 function Get-MemberRoles {
     param($Member)
     if (-not $Member) { return @() }
-    if ($Member.PSObject.Properties['roles'] -and $Member.roles) {
-        return @($Member.roles | Where-Object { $_ } | ForEach-Object { [string]$_ })
+
+    # 正規形式 (および単一文字列に崩れた roles) があれば最優先する。
+    # 空 roles は「権限なし」ではなく、従来どおり member にフォールバックする。
+    if (_HasProp $Member 'roles') {
+        # _AsArray は 1 要素配列を保護するために配列を 1 オブジェクトとして返す。
+        # ここでパイプに直接つなぐと配列全体が 1 ロールとして扱われるため、
+        # いったん受けて foreach で明示展開する。
+        $storedRoles = _AsArray $Member.roles
+        $roles = New-Object System.Collections.Generic.List[string]
+        foreach ($storedRole in $storedRoles) {
+            if ([string]::IsNullOrWhiteSpace([string]$storedRole)) { continue }
+            $roles.Add((([string]$storedRole).Trim()))
+        }
+        if ($roles.Count -gt 0) { return $roles }
+        return @('member')
     }
-    if ($Member.PSObject.Properties['role'] -and $Member.role) {
-        return @([string]$Member.role)
+    if (_HasProp $Member 'role' -and -not [string]::IsNullOrWhiteSpace([string]$Member.role)) {
+        return @(([string]$Member.role).Trim())
     }
+
+    # is_* は保存形式ではないが、本番に残った旧データを安全に読み込むための互換層。
+    # [bool]'false' は $true になるため、文字列は明示的に Parse する。
+    $legacyRoles = New-Object System.Collections.Generic.List[string]
+    foreach ($pair in @(
+        @{ Flag = 'is_admin';  Name = 'admin' },
+        @{ Flag = 'is_leader'; Name = 'leader' },
+        @{ Flag = 'is_member'; Name = 'member' }
+    )) {
+        if (-not (_HasProp $Member $pair.Flag)) { continue }
+        $raw = $Member.($pair.Flag)
+        $enabled = $false
+        if ($raw -is [bool]) { $enabled = $raw }
+        elseif ($raw -is [string]) {
+            [bool]::TryParse($raw, [ref]$enabled) | Out-Null
+        } elseif ($null -ne $raw) {
+            try { $enabled = ([int]$raw -ne 0) } catch { $enabled = $false }
+        }
+        if ($enabled) { $legacyRoles.Add($pair.Name) }
+    }
+    if ($legacyRoles.Count -gt 0) { return $legacyRoles.ToArray() }
     return @('member')
 }
 
@@ -176,7 +218,9 @@ function _HasProp {
 function _NormalizeMember {
     param($m)
     if ($null -eq $m) { return $m }
-    if (_HasProp $m 'roles') { _SetProp $m 'roles' (_AsArray $m.roles) }
+    # 既存ファイルは変更せず、メモリ上でだけ正規 roles 配列を提供する。
+    # legacy の role / is_* は保持するため、診断や外部連携の既存利用者を壊さない。
+    _SetProp $m 'roles' (_AsArray @(Get-MemberRoles -Member $m))
     return $m
 }
 
@@ -296,7 +340,38 @@ function _SaveMasterJson {
                  -AuthorName ([string]$AuthorName) -AuthorEmail ([string]$AuthorEmail)
 }
 
-function Save-MasterMembers      { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/members.json'       -CommitMessage 'update master: members'       -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
+function _CopyMemberForStorage {
+    # メンバー固有の追加プロパティは温存し、ロール表現だけを正規化する。
+    # この関数を Save-MasterMembers の唯一の入口にすることで、画面用 is_* や
+    # 旧 role を誤って本番 JSON に再保存しない。
+    param($Member)
+    $copy = [ordered]@{}
+    if ($Member -is [System.Collections.IDictionary]) {
+        foreach ($key in $Member.Keys) {
+            $name = [string]$key
+            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member')) { continue }
+            $copy[$name] = $Member[$key]
+        }
+    } elseif ($null -ne $Member) {
+        foreach ($prop in $Member.PSObject.Properties) {
+            $name = [string]$prop.Name
+            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member')) { continue }
+            $copy[$name] = $prop.Value
+        }
+    }
+    $copy['roles'] = @(Get-MemberRoles -Member $Member)
+    return [pscustomobject]$copy
+}
+
+function Save-MasterMembers {
+    param($Source, $Data, $AuthorName, $AuthorEmail)
+    $normalized = New-Object System.Collections.Generic.List[object]
+    foreach ($member in (_ToObjectArray $Data)) {
+        if ($null -ne $member) { $normalized.Add((_CopyMemberForStorage $member)) }
+    }
+    _SaveMasterJson -Source $Source -Data $normalized.ToArray() -RelPath 'master/members.json' `
+        -CommitMessage 'update master: members' -AuthorName $AuthorName -AuthorEmail $AuthorEmail
+}
 function Save-MasterProjects     { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/projects.json'      -CommitMessage 'update master: projects'      -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 function Save-MasterCategories   { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/categories.json'    -CommitMessage 'update master: categories'    -AuthorName $AuthorName -AuthorEmail $AuthorEmail }
 function Save-MasterTaskPatterns { param($Source, $Data, $AuthorName, $AuthorEmail) _SaveMasterJson -Source $Source -Data $Data -RelPath 'master/task_patterns.json' -CommitMessage 'update master: task_patterns' -AuthorName $AuthorName -AuthorEmail $AuthorEmail }

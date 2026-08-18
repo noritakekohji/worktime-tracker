@@ -168,6 +168,33 @@ Describe '旧スキーマ (role 単一文字列) との互換' -Tag 'lib','schem
     }
 }
 
+Describe 'メンバー保存時のロール正規化' -Tag 'lib','schema','compat' {
+
+    BeforeEach { $script:ctx = New-TempDataSource }
+    AfterEach  { Remove-TempDataSource $script:ctx }
+
+    It '旧 role を受理し、roles 配列だけを保存する' {
+        $data = @([ordered]@{ id='OLD'; name='旧'; role='admin'; active=$true; external_id='keep-me' })
+        Save-MasterMembers -Source $script:ctx.Source -Data $data -AuthorName 'ut' -AuthorEmail 'ut@local'
+        $raw = Get-RawMaster -Ctx $script:ctx -Name 'members.json'
+        $raw | Should -Not -Match '"role"\s*:'
+        $raw | Should -Match '"external_id"\s*:\s*"keep-me"'
+        (Test-JsonPropIsArray -Json $raw -Prop 'roles') | Should -BeTrue
+        (Has-Role -Member (@(Get-MasterMembers -Source $script:ctx.Source)[0]) -Role 'admin') | Should -BeTrue
+    }
+
+    It '旧 is_* フラグを受理し、画面用フラグを JSON に保存しない' {
+        $data = @([ordered]@{ id='FLAG'; name='旧画面'; is_admin=$true; is_leader=$false; is_member=$true; active=$true })
+        Save-MasterMembers -Source $script:ctx.Source -Data $data -AuthorName 'ut' -AuthorEmail 'ut@local'
+        $raw = Get-RawMaster -Ctx $script:ctx -Name 'members.json'
+        $raw | Should -Not -Match '"is_(admin|leader|member)"\s*:'
+        (Test-JsonPropIsArray -Json $raw -Prop 'roles') | Should -BeTrue
+        $member = @(Get-MasterMembers -Source $script:ctx.Source)[0]
+        (Has-Role -Member $member -Role 'admin') | Should -BeTrue
+        (Has-Role -Member $member -Role 'member') | Should -BeTrue
+    }
+}
+
 Describe '本番に既に存在する壊れた形を読めること (後方互換の担保)' -Tag 'lib','schema','compat' {
 
     # 保存側の不具合により、本番のマスタには要素 1 個の配列が
