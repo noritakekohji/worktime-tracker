@@ -5,7 +5,11 @@
 #
 # 起動: client\launch.cmd または powershell -ExecutionPolicy Bypass -File client\WorkTimeTracker.ps1
 
-param([switch]$ForceConfig)
+param(
+    [switch]$ForceConfig,
+    # Pester から設定・保存データを変更せず、実ウィンドウの生成まで確認する。
+    [switch]$SmokeTest
+)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework
@@ -29,8 +33,8 @@ function Update-LogPath {
     param([Parameter(Mandatory)]$Config)
     $dir = if ($Config.PSObject.Properties['log_dir']) { $Config.log_dir } else { '' }
     if ([string]::IsNullOrWhiteSpace($dir)) {
-        $Script:LogPath = $null
-        return
+        # 初回設定前・旧設定でも、launch.cmd が案内する標準ログを必ず残す。
+        $dir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'worktime-tracker'
     }
     if (-not (Test-Path -LiteralPath $dir)) {
         try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $Script:LogPath = $null; return }
@@ -59,6 +63,14 @@ trap {
     exit 1
 }
 
+# 依存スクリプトの読込や設定読込で失敗した場合にも、launch.cmd の案内先に
+# 原因を残せるよう、設定の確定前から標準ログを有効化する。
+try {
+    $earlyLogDir = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'worktime-tracker'
+    New-Item -ItemType Directory -Path $earlyLogDir -Force | Out-Null
+    $Script:LogPath = Join-Path $earlyLogDir 'last_error.log'
+} catch { }
+
 $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Version.ps1')
 . (Join-Path $libDir 'Config.ps1')
@@ -71,6 +83,39 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'UserPrefs.ps1')
 . (Join-Path $libDir 'UserPrefsDialog.ps1')
+
+# ---- 起動スモークテスト ----
+# 設定ダイアログやユーザーの local_store に依存せず、実際に MainWindow を表示して
+# Dispatcher が動作することまで確認する。タイマーで即時に閉じるため自動テストで安全に使える。
+function Invoke-TrackerStartupSmokeTest {
+    $xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
+    [xml]$smokeXaml = Get-Content -LiteralPath $xamlPath -Raw -Encoding UTF8
+    $smokeReader = New-Object System.Xml.XmlNodeReader $smokeXaml
+    $smokeWindow = [Windows.Markup.XamlReader]::Load($smokeReader)
+    if (-not ($smokeWindow -is [System.Windows.Window])) {
+        throw "MainWindow.xaml did not create a Window: $xamlPath"
+    }
+
+    $requiredControls = @('ProjectCombo', 'EntriesGrid', 'SaveBtn', 'AddBtn', 'StatusText')
+    $missingControls = @($requiredControls | Where-Object { -not $smokeWindow.FindName($_) })
+    if ($missingControls.Count -gt 0) {
+        throw ('MainWindow.xaml is missing required controls: ' + ($missingControls -join ', '))
+    }
+
+    $closeTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $closeTimer.Interval = [TimeSpan]::FromMilliseconds(250)
+    $closeTimer.Add_Tick({
+        $closeTimer.Stop()
+        $smokeWindow.Close()
+    })
+    $closeTimer.Start()
+    [void]$smokeWindow.ShowDialog()
+}
+
+if ($SmokeTest) {
+    Invoke-TrackerStartupSmokeTest
+    exit 0
+}
 
 Write-FatalLog "==== START $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===="
 Write-FatalLog "PSVersion: $($PSVersionTable.PSVersion) | PSScriptRoot: $PSScriptRoot"

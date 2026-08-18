@@ -15,6 +15,15 @@
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-08-18
+
+### Fixed
+- 起動の初期段階（依存スクリプト・設定の読込を含む）で例外になった場合にも、`%APPDATA%\worktime-tracker\last_error.log` へ詳細を記録するよう修正。`launch.cmd` が案内するログが存在せず原因を追跡できない問題を解消
+
+### Added
+- `client\WorkTimeTracker.ps1 -SmokeTest` — ユーザー設定や実績データを変更せず、MainWindow を実表示して Dispatcher が動くことを確認する起動スモークモード
+- `tests/integration/TrackerStartup.Tests.ps1` — 別 PowerShell プロセスで上記スモークモードを実行し、タイムアウトせず正常終了することを継続検証
+
 ## [1.6.0] - 2026-08-10
 
 ### Added
