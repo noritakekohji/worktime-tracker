@@ -349,15 +349,32 @@ function _CopyMemberForStorage {
     if ($Member -is [System.Collections.IDictionary]) {
         foreach ($key in $Member.Keys) {
             $name = [string]$key
-            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member')) { continue }
+            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member', 'extension_properties')) { continue }
             $copy[$name] = $Member[$key]
         }
     } elseif ($null -ne $Member) {
         foreach ($prop in $Member.PSObject.Properties) {
             $name = [string]$prop.Name
-            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member')) { continue }
+            if ($name -in @('roles', 'role', 'is_admin', 'is_leader', 'is_member', 'extension_properties')) { continue }
             $copy[$name] = $prop.Value
         }
+    }
+    $copy['roles'] = @(Get-MemberRoles -Member $Member)
+    return [pscustomobject]$copy
+}
+
+function ConvertTo-MemberStorageRow {
+    # AdminDialog の画面行を保存用メンバーへ変換する。
+    # extension_properties は画面内部の退避領域であり、JSON には展開して保存する。
+    param($Member)
+    $copy = [ordered]@{}
+    if (_HasProp $Member 'extension_properties' -and $Member.extension_properties -is [System.Collections.IDictionary]) {
+        foreach ($key in $Member.extension_properties.Keys) {
+            $copy[[string]$key] = $Member.extension_properties[$key]
+        }
+    }
+    foreach ($name in @('id','name','company','department','rank','active')) {
+        if (_HasProp $Member $name) { $copy[$name] = $Member.$name }
     }
     $copy['roles'] = @(Get-MemberRoles -Member $Member)
     return [pscustomobject]$copy

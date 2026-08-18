@@ -193,6 +193,19 @@ Describe 'メンバー保存時のロール正規化' -Tag 'lib','schema','compa
         (Has-Role -Member $member -Role 'admin') | Should -BeTrue
         (Has-Role -Member $member -Role 'member') | Should -BeTrue
     }
+
+    It '管理画面の追加プロパティを展開して温存する' {
+        $screenRow = [pscustomobject]@{
+            id='EXTRA'; name='拡張'; is_admin=$true; is_member=$true; active=$true
+            extension_properties=[ordered]@{ external_id='outside'; cost_center='C-01' }
+        }
+        $data = @(ConvertTo-MemberStorageRow -Member $screenRow)
+        Save-MasterMembers -Source $script:ctx.Source -Data $data -AuthorName 'ut' -AuthorEmail 'ut@local'
+        $raw = Get-RawMaster -Ctx $script:ctx -Name 'members.json'
+        $raw | Should -Match '"external_id"\s*:\s*"outside"'
+        $raw | Should -Match '"cost_center"\s*:\s*"C-01"'
+        $raw | Should -Not -Match '"extension_properties"\s*:'
+    }
 }
 
 Describe '本番に既に存在する壊れた形を読めること (後方互換の担保)' -Tag 'lib','schema','compat' {

@@ -94,6 +94,13 @@ function Show-AdminDialog {
             foreach ($m in (Get-MasterMembers -Source $Source)) {
                 # roles 配列 (新) / role 単一文字列 (旧) のどちらも受理
                 $roles = @(Get-MemberRoles -Member $m)
+                # 管理画面で表示・編集しない追加プロパティも、保存時に失わないよう保持する。
+                # role / roles / is_* は DataStore が正規 roles 配列へ移行するためここには含めない。
+                $extraProperties = [ordered]@{}
+                foreach ($prop in $m.PSObject.Properties) {
+                    if ([string]$prop.Name -in @('id','name','company','department','rank','roles','role','is_admin','is_leader','is_member','active')) { continue }
+                    $extraProperties[[string]$prop.Name] = _ToHash $prop.Value
+                }
                 $members.Add([pscustomobject]@{
                     id         = [string]$m.id
                     name       = [string]$m.name
@@ -104,6 +111,7 @@ function Show-AdminDialog {
                     is_leader  = ($roles -contains 'leader')
                     is_member  = ($roles -contains 'member')
                     active     = if ($null -ne $m.active) { [bool]$m.active } else { $true }
+                    extension_properties = $extraProperties
                 })
             }
             # タスクパターンを先に読込 → ComboBox items を準備
@@ -182,6 +190,7 @@ function Show-AdminDialog {
             id=''; name=''; company=''; department=''; rank=''
             is_admin=$false; is_leader=$false; is_member=$true
             active=$true
+            extension_properties=[ordered]@{}
         })
     })
     $u.MemDelBtn.Add_Click({
@@ -900,15 +909,10 @@ function Show-AdminDialog {
                 if ($_.is_leader) { $roles += 'leader' }
                 if ($_.is_member) { $roles += 'member' }
                 if ($roles.Count -eq 0) { $roles = @('member') }
-                [ordered]@{
-                    id         = [string]$_.id
-                    name       = [string]$_.name
-                    company    = [string]$_.company
-                    department = [string]$_.department
-                    rank       = [string]$_.rank
-                    roles      = $roles
-                    active     = [bool]$_.active
-                }
+                # 追加プロパティを展開して保存する共通変換。roles は直前に
+                # チェックボックスから構築したものを使う。
+                _SetProp $_ 'roles' $roles
+                ConvertTo-MemberStorageRow -Member $_
             })
             $where = 'Save-MasterMembers'
             Save-MasterMembers -Source $Source -Data $membersOut -AuthorName $authorName -AuthorEmail $authorEmail
