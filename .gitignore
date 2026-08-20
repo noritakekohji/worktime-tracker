@@ -37,3 +37,6 @@ tests/results/
 *.pem
 credentials.*
 secrets.*
+
+# 生成物 (ガイド資料・レンダリング結果)
+output/
