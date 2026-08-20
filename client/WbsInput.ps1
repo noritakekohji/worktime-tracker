@@ -151,10 +151,12 @@ $ui = @{}
 foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','AdminBtn',
                   'SaveBtn','PushBtn','WbsTree','WbsGrid','AddRowBtn','GridTitle','StatusText','RemoteNoticeText','SyncProgress','VersionText',
                   'DelRowBtn','ShowDoneChk','FilterStatusText',
-                  # タスクビュー (右下)
+                  # タスクビュー (右ペイン)
                   'TaskViewHeader','TaskEntryDate','TaskEntryCategory',
                   'TaskEntryHours','TaskEntryAddBtn','TaskEntryDelBtn',
-                  'TaskEntriesGrid')) {
+                  'TaskEntriesGrid',
+                  # ヘッダの画面遷移ボタン
+                  'TrackerNavBtn','ReportNavBtn')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
 
@@ -849,16 +851,39 @@ $ui.WbsGrid.Add_LoadingRow({
 
 # ---- イベントハンドラ ----
 $ui.LoadBtn.Add_Click({ Load-WbsData })
+
+if ($ui.TrackerNavBtn) {
+    $ui.TrackerNavBtn.Add_Click({
+        $scriptPath = Join-Path $PSScriptRoot 'WorkTimeTracker.ps1'
+        if (Test-Path -LiteralPath $scriptPath) {
+            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
+        }
+    })
+}
+if ($ui.ReportNavBtn) {
+    $ui.ReportNavBtn.Add_Click({
+        $scriptPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1'
+        if (Test-Path -LiteralPath $scriptPath) {
+            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
+        }
+    })
+}
+
 $ui.PullBtn.Add_Click({
     # 📥 取得 = リモートから取得 → ローカル読込
     if (-not $Script:Source.RemoteCtx) {
         [System.Windows.MessageBox]::Show('スタンドアローンモードでは「取得」は使えません。「読込」を使ってください。', '取得', 'OK', 'Information') | Out-Null
         return
     }
-    Set-Status 'リモートから取得中...' '#f9e2af'
+    $ui.PullBtn.Content = '⏳ 取得中...'
+    Set-SyncBusy $true 'リモートから取得中...'
     try {
+        $onProgress = {
+            param($Index, $Total, $Path)
+            Set-SyncBusy $true ("リモートから取得中… ({0}/{1}) {2}" -f $Index, $Total, $Path)
+        }
         # マスタ pull
-        $pull = Sync-Pull-Masters -Source $Script:Source
+        $pull = Sync-Pull-Masters -Source $Script:Source -OnProgress $onProgress
         # 当月の自分のデータ pull (年/月を ComboBox から取得)
         $mid = if ($Script:CurrentMember) { [string]$Script:CurrentMember.id } else { [string]$cfg.member_id }
         $vy = [int]$ui.YearCombo.SelectedItem
@@ -873,9 +898,20 @@ $ui.PullBtn.Add_Click({
         # ローカルから WBS データ表示
         Load-WbsData
         Set-Status ('リモートから取得 → ローカル読込 完了 (master pulled={0})' -f $pull.Pulled) '#10b981'
+        $ui.PullBtn.Content = '✓ 取得完了！'
+        $timer = New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval = [TimeSpan]::FromSeconds(2)
+        $timer.Add_Tick({
+            $ui.PullBtn.Content = '📥 取得'
+            $timer.Stop()
+        })
+        $timer.Start()
     } catch {
         Set-Status ("取得失敗: $($_.Exception.Message)") '#ef4444'
+        $ui.PullBtn.Content = '📥 取得'
         [System.Windows.MessageBox]::Show("リモートからの取得に失敗:`n$($_.Exception.Message)", '取得エラー', 'OK', 'Error') | Out-Null
+    } finally {
+        Set-SyncBusy $false
     }
 })
 
@@ -1171,6 +1207,7 @@ $ui.SaveBtn.Add_Click({
 
 $ui.PushBtn.Add_Click({
     $Script:Window.Cursor = [System.Windows.Input.Cursors]::Wait
+    $ui.PushBtn.Content = '⏳ 送信中...'
     Set-SyncBusy $true '送信を準備しています…'
     try {
         $r = _DoSave
@@ -1191,10 +1228,19 @@ $ui.PushBtn.Add_Click({
         Suppress-RemoteUpdateNotice -Source $Script:Source -Master -DataPath (Get-MonitorDataPath)
         $ui.RemoteNoticeText.Visibility = 'Collapsed'
         Set-Status ("送信完了: {0} 件エントリ + プロジェクト定義" -f $r.NewCount) '#10b981'
+        $ui.PushBtn.Content = '✓ 送信完了！'
+        $timer = New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval = [TimeSpan]::FromSeconds(2)
+        $timer.Add_Tick({
+            $ui.PushBtn.Content = '📤 送信'
+            $timer.Stop()
+        })
+        $timer.Start()
         [System.Windows.MessageBox]::Show("Gitlab に送信しました (個人実績 + プロジェクト定義)。", '送信完了', 'OK', 'Information') | Out-Null
         Load-WbsData
     } catch {
         Set-Status "送信失敗: $_" '#ef4444'
+        $ui.PushBtn.Content = '📤 送信'
         [System.Windows.MessageBox]::Show("送信に失敗しました:`n$_", '送信失敗', 'OK', 'Error') | Out-Null
     } finally {
         Set-SyncBusy $false
