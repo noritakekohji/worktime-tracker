@@ -368,11 +368,12 @@ $Script:Window.Title = Format-WindowTitle -ScreenName '日次入力'
 
 $names = @(
     'CurrentMemberText','YearCombo','MonthCombo','ReloadBtn','PullBtn','StatusText','RemoteNoticeText','SyncProgress',
-    'EntryDate','TodayBtn','YesterdayBtn','IsLeaveChk',
+    'EntryDate','PrevDayBtn','NextDayBtn','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
     'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
-    'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText','VersionText'
+    'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText','VersionText',
+    'WbsNavBtn','ReportNavBtn'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
@@ -393,10 +394,18 @@ $Script:Entries = New-Object System.Collections.ObjectModel.ObservableCollection
 $ui.EntriesGrid.ItemsSource = $Script:Entries
 $Script:EditingItem = $null
 
+# 休暇 (is_leave) は作業工数ではないため合計から除外し、括弧書きで別に見せる。
+# 判定と加算は DataStore.ps1 の Test-IsLeaveEntry / Get-EntryHoursSum に集約している。
+function _FormatHoursText {
+    param([double]$WorkHours, [double]$LeaveHours)
+    if ($LeaveHours -gt 0) { return '{0:N1} h (休暇 {1:N1} h)' -f $WorkHours, $LeaveHours }
+    return '{0:N1} h' -f $WorkHours
+}
+
 function Update-HoursTotal {
-    $sum = 0.0
-    foreach ($e in $Script:Entries) { $sum += [double]$e.hours }
-    $ui.HoursTotalText.Text = '{0:N1} h' -f $sum
+    $sum   = Get-EntryHoursSum $Script:Entries
+    $leave = Get-EntryHoursSum $Script:Entries -LeaveOnly
+    $ui.HoursTotalText.Text = _FormatHoursText -WorkHours $sum -LeaveHours $leave
     Update-HoursDay
 }
 
@@ -405,11 +414,13 @@ function Update-HoursDay {
     $d = $ui.EntryDate.SelectedDate
     if (-not $d) { $ui.HoursDayText.Text = '0.0 h'; return }
     $dStr = $d.ToString('yyyy-MM-dd')
-    $sum = 0.0
+    $dayEntries = New-Object System.Collections.Generic.List[object]
     foreach ($e in $Script:Entries) {
-        if ([string]$e.date -eq $dStr) { $sum += [double]$e.hours }
+        if ([string]$e.date -eq $dStr) { [void]$dayEntries.Add($e) }
     }
-    $ui.HoursDayText.Text = '{0:N1} h' -f $sum
+    $sum   = Get-EntryHoursSum $dayEntries.ToArray()
+    $leave = Get-EntryHoursSum $dayEntries.ToArray() -LeaveOnly
+    $ui.HoursDayText.Text = _FormatHoursText -WorkHours $sum -LeaveHours $leave
 }
 
 function Set-Status {
@@ -780,9 +791,38 @@ $ui.YearCombo.Add_SelectionChanged({ Load-ViewMonth })
 $ui.MonthCombo.Add_SelectionChanged({ Load-ViewMonth })
 
 $ui.EntryDate.SelectedDate = [datetime]::Today
+if ($ui.PrevDayBtn) {
+    $ui.PrevDayBtn.Add_Click({
+        $curr = if ($ui.EntryDate.SelectedDate) { [datetime]$ui.EntryDate.SelectedDate } else { [datetime]::Today }
+        $ui.EntryDate.SelectedDate = $curr.AddDays(-1)
+    })
+}
+if ($ui.NextDayBtn) {
+    $ui.NextDayBtn.Add_Click({
+        $curr = if ($ui.EntryDate.SelectedDate) { [datetime]$ui.EntryDate.SelectedDate } else { [datetime]::Today }
+        $ui.EntryDate.SelectedDate = $curr.AddDays(1)
+    })
+}
 $ui.TodayBtn.Add_Click({ $ui.EntryDate.SelectedDate = [datetime]::Today })
 $ui.YesterdayBtn.Add_Click({ $ui.EntryDate.SelectedDate = ([datetime]::Today).AddDays(-1) })
 $ui.EntryDate.Add_SelectedDateChanged({ Update-HoursDay })
+
+if ($ui.WbsNavBtn) {
+    $ui.WbsNavBtn.Add_Click({
+        $scriptPath = Join-Path $PSScriptRoot 'WbsInput.ps1'
+        if (Test-Path -LiteralPath $scriptPath) {
+            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
+        }
+    })
+}
+if ($ui.ReportNavBtn) {
+    $ui.ReportNavBtn.Add_Click({
+        $scriptPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1'
+        if (Test-Path -LiteralPath $scriptPath) {
+            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
+        }
+    })
+}
 
 # クイック工数ボタン
 foreach ($n in 'H025','H05','H1','H2','H4','H8') {

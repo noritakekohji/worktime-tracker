@@ -434,6 +434,64 @@ function Save-ProjectWbsItems {
     return $updated.ToArray()
 }
 
+# ---- 休暇エントリ (is_leave) ----
+# is_leave = true のエントリは「その日は入力済み」を表すが、作業工数ではない。
+#   - 工数集計 (合計 / メンバー別 / プロジェクト別 / グラフ / 週次負荷 など) からは除外する
+#   - 未入力検知では「入力あり」として扱う (行自体は残す)
+# 判定を 1 か所に集約しておかないと、集計箇所ごとに漏れて休暇が工数に混ざる。
+
+function Test-IsLeaveEntry {
+    param($Entry)
+    if ($null -eq $Entry) { return $false }
+    $v = $null
+    if ($Entry -is [System.Collections.IDictionary]) {
+        if ($Entry.Contains('is_leave')) { $v = $Entry['is_leave'] }
+    } elseif ($Entry.PSObject -and $Entry.PSObject.Properties['is_leave']) {
+        $v = $Entry.PSObject.Properties['is_leave'].Value
+    }
+    if ($v -is [array]) { $v = if ($v.Count -gt 0) { $v[0] } else { $null } }
+    if ($null -eq $v) { return $false }
+    if ($v -is [bool]) { return $v }
+    # Excel 取込などで文字列になっている場合。PS 5.1 の [bool]'false' は $true になるため明示的に判定する
+    $s = ([string]$v).Trim()
+    if ([string]::IsNullOrWhiteSpace($s)) { return $false }
+    return @('true','1','yes','y','on','はい','休暇') -contains $s.ToLowerInvariant()
+}
+
+function Get-WorkEntries {
+    # 休暇を除いた作業エントリだけを返す (工数集計用)
+    param($Entries)
+    $list = New-Object System.Collections.Generic.List[object]
+    foreach ($e in @($Entries)) {
+        if ($null -eq $e) { continue }
+        if (Test-IsLeaveEntry $e) { continue }
+        [void]$list.Add($e)
+    }
+    # PS 5.1: 1 要素配列は return で unwrap されるためカンマ演算子で返す
+    return ,$list.ToArray()
+}
+
+function Get-EntryHoursSum {
+    # 工数合計。IncludeLeave を付けない限り休暇分は除外する。
+    param($Entries, [switch]$IncludeLeave, [switch]$LeaveOnly)
+    $sum = 0.0
+    foreach ($e in @($Entries)) {
+        if ($null -eq $e) { continue }
+        $isLeave = Test-IsLeaveEntry $e
+        if ($LeaveOnly) {
+            if (-not $isLeave) { continue }
+        } elseif ($isLeave -and -not $IncludeLeave) {
+            continue
+        }
+        $h = 0.0
+        $raw = $e.hours
+        if ($raw -is [array]) { $raw = if ($raw.Count -gt 0) { $raw[0] } else { $null } }
+        [void][double]::TryParse([string]$raw, [ref]$h)
+        $sum += $h
+    }
+    return $sum
+}
+
 # ---- 実績データ (ローカル) ----
 
 function Load-MonthEntries {

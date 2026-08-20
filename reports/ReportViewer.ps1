@@ -97,6 +97,9 @@ $Script:Categories    = $ctx.Categories
 $Script:TaskPatterns  = $ctx.TaskPatterns
 $Script:CurrentMember = $ctx.CurrentMember
 $Script:AllEntries    = @()
+# フィルタ適用後の行。ChartRows は休暇を除いた集計用、AllFilteredRows は休暇込み (未入力検知用)
+$Script:ChartRows        = $null
+$Script:AllFilteredRows  = @()
 
 # ---- 名称解決ヘルパ ----
 # Report は ID/Code を集計キーに使うが、画面表示には名称を併記する。
@@ -664,6 +667,9 @@ function Apply-Filters {
         $groupCode = _Str $e.task_group_code
         $taskCode = _Str $e.task_code
         $catCode = _Str $e.category
+        # 休暇はプロジェクト等を持たないため、明細ではカテゴリ欄に「休暇」と出す
+        $isLeave = Test-IsLeaveEntry $e
+        $catDisplay = if ($isLeave) { '休暇' } else { Resolve-CategoryDisplay $catCode }
         [void]$list.Add([pscustomobject]@{
             date            = _Str $e.date
             member_id       = $memberId
@@ -677,30 +683,38 @@ function Apply-Filters {
             task_code       = $taskCode
             task_display    = _MergeCodeName $taskCode (Resolve-TaskName $taskCode $projectCode $processCode $groupCode)
             category        = $catCode
-            category_display = Resolve-CategoryDisplay $catCode
+            category_display = $catDisplay
+            is_leave        = $isLeave
             hours           = _Num $e.hours
             comment         = _Str $e.comment
         })
     }
     $rows = $list.ToArray()
 
+    # 明細には休暇も残す (記録として見えている必要があるため)。
+    # 一方、工数集計は休暇を除いた作業分だけで行う。
     $u.DetailGrid.ItemsSource = $rows
+    $workRows = Get-WorkEntries $rows
+    # 未入力検知は「休暇でも入力あり」として扱うため、休暇込みの行を別に保持する
+    $Script:AllFilteredRows = $rows
 
-    $total = 0.0
-    foreach ($r in $rows) { $total += [double]$r.hours }
-    $u.SummaryText.Text = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f $total
+    $total      = Get-EntryHoursSum $rows
+    $leaveTotal = Get-EntryHoursSum $rows -LeaveOnly
+    $summary = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f $total
+    if ($leaveTotal -gt 0) { $summary += " (休暇 {0:N1} h は集計対象外)" -f $leaveTotal }
+    $u.SummaryText.Text = $summary
 
-    $u.MemberSummaryGrid.ItemsSource  = _SumBy $rows 'member_id'    'メンバー'     { param($k) Resolve-MemberDisplay $k }
-    $u.ProjectSummaryGrid.ItemsSource = _SumBy $rows 'project_code' 'プロジェクト' { param($k) Resolve-ProjectDisplay $k }
-    $u.CategorySummaryGrid.ItemsSource= _SumBy $rows 'category'     'カテゴリ'     { param($k) Resolve-CategoryDisplay $k }
+    $u.MemberSummaryGrid.ItemsSource  = _SumBy $workRows 'member_id'    'メンバー'     { param($k) Resolve-MemberDisplay $k }
+    $u.ProjectSummaryGrid.ItemsSource = _SumBy $workRows 'project_code' 'プロジェクト' { param($k) Resolve-ProjectDisplay $k }
+    $u.CategorySummaryGrid.ItemsSource= _SumBy $workRows 'category'     'カテゴリ'     { param($k) Resolve-CategoryDisplay $k }
     # システム別 / 会社別は集計キー自体をマスタから解決する
-    $u.SystemSummaryGrid.ItemsSource  = _SumBy $rows { param($r) $s = Resolve-ProjectTargetSystem ([string]$r.project_code); if ($s) { $s } else { '(未設定)' } } '対象システム'
-    $u.CompanySummaryGrid.ItemsSource = _SumBy $rows { param($r) $c = Resolve-MemberCompany ([string]$r.member_id);        if ($c) { $c } else { '(未設定)' } } '会社'
+    $u.SystemSummaryGrid.ItemsSource  = _SumBy $workRows { param($r) $s = Resolve-ProjectTargetSystem ([string]$r.project_code); if ($s) { $s } else { '(未設定)' } } '対象システム'
+    $u.CompanySummaryGrid.ItemsSource = _SumBy $workRows { param($r) $c = Resolve-MemberCompany ([string]$r.member_id);        if ($c) { $c } else { '(未設定)' } } '会社'
 
     # 以降の重い Build-* はタブ表示時に遅延実行する (ファイル末尾の
     # Apply-Filters ラッパ / _BuildVisibleViews を参照)。ここでは共有の
     # 行データだけ確定させる。
-    $Script:ChartRows = $rows
+    $Script:ChartRows = $workRows
 }
 
 # ---- C3: ダッシュボード (KPI カード + Top 一覧) ----
@@ -1010,7 +1024,9 @@ function Build-Anomalies {
     }
 
     # 3) 平日に実績ゼロ (1人) — 期間内で「平日 かつ そのメンバーの実績合計 0h」の日
-    $byMember = $Rows | Group-Object member_id
+    #    休暇は工数ゼロ扱いだが入力済みなので、ここでは休暇込みの行で「入力あり」を判定する
+    $presenceRows = if ($Script:AllFilteredRows) { $Script:AllFilteredRows } else { $Rows }
+    $byMember = $presenceRows | Group-Object member_id
     $from = $u.FromDate.SelectedDate
     $to   = $u.ToDate.SelectedDate
     if ($from -and $to) {
@@ -1665,6 +1681,8 @@ $u.ExportBtn.Add_Click({
         'date',
         'member_display','project_display','process_display','task_group_display','task_display','category_display',
         'member_id','project_code','process_code','task_group_code','task_code','category',
+        # 明細には休暇行も含まれる。受け取った側が工数を合計するときに区別できるよう選べるようにする
+        'is_leave',
         'hours','comment'
     )
     $defaultCols = @('date','member_display','project_display','process_display','task_group_display','task_display','category_display','hours','comment')
@@ -1878,8 +1896,10 @@ function Build-MemberLoad {
     }
 
     # 日付セット per member
+    # 休暇は工数集計からは外すが「その日は入力済み」なので、未入力検知では休暇込みの行を使う
+    $presenceRows = if ($Script:AllFilteredRows) { $Script:AllFilteredRows } else { $Rows }
     $hasEntry = @{}
-    foreach ($r in $Rows) {
+    foreach ($r in $presenceRows) {
         $mid = [string]$r.member_id
         if (-not $hasEntry.ContainsKey($mid)) { $hasEntry[$mid] = New-Object 'System.Collections.Generic.HashSet[string]' }
         [void]$hasEntry[$mid].Add([string]$r.date)

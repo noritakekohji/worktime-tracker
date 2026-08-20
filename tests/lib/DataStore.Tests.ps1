@@ -181,3 +181,87 @@ Describe 'Get/Set-DataFile (生 I/O)' -Tag 'lib' {
         ($b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) | Should -Be $false
     }
 }
+
+# 休暇 (is_leave) は「その日は入力済み」を表すだけで作業工数ではない。
+# 集計側で判定が漏れると休暇時間が工数に混ざる (2026-08 の不具合)。
+Describe '休暇エントリ (is_leave) の判定と集計' -Tag 'lib' {
+
+    It 'is_leave = $true を休暇と判定' {
+        Test-IsLeaveEntry ([pscustomobject]@{ date='2026-08-20'; hours=8; is_leave=$true }) | Should -Be $true
+    }
+
+    It 'is_leave = $false / プロパティ無しは休暇ではない' {
+        Test-IsLeaveEntry ([pscustomobject]@{ date='2026-08-20'; hours=8; is_leave=$false }) | Should -Be $false
+        Test-IsLeaveEntry ([pscustomobject]@{ date='2026-08-20'; hours=8 })                  | Should -Be $false
+        Test-IsLeaveEntry $null                                                              | Should -Be $false
+    }
+
+    It '文字列 "true"/"false" を正しく判定 (PS 5.1 の [bool]"false" = $true 対策)' {
+        Test-IsLeaveEntry ([pscustomobject]@{ is_leave='true'  }) | Should -Be $true
+        Test-IsLeaveEntry ([pscustomobject]@{ is_leave='false' }) | Should -Be $false
+        Test-IsLeaveEntry ([pscustomobject]@{ is_leave=''      }) | Should -Be $false
+    }
+
+    It 'ハッシュテーブルのエントリでも判定できる' {
+        Test-IsLeaveEntry @{ is_leave=$true }  | Should -Be $true
+        Test-IsLeaveEntry @{ hours=3 }         | Should -Be $false
+    }
+
+    It 'Get-WorkEntries は休暇を除外する' {
+        $entries = @(
+            [pscustomobject]@{ date='2026-08-20'; hours=1.0; is_leave=$false },
+            [pscustomobject]@{ date='2026-08-20'; hours=8.0; is_leave=$true },
+            [pscustomobject]@{ date='2026-08-21'; hours=2.5 }
+        )
+        $work = Get-WorkEntries $entries
+        $work.Count | Should -Be 2
+        @($work | Where-Object { $_.hours -eq 8.0 }).Count | Should -Be 0
+    }
+
+    It 'Get-WorkEntries は結果 1 件でも配列を返す (ItemsSource 代入で落ちない)' {
+        $entries = @(
+            [pscustomobject]@{ date='2026-08-20'; hours=1.0 },
+            [pscustomobject]@{ date='2026-08-20'; hours=8.0; is_leave=$true }
+        )
+        $work = Get-WorkEntries $entries
+        $work -is [array] | Should -Be $true
+        $work.Count | Should -Be 1
+    }
+
+    It 'Get-EntryHoursSum は既定で休暇を除外する' {
+        $entries = @(
+            [pscustomobject]@{ hours=1.5; is_leave=$false },
+            [pscustomobject]@{ hours=8.0; is_leave=$true },
+            [pscustomobject]@{ hours=2.5 }
+        )
+        Get-EntryHoursSum $entries                | Should -Be 4.0
+        Get-EntryHoursSum $entries -IncludeLeave  | Should -Be 12.0
+        Get-EntryHoursSum $entries -LeaveOnly     | Should -Be 8.0
+    }
+
+    It 'Get-EntryHoursSum は数値以外の hours を 0 として扱う' {
+        $entries = @(
+            [pscustomobject]@{ hours='3.5' },
+            [pscustomobject]@{ hours=''    },
+            [pscustomobject]@{ hours=$null }
+        )
+        Get-EntryHoursSum $entries | Should -Be 3.5
+    }
+
+    It '休暇エントリも保存・読込で is_leave が保持される' {
+        $ctx = New-TempDataSource
+        try {
+            $entries = @(
+                [pscustomobject]@{ date='2026-08-20'; project_code='ABC001'; process_code=''; task_group_code=''; task_code=''; category='IMPL'; is_leave=$false; hours=1.0; comment='' },
+                [pscustomobject]@{ date='2026-08-20'; project_code='';       process_code=''; task_group_code=''; task_code=''; category='';     is_leave=$true;  hours=8.0; comment='' }
+            )
+            Save-MonthEntries -Source $ctx.Source -MemberId 'ut' -Year 2026 -Month 8 -Entries $entries -AuthorName 'ut' -AuthorEmail 'ut@local'
+            $loaded = @(Load-MonthEntries -Source $ctx.Source -MemberId 'ut' -Year 2026 -Month 8)
+            $loaded.Count | Should -Be 2
+            Get-EntryHoursSum $loaded               | Should -Be 1.0
+            Get-EntryHoursSum $loaded -LeaveOnly    | Should -Be 8.0
+        } finally {
+            Remove-TempDataSource $ctx
+        }
+    }
+}
