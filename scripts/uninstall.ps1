@@ -73,7 +73,7 @@ if (Test-Path -LiteralPath $cfgPath) {
 
 Write-Host '削除対象 (確認):' -ForegroundColor White
 Write-Host "  1. インストール先  : $InstallDir"
-Write-Host "  2. デスクトップショートカット 3 個 ($desktop\WorkTime *.lnk)"
+Write-Host "  2. デスクトップショートカット 2 個 ($desktop\WorkTime *.lnk)"
 if (-not $KeepUserData) {
     Write-Host "  3. ユーザ設定/ログ : $appData"
     Write-Host "                       (config.json / token.dat / user_prefs.json /"

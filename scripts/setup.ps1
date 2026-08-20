@@ -68,20 +68,14 @@ $sc2.IconLocation = "$env:WINDIR\System32\imageres.dll,114"
 $sc2.WindowStyle = 7
 $sc2.Save()
 
-# 旧名のショートカットがあれば削除
-$oldWbsLnk = Join-Path $desktop 'WorkTime WBS入力.lnk'
-if (Test-Path -LiteralPath $oldWbsLnk) { Remove-Item -LiteralPath $oldWbsLnk -Force -ErrorAction SilentlyContinue }
-
-$sc3 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime WBS.lnk'))
-$sc3.TargetPath = "$InstallDir\client\WbsInput.cmd"
-$sc3.WorkingDirectory = "$InstallDir\client"
-$sc3.IconLocation = "$env:WINDIR\System32\imageres.dll,110"
-$sc3.WindowStyle = 7
-$sc3.Save()
+# 旧名の WBS ショートカットがあれば削除 (WBS 画面は Tracker / Report から相互起動)
+foreach ($oldLnkName in 'WorkTime WBS.lnk', 'WorkTime WBS入力.lnk') {
+    $oldLnk = Join-Path $desktop $oldLnkName
+    if (Test-Path -LiteralPath $oldLnk) { Remove-Item -LiteralPath $oldLnk -Force -ErrorAction SilentlyContinue }
+}
 
 Write-Host "完了。デスクトップのショートカットから起動してください。" -ForegroundColor Green
 Write-Host "  - WorkTime Tracker  (実績入力)"
-Write-Host "  - WorkTime WBS      (WBS形式実績入力)"
 Write-Host "  - WorkTime Report   (集計ビューア)"
 Write-Host ""
 Write-Host "初回起動時に GitLab URL / Project ID / Project Access Token を入力してください。"

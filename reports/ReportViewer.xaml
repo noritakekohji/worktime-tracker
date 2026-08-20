@@ -135,29 +135,35 @@
     </Window.Resources>
 
     <DockPanel>
-        <!-- ヘッダ (濃色) -->
-        <Border DockPanel.Dock="Top" Background="#0c4a6e" Padding="18,14">
+        <!-- ヘッダ (ディープスレート) -->
+        <Border DockPanel.Dock="Top" Background="#0f172a" Padding="18,12">
             <DockPanel>
-                <TextBlock Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                <TextBlock x:Name="SummaryText" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="#7dd3fc"/>
-                <TextBlock x:Name="RemoteNoticeText" Margin="18,0,0,0" VerticalAlignment="Center" Foreground="#fef08a" FontWeight="Bold" Visibility="Collapsed"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="TrackerNavBtn" Content="⏱ 日次入力" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く"/>
+                    <Button x:Name="WbsNavBtn" Content="📊 WBS入力" Margin="0,0,8,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS入力画面を開く"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SummaryText" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="#38bdf8" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="RemoteNoticeText" Margin="18,0,0,0" VerticalAlignment="Center" Foreground="#fef08a" FontWeight="Bold" Visibility="Collapsed"/>
+                </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- フッタ (濃色) -->
-        <Border DockPanel.Dock="Bottom" Background="#0c4a6e" Padding="18,14">
+        <!-- フッタ (ディープスレート) -->
+        <Border DockPanel.Dock="Bottom" Background="#0f172a" Padding="18,12">
             <DockPanel>
-                <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#bae6fd" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock x:Name="VersionText" DockPanel.Dock="Left" Margin="14,0,0,0" Foreground="#7dd3fc" FontSize="11" VerticalAlignment="Center"
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock x:Name="VersionText" DockPanel.Dock="Left" Margin="14,0,0,0" Foreground="#38bdf8" FontSize="11" VerticalAlignment="Center"
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#0f766e" Foreground="White" BorderBrush="#0f766e"
+                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
                             ToolTip="ローカルから全データ再読込"/>
-                    <Button x:Name="ReloadBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"
+                    <Button x:Name="ReloadBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0284c7" Margin="4,0,0,0"
                             ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
-                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0369a1" Foreground="White" BorderBrush="#0369a1" Margin="4,0,0,0"/>
-                    <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="160"/>
+                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0f766e" Foreground="White" BorderBrush="#0d9488" Margin="4,0,0,0"/>
+                    <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="150" Margin="4,0,0,0"/>
                     <Button x:Name="AdminBtn"  Content="🛠 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
             </DockPanel>
