@@ -685,7 +685,8 @@ function Apply-Filters {
             category        = $catCode
             category_display = $catDisplay
             is_leave        = $isLeave
-            hours           = _Num $e.hours
+            # 休暇は工数 0。旧データに工数が入っていても 0 として見せる
+            hours           = if ($isLeave) { 0.0 } else { _Num $e.hours }
             comment         = _Str $e.comment
         })
     }
@@ -698,11 +699,7 @@ function Apply-Filters {
     # 未入力検知は「休暇でも入力あり」として扱うため、休暇込みの行を別に保持する
     $Script:AllFilteredRows = $rows
 
-    $total      = Get-EntryHoursSum $rows
-    $leaveTotal = Get-EntryHoursSum $rows -LeaveOnly
-    $summary = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f $total
-    if ($leaveTotal -gt 0) { $summary += " (休暇 {0:N1} h は集計対象外)" -f $leaveTotal }
-    $u.SummaryText.Text = $summary
+    $u.SummaryText.Text = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f (Get-EntryHoursSum $rows)
 
     $u.MemberSummaryGrid.ItemsSource  = _SumBy $workRows 'member_id'    'メンバー'     { param($k) Resolve-MemberDisplay $k }
     $u.ProjectSummaryGrid.ItemsSource = _SumBy $workRows 'project_code' 'プロジェクト' { param($k) Resolve-ProjectDisplay $k }

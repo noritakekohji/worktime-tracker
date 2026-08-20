@@ -394,18 +394,10 @@ $Script:Entries = New-Object System.Collections.ObjectModel.ObservableCollection
 $ui.EntriesGrid.ItemsSource = $Script:Entries
 $Script:EditingItem = $null
 
-# 休暇 (is_leave) は作業工数ではないため合計から除外し、括弧書きで別に見せる。
+# 休暇 (is_leave) は工数 0 として扱うため合計には現れない。
 # 判定と加算は DataStore.ps1 の Test-IsLeaveEntry / Get-EntryHoursSum に集約している。
-function _FormatHoursText {
-    param([double]$WorkHours, [double]$LeaveHours)
-    if ($LeaveHours -gt 0) { return '{0:N1} h (休暇 {1:N1} h)' -f $WorkHours, $LeaveHours }
-    return '{0:N1} h' -f $WorkHours
-}
-
 function Update-HoursTotal {
-    $sum   = Get-EntryHoursSum $Script:Entries
-    $leave = Get-EntryHoursSum $Script:Entries -LeaveOnly
-    $ui.HoursTotalText.Text = _FormatHoursText -WorkHours $sum -LeaveHours $leave
+    $ui.HoursTotalText.Text = '{0:N1} h' -f (Get-EntryHoursSum $Script:Entries)
     Update-HoursDay
 }
 
@@ -418,9 +410,7 @@ function Update-HoursDay {
     foreach ($e in $Script:Entries) {
         if ([string]$e.date -eq $dStr) { [void]$dayEntries.Add($e) }
     }
-    $sum   = Get-EntryHoursSum $dayEntries.ToArray()
-    $leave = Get-EntryHoursSum $dayEntries.ToArray() -LeaveOnly
-    $ui.HoursDayText.Text = _FormatHoursText -WorkHours $sum -LeaveHours $leave
+    $ui.HoursDayText.Text = '{0:N1} h' -f (Get-EntryHoursSum $dayEntries.ToArray())
 }
 
 function Set-Status {
@@ -772,7 +762,8 @@ function Load-ViewMonth {
                 category        = $ctc
                 category_name   = $names.category_name
                 is_leave        = $isLeaveLoaded
-                hours           = _Num $e.hours
+                # 休暇は工数 0 で扱う (旧データに工数が入っていても 0 に正規化し、保存し直せばファイルも直る)
+                hours           = if ($isLeaveLoaded) { 0.0 } else { _Num $e.hours }
                 comment         = _Str $e.comment
                 dirty           = ''
                 dirty_mark      = ''
@@ -825,12 +816,31 @@ if ($ui.ReportNavBtn) {
 }
 
 # クイック工数ボタン
+$Script:HoursQuickBtns = New-Object System.Collections.Generic.List[object]
 foreach ($n in 'H025','H05','H1','H2','H4','H8') {
     $b = $Script:Window.FindName($n)
     if ($b) {
         $b.Add_Click({ param($s,$e) $ui.HoursBox.Text = [string]$s.Tag; $ui.HoursBox.Focus() | Out-Null }.GetNewClosure())
+        [void]$Script:HoursQuickBtns.Add($b)
     }
 }
+
+# 休暇は作業工数ではないため、チェック中は工数を 0 に固定し入力させない。
+# 解除時は直前の値 (無ければ 1.0) に戻す。
+$Script:HoursBeforeLeave = '1.0'
+function Set-LeaveFormState {
+    param([bool]$IsLeave)
+    if ($IsLeave) {
+        if ($ui.HoursBox.Text -ne '0.0') { $Script:HoursBeforeLeave = $ui.HoursBox.Text }
+        $ui.HoursBox.Text = '0.0'
+    } else {
+        if ($ui.HoursBox.Text -eq '0.0') { $ui.HoursBox.Text = $Script:HoursBeforeLeave }
+    }
+    $ui.HoursBox.IsEnabled = (-not $IsLeave)
+    foreach ($btn in $Script:HoursQuickBtns) { $btn.IsEnabled = (-not $IsLeave) }
+}
+$ui.IsLeaveChk.Add_Checked({   Set-LeaveFormState $true })
+$ui.IsLeaveChk.Add_Unchecked({ Set-LeaveFormState $false })
 
 # ---- フォーム → エントリ ----
 function Get-EntryFromForm {
@@ -852,9 +862,12 @@ function Get-EntryFromForm {
         if (-not $task -and $ui.TaskCombo.Items.Count -gt 0) { throw 'タスクを選択してください' }
     }
     # 休暇のときは proj/proc/tg/task すべて任意。カテゴリは無くても OK。
+    # 休暇は作業工数ではないため常に 0 とし、工数欄は見ない。
     $hours = 0.0
-    if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
-        throw '工数は正の数値で入力してください'
+    if (-not $isLeave) {
+        if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$hours) -or $hours -le 0) {
+            throw '工数は正の数値で入力してください'
+        }
     }
 
     # 対象期間チェック (period_from / period_to を持つプロジェクトのみ; 休暇は対象外)

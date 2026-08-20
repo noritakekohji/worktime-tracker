@@ -228,15 +228,14 @@ Describe '休暇エントリ (is_leave) の判定と集計' -Tag 'lib' {
         $work.Count | Should -Be 1
     }
 
-    It 'Get-EntryHoursSum は既定で休暇を除外する' {
+    It 'Get-EntryHoursSum は休暇を加算しない' {
         $entries = @(
             [pscustomobject]@{ hours=1.5; is_leave=$false },
             [pscustomobject]@{ hours=8.0; is_leave=$true },
             [pscustomobject]@{ hours=2.5 }
         )
-        Get-EntryHoursSum $entries                | Should -Be 4.0
-        Get-EntryHoursSum $entries -IncludeLeave  | Should -Be 12.0
-        Get-EntryHoursSum $entries -LeaveOnly     | Should -Be 8.0
+        # 旧データで休暇に工数が残っていても合計には入らない
+        Get-EntryHoursSum $entries | Should -Be 4.0
     }
 
     It 'Get-EntryHoursSum は数値以外の hours を 0 として扱う' {
@@ -258,8 +257,8 @@ Describe '休暇エントリ (is_leave) の判定と集計' -Tag 'lib' {
             Save-MonthEntries -Source $ctx.Source -MemberId 'ut' -Year 2026 -Month 8 -Entries $entries -AuthorName 'ut' -AuthorEmail 'ut@local'
             $loaded = @(Load-MonthEntries -Source $ctx.Source -MemberId 'ut' -Year 2026 -Month 8)
             $loaded.Count | Should -Be 2
-            Get-EntryHoursSum $loaded               | Should -Be 1.0
-            Get-EntryHoursSum $loaded -LeaveOnly    | Should -Be 8.0
+            @($loaded | Where-Object { Test-IsLeaveEntry $_ }).Count | Should -Be 1
+            Get-EntryHoursSum $loaded | Should -Be 1.0
         } finally {
             Remove-TempDataSource $ctx
         }

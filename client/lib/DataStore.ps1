@@ -436,6 +436,7 @@ function Save-ProjectWbsItems {
 
 # ---- 休暇エントリ (is_leave) ----
 # is_leave = true のエントリは「その日は入力済み」を表すが、作業工数ではない。
+#   - 工数は常に 0 (入力画面でも 0 固定。旧データに工数が入っていても 0 として扱う)
 #   - 工数集計 (合計 / メンバー別 / プロジェクト別 / グラフ / 週次負荷 など) からは除外する
 #   - 未入力検知では「入力あり」として扱う (行自体は残す)
 # 判定を 1 か所に集約しておかないと、集計箇所ごとに漏れて休暇が工数に混ざる。
@@ -472,17 +473,13 @@ function Get-WorkEntries {
 }
 
 function Get-EntryHoursSum {
-    # 工数合計。IncludeLeave を付けない限り休暇分は除外する。
-    param($Entries, [switch]$IncludeLeave, [switch]$LeaveOnly)
+    # 作業工数の合計。休暇は工数 0 扱いなので加算しない
+    # (旧データの休暇に工数が入っていても合計に混ざらないよう、値ではなく is_leave で判定する)。
+    param($Entries)
     $sum = 0.0
     foreach ($e in @($Entries)) {
         if ($null -eq $e) { continue }
-        $isLeave = Test-IsLeaveEntry $e
-        if ($LeaveOnly) {
-            if (-not $isLeave) { continue }
-        } elseif ($isLeave -and -not $IncludeLeave) {
-            continue
-        }
+        if (Test-IsLeaveEntry $e) { continue }
         $h = 0.0
         $raw = $e.hours
         if ($raw -is [array]) { $raw = if ($raw.Count -gt 0) { $raw[0] } else { $null } }

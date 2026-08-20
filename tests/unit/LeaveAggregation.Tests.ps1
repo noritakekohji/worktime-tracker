@@ -88,6 +88,25 @@ Describe 'Report / Tracker の集計配線' -Tag 'unit' {
         ([regex]::Matches($script:ViewerSrc, '\$presenceRows\s*=')).Count | Should -BeGreaterOrEqual 2
     }
 
+    It '休暇の工数は 0 として扱う (Report の明細行 / Tracker の読込)' {
+        $script:ViewerSrc  | Should -Match 'hours\s+=\s*if \(\$isLeave\)\s*\{\s*0\.0\s*\}'
+        $script:TrackerSrc | Should -Match 'hours\s+=\s*if \(\$isLeaveLoaded\)\s*\{\s*0\.0\s*\}'
+    }
+
+    It '休暇のときは工数入力を求めず 0 で登録する' {
+        # 「工数は正の数値で入力してください」の検証を休暇時に通さないこと
+        $script:TrackerSrc | Should -Match 'if \(-not \$isLeave\) \{[\s\S]{0,200}工数は正の数値で入力してください'
+        # 休暇チェック中は工数欄とクイック工数ボタンを無効化する
+        $script:TrackerSrc | Should -Match 'function Set-LeaveFormState'
+        $script:TrackerSrc | Should -Match '\$ui\.IsLeaveChk\.Add_Checked'
+        $script:TrackerSrc | Should -Match '\$ui\.IsLeaveChk\.Add_Unchecked'
+    }
+
+    It '休暇時間の併記は残っていない (合算しない)' {
+        ([regex]::Matches($script:ViewerSrc,  '休暇 \{0:N1\} h')).Count | Should -Be 0
+        ([regex]::Matches($script:TrackerSrc, '休暇 \{1:N1\} h')).Count | Should -Be 0
+    }
+
     It 'Tracker の当日/当月合計は共通ヘルパで休暇を除外する' {
         $script:TrackerSrc | Should -Match 'function Update-HoursTotal[\s\S]{0,400}Get-EntryHoursSum'
         $script:TrackerSrc | Should -Match 'function Update-HoursDay[\s\S]{0,600}Get-EntryHoursSum'
