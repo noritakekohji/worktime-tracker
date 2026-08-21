@@ -799,20 +799,10 @@ $ui.YesterdayBtn.Add_Click({ $ui.EntryDate.SelectedDate = ([datetime]::Today).Ad
 $ui.EntryDate.Add_SelectedDateChanged({ Update-HoursDay })
 
 if ($ui.WbsNavBtn) {
-    $ui.WbsNavBtn.Add_Click({
-        $scriptPath = Join-Path $PSScriptRoot 'WbsInput.ps1'
-        if (Test-Path -LiteralPath $scriptPath) {
-            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
-        }
-    })
+    $ui.WbsNavBtn.Add_Click({ Start-AppScreen (Join-Path $PSScriptRoot 'WbsInput.ps1') })
 }
 if ($ui.ReportNavBtn) {
-    $ui.ReportNavBtn.Add_Click({
-        $scriptPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1'
-        if (Test-Path -LiteralPath $scriptPath) {
-            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
-        }
-    })
+    $ui.ReportNavBtn.Add_Click({ Start-AppScreen (Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1') })
 }
 
 # クイック工数ボタン

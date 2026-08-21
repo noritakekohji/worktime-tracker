@@ -97,8 +97,13 @@ try {
     $setup = Join-Path $SourceDir 'scripts\setup.cmd'
     $process = Start-Process -FilePath $env:ComSpec -ArgumentList ('/c ""{0}" /force /quiet"' -f $setup) -Wait -PassThru
     if ($process.ExitCode -ne 0) { exit $process.ExitCode }
-    $launch = Join-Path $InstallDir 'client\launch.cmd'
-    if (Test-Path -LiteralPath $launch) { Start-Process -FilePath $launch }
+    # 更新後の再起動もコンソールを出さない (ショートカット起動と同じ形)
+    $tracker = Join-Path $InstallDir 'client\WorkTimeTracker.ps1'
+    if (Test-Path -LiteralPath $tracker) {
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+            '-ExecutionPolicy','Bypass','-NoProfile','-WindowStyle','Hidden','-File',('"{0}"' -f $tracker)
+        )
+    }
 } finally {
     Remove-Item -LiteralPath $WorkRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

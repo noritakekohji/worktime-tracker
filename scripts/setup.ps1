@@ -53,16 +53,23 @@ Get-ChildItem -Path $InstallDir -Recurse -Filter *.cmd | ForEach-Object {
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shell = New-Object -ComObject WScript.Shell
 
-# launch.cmd 経由で起動 (エラー時にコンソールが残るため)
+# powershell.exe を直接起動する (launch.cmd 経由だと黒いコンソールが残って邪魔になる)。
+# Hidden を powershell 側とショートカット側の両方に指定し、WPF ウィンドウだけが出るようにする。
+# エラー内容は MessageBox と %APPDATA%\worktime-tracker\last_error.log で確認できる。
+# コンソール付きで起動して確認したい場合は client\launch.cmd / client\WbsInput.cmd を直接実行する。
+$psExe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+
 $sc1 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime Tracker.lnk'))
-$sc1.TargetPath = "$InstallDir\client\launch.cmd"
+$sc1.TargetPath = $psExe
+$sc1.Arguments = '-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "{0}\client\WorkTimeTracker.ps1"' -f $InstallDir
 $sc1.WorkingDirectory = "$InstallDir\client"
 $sc1.IconLocation = "$env:WINDIR\System32\imageres.dll,109"
-$sc1.WindowStyle = 7   # minimized launcher window
+$sc1.WindowStyle = 7   # minimized
 $sc1.Save()
 
 $sc2 = $shell.CreateShortcut((Join-Path $desktop 'WorkTime Report.lnk'))
-$sc2.TargetPath = "$InstallDir\reports\launch.cmd"
+$sc2.TargetPath = $psExe
+$sc2.Arguments = '-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File "{0}\reports\ReportViewer.ps1"' -f $InstallDir
 $sc2.WorkingDirectory = "$InstallDir\reports"
 $sc2.IconLocation = "$env:WINDIR\System32\imageres.dll,114"
 $sc2.WindowStyle = 7

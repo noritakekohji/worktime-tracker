@@ -207,30 +207,44 @@
                             ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込"/>
                 </StackPanel>
 
-                <!-- 左側: ログインユーザー & ステータス -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="#1e293b" CornerRadius="20" Padding="14,6" BorderBrush="#334155" BorderThickness="1">
+                <!-- 左側: ログインユーザー & ステータス
+                     DockPanel にして、長いメッセージは切り落としではなく "…" で省略する -->
+                <DockPanel VerticalAlignment="Center">
+                    <Border DockPanel.Dock="Left" Background="#1e293b" CornerRadius="20" Padding="14,6" BorderBrush="#334155" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="👤" FontSize="15" Margin="0,0,8,0"/>
                             <TextBlock x:Name="CurrentMemberText" Text="" FontWeight="Bold" FontSize="14" Foreground="#34d399"/>
                         </StackPanel>
                     </Border>
                     <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="StatusText" Foreground="#fef08a" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="RemoteNoticeText" Visibility="Collapsed" Foreground="#fef08a" FontWeight="Bold"/>
+                        <TextBlock x:Name="StatusText" Foreground="#fef08a" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                        <TextBlock x:Name="RemoteNoticeText" Visibility="Collapsed" Foreground="#fef08a" FontWeight="Bold"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                     </StackPanel>
-                </StackPanel>
+                </DockPanel>
             </DockPanel>
         </Border>
 
         <!-- ===== フッタ (ディープスレート) ===== -->
         <Border DockPanel.Dock="Bottom" Background="#0f172a" Padding="18,12">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Left" x:Name="ModeText" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock DockPanel.Dock="Left" x:Name="VersionText" Margin="12,0,0,0" Foreground="#34d399" FontSize="11" VerticalAlignment="Center"
+            <!-- Grid にしてボタン列 (Auto) を先に確保する。
+                 local_store のパスが長くても、切れるのは左のテキスト側だけにする -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="ModeText" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <TextBlock Grid.Column="1" x:Name="VersionText" Margin="12,0,12,0" Foreground="#34d399" FontSize="11" VerticalAlignment="Center"
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Border Background="#1e293b" CornerRadius="8" Padding="12,6" Margin="0,0,8,0" BorderBrush="#334155" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="📅 選択日" Foreground="#94a3b8" Margin="0,0,8,0" FontWeight="Bold"/>
@@ -249,7 +263,7 @@
                     <Button x:Name="PushBtn" Content="📤 送信" Style="{StaticResource Primary}" MinWidth="100" Margin="6,2,3,2"/>
                     <Button x:Name="OpenFolderBtn" Content="📂 開く" Margin="6,2,3,2" Background="#1e293b" Foreground="White" BorderBrush="#334155"/>
                 </StackPanel>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- ===== 本体 (左: 当月実績 / 右: 入力フォーム) ===== -->

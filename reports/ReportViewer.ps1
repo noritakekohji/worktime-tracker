@@ -322,7 +322,8 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'WorkTypeNoteBox','WorkTypeNoteText',
               'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid',
               'CasePieCanvas','CasePieLegend','CaseBarCanvas',
-              'OpsPieCanvas','OpsPieLegend','OpsBarCanvas') {
+              'OpsPieCanvas','OpsPieLegend','OpsBarCanvas',
+              'TrackerNavBtn','WbsNavBtn') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -331,6 +332,11 @@ if ($u.VersionText) {
     $u.VersionText.Text = $Script:AppVersionTag
     $u.VersionText.Add_MouseLeftButtonUp({ Show-ChangelogDialog })
 }
+
+# ヘッダの画面切り替え (Start-AppScreen は Bootstrap.ps1。コンソールを出さずに別プロセス起動する)
+$Script:AppRoot = Split-Path -Parent $PSScriptRoot
+if ($u.TrackerNavBtn) { $u.TrackerNavBtn.Add_Click({ Start-AppScreen (Join-Path $Script:AppRoot 'client\WorkTimeTracker.ps1') }) }
+if ($u.WbsNavBtn)     { $u.WbsNavBtn.Add_Click({     Start-AppScreen (Join-Path $Script:AppRoot 'client\WbsInput.ps1') }) }
 
 # 管理者ロールなら管理者ボタン表示 (CurrentMember は Bootstrap で解決済み)
 if ($Script:CurrentMember -and (Has-Role -Member $Script:CurrentMember -Role 'admin') -and $u.AdminBtn) {

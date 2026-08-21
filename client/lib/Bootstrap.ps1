@@ -117,3 +117,17 @@ function Reload-MasterContext {
         Holidays     = @(Get-MasterHolidays     -Source $Source)
     }
 }
+
+# ---- 画面切り替え ----
+# 他画面を別プロセスで起動する。PowerShell のコンソールウィンドウが残ると邪魔なので、
+# Start-Process 側 (起動そのもの) と powershell 側 (起動後のウィンドウ) の両方を Hidden にする。
+function Start-AppScreen {
+    param([Parameter(Mandatory = $true)][string]$ScriptPath)
+    if (-not (Test-Path -LiteralPath $ScriptPath)) {
+        [System.Windows.MessageBox]::Show(("画面が見つかりません:`n" + $ScriptPath), '画面切り替え', 'OK', 'Warning') | Out-Null
+        return
+    }
+    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+        '-ExecutionPolicy', 'Bypass', '-NoProfile', '-WindowStyle', 'Hidden', '-File', ('"{0}"' -f $ScriptPath)
+    )
+}

@@ -853,20 +853,10 @@ $ui.WbsGrid.Add_LoadingRow({
 $ui.LoadBtn.Add_Click({ Load-WbsData })
 
 if ($ui.TrackerNavBtn) {
-    $ui.TrackerNavBtn.Add_Click({
-        $scriptPath = Join-Path $PSScriptRoot 'WorkTimeTracker.ps1'
-        if (Test-Path -LiteralPath $scriptPath) {
-            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
-        }
-    })
+    $ui.TrackerNavBtn.Add_Click({ Start-AppScreen (Join-Path $PSScriptRoot 'WorkTimeTracker.ps1') })
 }
 if ($ui.ReportNavBtn) {
-    $ui.ReportNavBtn.Add_Click({
-        $scriptPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1'
-        if (Test-Path -LiteralPath $scriptPath) {
-            Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`""
-        }
-    })
+    $ui.ReportNavBtn.Add_Click({ Start-AppScreen (Join-Path (Split-Path -Parent $PSScriptRoot) 'reports\ReportViewer.ps1') })
 }
 
 $ui.PullBtn.Add_Click({

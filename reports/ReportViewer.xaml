@@ -136,37 +136,61 @@
 
     <DockPanel>
         <!-- ヘッダ (ディープスレート) -->
+        <!-- ヘッダの並びは 3 画面共通:
+             左 = 画面名 + 状態 / 中央右 = データ取得 (読込・取得) / 右端 = 画面切替 + 管理 -->
         <Border DockPanel.Dock="Top" Background="#0f172a" Padding="18,12">
             <DockPanel>
+                <!-- 右端: 画面切り替え & 管理 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="TrackerNavBtn" Content="⏱ 日次入力" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く"/>
-                    <Button x:Name="WbsNavBtn" Content="📊 WBS入力" Margin="0,0,8,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS入力画面を開く"/>
+                    <Button x:Name="WbsNavBtn" Content="📊 WBS入力" Margin="0,0,12,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS入力画面を開く"/>
+                    <Button x:Name="AdminBtn" Content="🛠 管理者" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"
+                            ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="SummaryText" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="#38bdf8" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="RemoteNoticeText" Margin="18,0,0,0" VerticalAlignment="Center" Foreground="#fef08a" FontWeight="Bold" Visibility="Collapsed"/>
+
+                <!-- 中央右: データ取得 (Tracker / WBS 入力と同じ位置・同じ配色) -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
+                            ToolTip="ローカルから全データ再読込"/>
+                    <Button x:Name="ReloadBtn" Content="📥 取得" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0284c7"
+                            ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
                 </StackPanel>
+
+                <!-- 左: 画面名 + 集計サマリ (長い場合は "…" で省略) -->
+                <DockPanel VerticalAlignment="Center">
+                    <TextBlock DockPanel.Dock="Left" Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    <StackPanel Margin="24,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="SummaryText" Foreground="#38bdf8" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                        <TextBlock x:Name="RemoteNoticeText" Foreground="#fef08a" FontWeight="Bold" Visibility="Collapsed"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                    </StackPanel>
+                </DockPanel>
             </DockPanel>
         </Border>
 
         <!-- フッタ (ディープスレート) -->
+        <!-- フッタの並びも 3 画面共通: 左 = 保存先/状態 (長ければ省略) / 右 = バージョン + その画面の主アクション -->
         <Border DockPanel.Dock="Bottom" Background="#0f172a" Padding="18,12">
-            <DockPanel>
-                <TextBlock x:Name="StatusText" DockPanel.Dock="Left" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock x:Name="VersionText" DockPanel.Dock="Left" Margin="14,0,0,0" Foreground="#38bdf8" FontSize="11" VerticalAlignment="Center"
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="StatusText" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <TextBlock Grid.Column="1" x:Name="VersionText" Margin="14,0,12,0" Foreground="#38bdf8" FontSize="11" VerticalAlignment="Center"
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
-                            ToolTip="ローカルから全データ再読込"/>
-                    <Button x:Name="ReloadBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0284c7" Margin="4,0,0,0"
-                            ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
-                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0f766e" Foreground="White" BorderBrush="#0d9488" Margin="4,0,0,0"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0f766e" Foreground="White" BorderBrush="#0d9488"/>
                     <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="150" Margin="4,0,0,0"/>
-                    <Button x:Name="AdminBtn"  Content="🛠 管理者" Visibility="Collapsed" ToolTip="マスタ編集 / 他者データ編集"/>
                 </StackPanel>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- 期間フィルタ + クイック選択 + 集計軸フィルタ -->

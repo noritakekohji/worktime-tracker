@@ -111,6 +111,49 @@ Describe 'XAML パース' -Tag 'ui' {
     }
 }
 
+# local_store のパスが長いと、フッタ左のテキストが幅を食ってボタンが画面外へ押し出されていた。
+# 「テキストは省略・ボタンは常に見える」を最小幅で検証する。
+Describe 'フッタは長いパスでもボタンが切れない' -Tag 'ui' {
+
+    $footerCases = @(
+        @{ Label='Tracker';    Xaml='client/MainWindow.xaml';      Status='ModeText';   Buttons=@('SaveBtn','PushBtn','OpenFolderBtn') }
+        @{ Label='WbsInput';   Xaml='client/WbsInput.xaml';        Status='StatusText'; Buttons=@('SaveBtn','PushBtn') }
+        @{ Label='ReportViewer'; Xaml='reports/ReportViewer.xaml'; Status='StatusText'; Buttons=@('ApplyBtn','ExportBtn') }
+    )
+
+    It '<label>: 最小幅 + 長いパスでもフッタのボタンが枠内に収まる' -TestCases $footerCases {
+        param($Label, $Xaml, $Status, $Buttons)
+        $w = Get-Window $Xaml
+        $w.WindowStyle   = 'None'
+        $w.ShowInTaskbar = $false
+        $w.Left = -32000
+        $w.Top  = -32000
+        $w.Width = if ($w.MinWidth -gt 0) { $w.MinWidth } else { 960 }
+        $w.Show()
+        try {
+            $tb = $w.FindName($Status)
+            $tb | Should -Not -BeNullOrEmpty -Because "$Label : $Status が XAML にない"
+            $tb.Text = 'スタンドアローン | C:\Users\user\OneDrive - とても長い会社名 株式会社\部門共有\業務システム部\worktime-tracker\local_store\2026年度\バックアップ\store'
+            $w.UpdateLayout()
+
+            # ボタンの座標だけ見ても検出できない: レイアウト上の枠をはみ出しても
+            # 座標自体は「正しい位置」を返し、実際には親 Border が描画を切り落とすため。
+            # そこで「テキスト幅 + ボタン列の幅」がウインドウ幅に収まるかで判定する。
+            foreach ($n in $Buttons) {
+                $w.FindName($n) | Should -Not -BeNullOrEmpty -Because "$Label : $n が XAML にない"
+            }
+            $firstBtn = $w.FindName($Buttons[0])
+            $panel = [System.Windows.Media.VisualTreeHelper]::GetParent($firstBtn)
+            $used = $tb.ActualWidth + $panel.ActualWidth
+            $used | Should -BeLessOrEqual $w.ActualWidth -Because (
+                "$Label : フッタ左のテキスト ({0:N0}px) とボタン列 ({1:N0}px) の合計がウインドウ幅 ({2:N0}px) を超えています。" -f `
+                    $tb.ActualWidth, $panel.ActualWidth, $w.ActualWidth)
+        } finally {
+            $w.Close()
+        }
+    }
+}
+
 Describe 'PS の FindName 参照と XAML の x:Name が整合' -Tag 'ui' {
 
     $cases = @(
@@ -143,7 +186,24 @@ Describe 'PS の FindName 参照と XAML の x:Name が整合' -Tag 'ui' {
         $missing | Should -Be @() -Because ("$Label : XAML に存在しない要素を `$ui 経由で参照しています: " + ($missing -join ', '))
     }
 
-    # 逆方向: FindName していない名前を $ui.XXX で触ると常に $null になる
+    # 逆方向: XAML にボタンがあるのに PS 側がその名前に一切触れていないと、
+    # 押しても無反応の「飾りボタン」になる (Report のナビゲーションボタンで発生)。
+    It '<label>: XAML の名前付きボタンは PS 側から参照されている' -TestCases $cases {
+        param($Label, $Xaml, $Ps)
+        $xamlPath = Resolve-Path-Local $Xaml
+        $psPath   = Resolve-Path-Local $Ps
+        if (-not (Test-Path -LiteralPath $psPath)) { Set-ItResult -Skipped -Because "$Ps がない"; return }
+        $xamlText = Get-Content -LiteralPath $xamlPath -Raw
+        $psText   = Get-Content -LiteralPath $psPath -Raw
+        $btnNames = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($m in ([regex]::Matches($xamlText, '<Button[^>]*x:Name="([A-Za-z_][A-Za-z0-9_]*)"'))) {
+            [void]$btnNames.Add($m.Groups[1].Value)
+        }
+        $orphans = @($btnNames | Where-Object { $psText -notmatch [regex]::Escape($_) })
+        $orphans | Should -Be @() -Because ("$Label : PS 側から一度も参照されないボタン (押しても無反応): " + ($orphans -join ', '))
+    }
+
+    # FindName していない名前を $ui.XXX で触ると常に $null になる
     It '<label>: $ui.XXX で触る要素は全て FindName 済み' -TestCases $cases {
         param($Label, $Xaml, $Ps)
         $registered = Get-PsFindNameReferences $Ps
