@@ -348,3 +348,72 @@ Describe 'フォントサイズが規定の段階に収まっている' -Tag 'ui
         $unexpected | Should -Be @() -Because ("$Rel : 想定外の FontSize があります (11/13/16 いずれかに寄せてください): " + ($unexpected -join ', '))
     }
 }
+
+# Start-AppScreen (Bootstrap.ps1) を使う画面遷移ボタンが実際に動くための前提条件。
+# WorkTimeTracker.ps1 だけ Bootstrap.ps1 の dot-source が漏れていたため、
+# WBS入力/レポートへの画面遷移ボタンが「用語 'Start-AppScreen' は認識されません」で
+# 実行時エラーになっていた (2026-08-22)。$ui.XXX テストと違い、これは「呼び出す関数が
+# そもそもロードされているか」を静的に確認する。
+Describe 'Start-AppScreen を呼ぶ画面は Bootstrap.ps1 を dot-source している' -Tag 'ui' {
+
+    $screenCases = @(
+        @{ Label='Tracker';      Ps='client/WorkTimeTracker.ps1' }
+        @{ Label='WbsInput';     Ps='client/WbsInput.ps1' }
+        @{ Label='ReportViewer'; Ps='reports/ReportViewer.ps1' }
+    )
+
+    It '<label>: Start-AppScreen を呼んでいれば Bootstrap.ps1 も dot-source している' -TestCases $screenCases {
+        param($Label, $Ps)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Ps) -Raw
+        if ($text -notmatch 'Start-AppScreen') { return }   # このスクリーン移動を実装していないなら対象外
+        $text | Should -Match "\. \(Join-Path \`$libDir 'Bootstrap\.ps1'\)" `
+            -Because "$Label : Start-AppScreen を呼んでいるのに Bootstrap.ps1 を dot-source していません (実行時に「用語が認識されません」で落ちます)"
+    }
+}
+
+# WPF の Opacity は子要素 (テキスト含む) に多重にカスケードするため、
+# ControlTemplate の disabled トリガーで Border.Opacity を下げると、背景色によっては
+# ボタンが背景に溶けて見えなくなる (WbsInput の「送信」ボタンでコントラスト比 1.5:1 まで
+# 低下していた実例あり)。無効時は明示的な色 (#f1f5f9/#94a3b8 など) を指定する方式に統一する。
+Describe '無効ボタンの見た目は Opacity ではなく明示色で表現している' -Tag 'ui' {
+
+    $paletteXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml',
+        'client/ConfigDialog.xaml',
+        'client/UserPrefsDialog.xaml'
+    )
+
+    It '<_>: IsEnabled=False トリガーが Opacity を使っていない' -TestCases ($paletteXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $offenders = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($m in ([regex]::Matches($text, '<Trigger Property="IsEnabled" Value="False">[\s\S]{0,150}?</Trigger>'))) {
+            if ($m.Value -match 'Property="Opacity"') { $offenders.Add($m.Value) }
+        }
+        $offenders.Count | Should -Be 0 -Because "$Rel : IsEnabled=False で Opacity を使っている箇所があります (背景に溶けて見えなくなる)"
+    }
+}
+
+# E950 は Segoe MDL2 Assets では「チップ/回路基板」のような見た目で、
+# 「Tools (レンチ)」を意図した用途 (管理者ボタン等) には向かない。
+# 正しいレンチのグリフは E90F (Repair)。誤ったグリフの再導入を防ぐ。
+Describe 'アイコングリフの既知の誤用が復活していない' -Tag 'ui' {
+
+    $iconXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml',
+        'client/ConfigDialog.xaml',
+        'client/UserPrefsDialog.xaml'
+    )
+
+    It '<_>: E950 (チップに見える誤字) が使われていない' -TestCases ($iconXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $text | Should -Not -Match '&#xE950;' -Because "$Rel : E950 は Segoe MDL2 Assets で「チップ」に見えるグリフです。管理者/ツール用途には E90F (Repair=レンチ) を使ってください"
+    }
+}

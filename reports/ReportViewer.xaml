@@ -178,7 +178,7 @@
                     <Button x:Name="AdminBtn" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"
                             ToolTip="マスタ編集 / 他者データ編集">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>

@@ -83,6 +83,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'AdminDialog.ps1')
 . (Join-Path $libDir 'UserPrefs.ps1')
 . (Join-Path $libDir 'UserPrefsDialog.ps1')
+. (Join-Path $libDir 'Bootstrap.ps1')
 
 # ---- 起動スモークテスト ----
 # 設定ダイアログやユーザーの local_store に依存せず、実際に MainWindow を表示して

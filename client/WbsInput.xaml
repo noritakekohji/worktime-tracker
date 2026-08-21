@@ -81,7 +81,8 @@
                                 <Setter TargetName="b" Property="Background" Value="#e2e8f0"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="b" Property="Background" Value="#f1f5f9"/>
+                                <Setter Property="Foreground" Value="#94a3b8"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -104,7 +105,8 @@
                                 <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="b" Property="Background" Value="#94a3b8"/>
+                                <Setter Property="Foreground" Value="#e2e8f0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -146,7 +148,7 @@
                     <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
                     <Button x:Name="AdminBtn" Margin="6,0,0,0" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>

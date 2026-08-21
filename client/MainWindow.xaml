@@ -212,7 +212,7 @@
                     <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
                     <Button x:Name="AdminBtn" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
