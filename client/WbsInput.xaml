@@ -50,6 +50,70 @@
         </Style>
         <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
              混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
+        <!-- ヘッダー/フッターの濃色地に置くボタン。個別に Background/Foreground を
+             上書きする旧方式は、ボタン背景とヘッダー背景の明度差が WCAG 1.4.11
+             (非テキストコントラスト 3:1 以上推奨) を満たさず、ボタンがヘッダーに
+             溶けて見えなくなっていた (実機スクリーンショットで報告あり)。
+             色分けは文字色ではなくアイコンで表現し、文字は白に統一する -->
+        <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#64748b"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#94a3b8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#7c8ba1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#556174"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#334155"/>
+                                <Setter Property="Foreground" Value="#64748b"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HeaderButtonPrimary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#0369a1"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#0284c7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#0284c7"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#075985"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#334155"/>
+                                <Setter Property="Foreground" Value="#64748b"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="IconGlyph" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
             <Setter Property="FontWeight" Value="Normal"/>
@@ -133,20 +197,20 @@
             <DockPanel>
                 <!-- 右端: ナビゲーションボタン -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="TrackerNavBtn" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く">
+                    <Button x:Name="TrackerNavBtn" Margin="0,0,4,0" Style="{StaticResource HeaderButton}" ToolTip="日次入力画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE121;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="日次入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ReportNavBtn" Margin="0,0,8,0" Background="#1e293b" Foreground="#38bdf8" BorderBrush="#334155" ToolTip="集計レポート画面を開く">
+                    <Button x:Name="ReportNavBtn" Margin="0,0,8,0" Style="{StaticResource HeaderButton}" ToolTip="集計レポート画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE9F9;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="レポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
-                    <Button x:Name="AdminBtn" Margin="6,0,0,0" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569">
+                    <Button x:Name="AdminBtn" Margin="6,0,0,0" Visibility="Collapsed" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -168,14 +232,14 @@
                     <ComboBox x:Name="YearCombo" Width="68" Margin="0,0,4,0" Background="White"/>
                     <Label Content="月:"/>
                     <ComboBox x:Name="MonthCombo" Width="52" Margin="0,0,12,0" Background="White"/>
-                    <Button x:Name="LoadBtn" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569" Margin="4,0,0,0"
+                    <Button x:Name="LoadBtn" Style="{StaticResource HeaderButton}" Margin="4,0,0,0"
                             ToolTip="ローカルから読込のみ">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="PullBtn" Background="#0369a1" Foreground="White" BorderBrush="#0284c7" Margin="4,0,0,0"
+                    <Button x:Name="PullBtn" Style="{StaticResource HeaderButtonPrimary}" Margin="4,0,0,0"
                             ToolTip="Gitlab からマスタ + 自分の当月実績を取得 → ローカルから読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>

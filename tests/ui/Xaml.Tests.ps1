@@ -417,3 +417,59 @@ Describe 'アイコングリフの既知の誤用が復活していない' -Tag 
         $text | Should -Not -Match '&#xE950;' -Because "$Rel : E950 は Segoe MDL2 Assets で「チップ」に見えるグリフです。管理者/ツール用途には E90F (Repair=レンチ) を使ってください"
     }
 }
+
+# ヘッダー/フッターのボタンが背景色に溶けて見えなくなっていた実例 (2026-08-22)。
+# 文字色のコントラストだけでなく、ボタン自体の背景色がヘッダー背景色から
+# 十分に浮き上がっているか (WCAG 1.4.11 非テキストコントラスト、目安 3:1 以上) も検証する。
+Describe 'ヘッダーボタンは背景から十分にコントラストが取れている (WCAG 1.4.11)' -Tag 'ui' {
+
+    $headerXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml'
+    )
+
+    It '<_>: HeaderButton / HeaderButtonPrimary スタイルが定義され、ヘッダー背景と 3:1 以上のコントラストを持つ' -TestCases ($headerXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        function Get-Luminance {
+            param([string]$Hex)
+            $h = $Hex.TrimStart('#')
+            $ch = @(
+                ([Convert]::ToInt32($h.Substring(0, 2), 16) / 255.0),
+                ([Convert]::ToInt32($h.Substring(2, 2), 16) / 255.0),
+                ([Convert]::ToInt32($h.Substring(4, 2), 16) / 255.0)
+            )
+            $lin = foreach ($c in $ch) {
+                if ($c -le 0.03928) { $c / 12.92 } else { [Math]::Pow((($c + 0.055) / 1.055), 2.4) }
+            }
+            (0.2126 * $lin[0]) + (0.7152 * $lin[1]) + (0.0722 * $lin[2])
+        }
+        function Get-ContrastRatio {
+            param([string]$A, [string]$B)
+            $la = Get-Luminance $A; $lb = Get-Luminance $B
+            $hi = [Math]::Max($la, $lb); $lo = [Math]::Min($la, $lb)
+            ($hi + 0.05) / ($lo + 0.05)
+        }
+
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $text | Should -Match 'x:Key="HeaderButton"' -Because "$Rel : ヘッダーボタン共通スタイルが見つかりません"
+
+        $headerBg = '#0f172a'
+        foreach ($styleName in @('HeaderButton', 'HeaderButtonPrimary')) {
+            $m = [regex]::Match($text, ('x:Key="{0}"[\s\S]{{0,400}}?<Setter Property="Background" Value="(#[0-9a-fA-F]{{6}})"' -f $styleName))
+            $m.Success | Should -Be $true -Because "$Rel : $styleName の Background 定義が見つかりません"
+            $ratio = Get-ContrastRatio $m.Groups[1].Value $headerBg
+            $ratio | Should -BeGreaterOrEqual 3.0 -Because ("$Rel : $styleName の背景 {0} はヘッダー背景に対し {1:N2}:1 しかありません (3:1 以上が目安)" -f $m.Groups[1].Value, $ratio)
+        }
+    }
+
+    It '<_>: 画面遷移/ユーティリティボタンが個別の Background 上書きに戻っていない' -TestCases ($headerXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $offenders = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($m in ([regex]::Matches($text, '<Button x:Name="(TrackerNavBtn|WbsNavBtn|ReportNavBtn|AdminBtn|UserPrefsBtn|SettingsBtn|ReloadBtn|LoadBtn|LoadAllBtn|PullBtn|OpenFolderBtn)"[^>]*>'))) {
+            if ($m.Value -match 'Background="#') { $offenders.Add($m.Groups[1].Value) }
+        }
+        $offenders.Count | Should -Be 0 -Because ("$Rel : ヘッダーボタンが Style ではなく個別 Background に戻っています: " + ($offenders -join ', '))
+    }
+}
