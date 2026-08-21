@@ -69,6 +69,15 @@
         </Style>
 
         <!-- 標準ボタン (ソフトグレー/ライトミント) -->
+        <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
+             混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
+        <Style x:Key="IconGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Padding" Value="12,5"/>
@@ -188,11 +197,37 @@
             <DockPanel>
                 <!-- 右側: 画面切り替え & 管理機能ボタン群 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="WbsNavBtn" Content="📊 WBS入力" Margin="0,0,4,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS形式の実績入力画面を開く"/>
-                    <Button x:Name="ReportNavBtn" Content="📈 レポート" Margin="0,0,12,0" Background="#1e293b" Foreground="#38bdf8" BorderBrush="#334155" ToolTip="集計レポート画面を開く"/>
-                    <Button x:Name="AdminBtn" Content="🛠 管理者" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"/>
-                    <Button x:Name="UserPrefsBtn" Content="⭐ お気に入り" Background="#334155" Foreground="White" BorderBrush="#475569"/>
-                    <Button x:Name="SettingsBtn" Content="⚙ 設定" Background="#334155" Foreground="White" BorderBrush="#475569"/>
+                    <Button x:Name="WbsNavBtn" Margin="0,0,4,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS形式の実績入力画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="WBS入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ReportNavBtn" Margin="0,0,12,0" Background="#1e293b" Foreground="#38bdf8" BorderBrush="#334155" ToolTip="集計レポート画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9F9;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="レポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
+                    <Button x:Name="AdminBtn" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="UserPrefsBtn" Background="#334155" Foreground="White" BorderBrush="#475569">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE734;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="お気に入り" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsBtn" Background="#334155" Foreground="White" BorderBrush="#475569">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="設定" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 中央右: 年月選択 & 読込/取得 -->
@@ -201,10 +236,20 @@
                     <ComboBox x:Name="YearCombo" Width="84"/>
                     <TextBlock Text="/" Margin="4,0" Foreground="#94a3b8"/>
                     <ComboBox x:Name="MonthCombo" Width="64"/>
-                    <Button x:Name="ReloadBtn" Content="📋 読込" Margin="8,0,0,0" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
-                            ToolTip="ローカルから当月データを再読込"/>
-                    <Button x:Name="PullBtn" Content="📥 取得" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0284c7"
-                            ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込"/>
+                    <Button x:Name="ReloadBtn" Margin="8,0,0,0" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
+                            ToolTip="ローカルから当月データを再読込">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PullBtn" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0284c7"
+                            ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="取得" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 左側: ログインユーザー & ステータス
@@ -212,7 +257,7 @@
                 <DockPanel VerticalAlignment="Center">
                     <Border DockPanel.Dock="Left" Background="#1e293b" CornerRadius="20" Padding="14,6" BorderBrush="#334155" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="👤" FontSize="15" Margin="0,0,8,0"/>
+                            <TextBlock Text="👤" FontSize="16" Margin="0,0,8,0"/>
                             <TextBlock x:Name="CurrentMemberText" Text="" FontWeight="Bold" FontSize="14" Foreground="#34d399"/>
                         </StackPanel>
                     </Border>
@@ -248,7 +293,7 @@
                     <Border Background="#1e293b" CornerRadius="8" Padding="12,6" Margin="0,0,8,0" BorderBrush="#334155" BorderThickness="1">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="📅 選択日" Foreground="#94a3b8" Margin="0,0,8,0" FontWeight="Bold"/>
-                            <TextBlock x:Name="HoursDayText" Text="0.0 h" FontWeight="Bold" FontSize="15" Foreground="White"/>
+                            <TextBlock x:Name="HoursDayText" Text="0.0 h" FontWeight="Bold" FontSize="13" Foreground="White"/>
                         </StackPanel>
                     </Border>
                     <Border Background="#1e293b" CornerRadius="8" Padding="12,6" Margin="0,0,12,0" BorderBrush="#334155" BorderThickness="1">
@@ -257,11 +302,26 @@
                             <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="White"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"/>
+                    <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="100">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <ProgressBar x:Name="SyncProgress" Width="120" Height="12" Margin="8,0,4,0" VerticalAlignment="Center"
                                  Visibility="Collapsed" IsIndeterminate="True" Foreground="#34d399"/>
-                    <Button x:Name="PushBtn" Content="📤 送信" Style="{StaticResource Primary}" MinWidth="100" Margin="6,2,3,2"/>
-                    <Button x:Name="OpenFolderBtn" Content="📂 開く" Margin="6,2,3,2" Background="#1e293b" Foreground="White" BorderBrush="#334155"/>
+                    <Button x:Name="PushBtn" Style="{StaticResource Primary}" MinWidth="100" Margin="6,2,3,2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="OpenFolderBtn" Margin="6,2,3,2" Background="#1e293b" Foreground="White" BorderBrush="#334155">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="開く" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -281,9 +341,24 @@
                             <TextBlock x:Name="ListTitle" Text="📋 当月エントリ一覧" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="DuplicateBtn" Content="⎘ 行を複製"/>
-                            <Button x:Name="EditRowBtn" Content="✎ 編集"/>
-                            <Button x:Name="DeleteRowBtn" Content="🗑 削除" Style="{StaticResource Danger}"/>
+                            <Button x:Name="DuplicateBtn">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="行を複製" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="EditRowBtn">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE70F;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="編集" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="DeleteRowBtn" Style="{StaticResource Danger}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </DockPanel>
 
@@ -374,9 +449,24 @@
                     <TextBlock x:Name="FormHeader" Text="✏ 新規エントリ" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top"/>
 
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                        <Button x:Name="ClearBtn" Content="✕ クリア"/>
-                        <Button x:Name="UpdateBtn" Content="✓ 更新" Style="{StaticResource Warning}" Visibility="Collapsed" MinWidth="100"/>
-                        <Button x:Name="AddBtn" Content="＋ 追加" Style="{StaticResource Primary}" MinWidth="100"/>
+                        <Button x:Name="ClearBtn">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
+                                <TextBlock Text="クリア" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="UpdateBtn" Style="{StaticResource Warning}" Visibility="Collapsed" MinWidth="100">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"/>
+                                <TextBlock Text="更新" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AddBtn" Style="{StaticResource Primary}" MinWidth="100">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
+                                <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
 
                     <StackPanel>
@@ -385,8 +475,18 @@
                             <Button x:Name="PrevDayBtn" Content="◀" MinWidth="32" Margin="0,1,2,1" MinHeight="26" ToolTip="前日 (-1日)"/>
                             <DatePicker x:Name="EntryDate" Width="140"/>
                             <Button x:Name="NextDayBtn" Content="▶" MinWidth="32" Margin="2,1,4,1" MinHeight="26" ToolTip="翌日 (+1日)"/>
-                            <Button x:Name="TodayBtn" Content="📅 今日" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2"/>
-                            <Button x:Name="YesterdayBtn" Content="↩ 昨日" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2"/>
+                            <Button x:Name="TodayBtn" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="今日" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="YesterdayBtn" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE72B;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="昨日" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
 
                         <CheckBox x:Name="IsLeaveChk" Content="🏖 休暇 (プロジェクト/工程/タスク不要)"
@@ -410,7 +510,7 @@
                         <Border x:Name="TaskDescBorder" Margin="0,4,0,0" Padding="8,6" CornerRadius="4"
                                 Background="#fffbeb" BorderBrush="#fcd34d" BorderThickness="1"
                                 Visibility="Collapsed">
-                            <TextBlock x:Name="TaskDescText" TextWrapping="Wrap" FontSize="12" Foreground="#92400e"/>
+                            <TextBlock x:Name="TaskDescText" TextWrapping="Wrap" FontSize="11" Foreground="#92400e"/>
                         </Border>
 
                         <Label Content="作業カテゴリ" Margin="0,4,0,0"/>
@@ -418,7 +518,7 @@
 
                         <Label Content="工数 (時間)" Margin="0,4,0,0"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBox x:Name="HoursBox" Text="1.0" FontSize="15" FontWeight="Bold" Width="76"/>
+                            <TextBox x:Name="HoursBox" Text="1.0" FontSize="16" FontWeight="Bold" Width="76"/>
                             <Button x:Name="H025" Content="0.25" Style="{StaticResource QuickHour}" Tag="0.25" Margin="3,1,1,1"/>
                             <Button x:Name="H05"  Content="0.5"  Style="{StaticResource QuickHour}" Tag="0.5"  Margin="2,1"/>
                             <Button x:Name="H1"   Content="1"    Style="{StaticResource QuickHour}" Tag="1"    Margin="2,1"/>

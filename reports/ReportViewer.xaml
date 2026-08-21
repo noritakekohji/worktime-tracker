@@ -51,6 +51,15 @@
         </Style>
 
         <!-- ボタンの寸法・角丸・文字サイズは 3 画面で共通 (日次入力 / WBS 入力と同値) -->
+        <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
+             混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
+        <Style x:Key="IconGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Padding" Value="12,5"/>
@@ -153,23 +162,49 @@
             <DockPanel>
                 <!-- 右端: 画面切り替え & 管理 -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="TrackerNavBtn" Content="⏱ 日次入力" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く"/>
-                    <Button x:Name="WbsNavBtn" Content="📊 WBS入力" Margin="0,0,12,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS入力画面を開く"/>
-                    <Button x:Name="AdminBtn" Content="🛠 管理者" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"
-                            ToolTip="マスタ編集 / 他者データ編集"/>
+                    <Button x:Name="TrackerNavBtn" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE121;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="日次入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="WbsNavBtn" Margin="0,0,12,0" Background="#1e293b" Foreground="#60a5fa" BorderBrush="#334155" ToolTip="WBS入力画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="WBS入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
+                    <Button x:Name="AdminBtn" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"
+                            ToolTip="マスタ編集 / 他者データ編集">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 中央右: データ取得 (Tracker / WBS 入力と同じ位置・同じ配色) -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <Button x:Name="LoadAllBtn" Content="📋 読込" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
-                            ToolTip="ローカルから全データ再読込"/>
-                    <Button x:Name="ReloadBtn" Content="📥 取得" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0284c7"
-                            ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込"/>
+                    <Button x:Name="LoadAllBtn" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569"
+                            ToolTip="ローカルから全データ再読込">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ReloadBtn" Margin="4,0,0,0" Background="#0369a1" Foreground="White" BorderBrush="#0284c7"
+                            ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="取得" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 左: 画面名 + 集計サマリ (長い場合は "…" で省略) -->
                 <DockPanel VerticalAlignment="Center">
-                    <TextBlock DockPanel.Dock="Left" Text="📊 WorkTime Report" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                    <TextBlock DockPanel.Dock="Left" Text="📊 WorkTime Report" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                     <StackPanel Margin="24,0,0,0" VerticalAlignment="Center">
                         <TextBlock x:Name="SummaryText" Foreground="#38bdf8" FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis"
@@ -198,8 +233,18 @@
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="ApplyBtn"  Content="🔍 フィルタ適用" Background="#0f766e" Foreground="White" BorderBrush="#0d9488"/>
-                    <Button x:Name="ExportBtn" Content="📤 CSV エクスポート" Style="{StaticResource Primary}" MinWidth="150" Margin="4,0,0,0"/>
+                    <Button x:Name="ApplyBtn" Background="#0f766e" Foreground="White" BorderBrush="#0d9488">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE71C;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="フィルタ適用" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ExportBtn" Style="{StaticResource Primary}" MinWidth="150" Margin="4,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="CSV エクスポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -216,9 +261,24 @@
                     <DatePicker x:Name="ToDate" Width="140"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
-                    <Button x:Name="PeriodThisMonthBtn" Content="📅 当月"  Padding="10,2" ToolTip="今月の 1 日 〜 月末"/>
-                    <Button x:Name="PeriodPrevMonthBtn" Content="📅 前月"  Padding="10,2" ToolTip="先月の 1 日 〜 月末"/>
-                    <Button x:Name="PeriodThisFYBtn"    Content="📅 今年度" Padding="10,2" ToolTip="4 月 1 日 〜 翌 3 月末 (会計年度)"/>
+                    <Button x:Name="PeriodThisMonthBtn" Padding="10,2" ToolTip="今月の 1 日 〜 月末">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="当月" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PeriodPrevMonthBtn" Padding="10,2" ToolTip="先月の 1 日 〜 月末">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="前月" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PeriodThisFYBtn" Padding="10,2" ToolTip="4 月 1 日 〜 翌 3 月末 (会計年度)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="今年度" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
                     <Label Content="会社:"/>
@@ -296,7 +356,12 @@
                                             <ComboBoxItem Content="50"/>
                                             <ComboBoxItem Content="全件"/>
                                         </ComboBox>
-                                        <Button x:Name="ChartRedrawBtn" Content="🔄 再描画" Margin="14,0,0,0"/>
+                                        <Button x:Name="ChartRedrawBtn" Margin="14,0,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE895;" Style="{StaticResource IconGlyph}"/>
+                                                <TextBlock Text="再描画" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </Border>
                                 <Border Background="{StaticResource Surface}" CornerRadius="8" BorderBrush="{StaticResource Border}" BorderThickness="1">
@@ -341,7 +406,12 @@
                     <TextBox x:Name="LoadOverThresholdTxt" Width="60" Text="45" VerticalAlignment="Center" Margin="4,0,12,0"/>
                     <Label Content="目標(週):" VerticalAlignment="Center"/>
                     <TextBox x:Name="LoadTargetTxt" Width="60" Text="40" VerticalAlignment="Center" Margin="4,0,12,0"/>
-                    <Button x:Name="LoadRefreshBtn" Content="🔄 再計算" Padding="8,2"/>
+                    <Button x:Name="LoadRefreshBtn" Padding="8,2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE895;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="再計算" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="▼ メンバー × 週 稼働マトリクス (赤=しきい値超 / 黄=未入力日あり)"

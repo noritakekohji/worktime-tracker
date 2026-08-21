@@ -116,13 +116,6 @@ Describe 'XAML パース' -Tag 'ui' {
 # (アクセント色は画面を見分けるためのものなので対象外)。
 Describe '共通カラートークンが全画面で一致' -Tag 'ui' {
 
-    $expected = @{
-        'Bg'       = '#f8fafc'
-        'Surface'  = '#ffffff'
-        'Surface2' = '#f1f5f9'
-        'Border'   = '#cbd5e1'
-        'Text'     = '#0f172a'
-    }
     $tokenCases = @(
         @{ Label='Tracker';         Xaml='client/MainWindow.xaml' }
         @{ Label='WbsInput';        Xaml='client/WbsInput.xaml' }
@@ -133,6 +126,15 @@ Describe '共通カラートークンが全画面で一致' -Tag 'ui' {
 
     It '<label>: Bg / Surface / Surface2 / Border / Text が共通値' -TestCases $tokenCases {
         param($Label, $Xaml)
+        # Pester v5 の -TestCases It は Run フェーズで実行され、Describe 直下の
+        # プレーン変数 (Discovery フェーズのみ) を参照できない。It 内で定義する。
+        $expected = @{
+            'Bg'       = '#f8fafc'
+            'Surface'  = '#ffffff'
+            'Surface2' = '#f1f5f9'
+            'Border'   = '#cbd5e1'
+            'Text'     = '#0f172a'
+        }
         $text = Get-Content -LiteralPath (Resolve-Path-Local $Xaml) -Raw
         $mismatch = @()
         foreach ($key in $expected.Keys) {
@@ -278,5 +280,71 @@ Describe 'PS の FindName 参照と XAML の x:Name が整合' -Tag 'ui' {
         $uiNames = Get-PsUiMemberReferences $Ps
         $missing = @($uiNames | Where-Object { $registered -notcontains $_ })
         $missing | Should -Be @() -Because ("$Label : FindName していない要素を `$ui 経由で参照しています: " + ($missing -join ', '))
+    }
+}
+
+# ボタンアイコンは Segoe MDL2 Assets (IconGlyph スタイル) に統一している。
+# 絵文字は環境によって色付き/モノクロが混在するため、Content に絵文字を直書きする
+# ボタンが復活していないかを回帰的に検出する (◀▶▲▼ など色のない幾何学記号は対象外)。
+Describe 'ボタンアイコンは絵文字直書きに戻っていない' -Tag 'ui' {
+
+    $iconXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml',
+        'client/ConfigDialog.xaml',
+        'client/UserPrefsDialog.xaml'
+    )
+
+    It '<_>: Button の Content に絵文字 (色付きピクトグラム) が直書きされていない' -TestCases ($iconXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $offenders = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($m in ([regex]::Matches($text, '<Button\b[\s\S]*?/>|<Button\b[\s\S]*?</Button>'))) {
+            $cm = [regex]::Match($m.Value, 'Content="([^"]*)"')
+            if (-not $cm.Success -or $cm.Groups[1].Value.Length -eq 0) { continue }
+            $cp = [int][char]$cm.Groups[1].Value[0]
+            # U+1F000 以上、または装飾用記号 (Dingbats/Misc Symbols 0x2190-0x2BFF) は
+            # 色付きピクトグラムとして絵文字フォント任せになりやすいため対象。
+            # 幾何学図形 (▲▼◀▶ = U+25xx) は元々モノクロなので対象外。
+            if ($cp -ge 0x1F000 -or ($cp -ge 0x2190 -and $cp -le 0x2BFF -and $cp -notin 0x25A0..0x25FF)) {
+                $offenders.Add($cm.Groups[1].Value)
+            }
+        }
+        $offenders | Should -Be @() -Because ("$Rel : Content に絵文字が直書きされたボタンがあります (IconGlyph 化してください): " + ($offenders -join ', '))
+    }
+
+    It '<_>: IconGlyph スタイルが定義されている' -TestCases ($iconXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $text | Should -Match 'x:Key="IconGlyph"' -Because "$Rel : ボタンアイコン用の共通スタイルが見つかりません"
+        $text | Should -Match 'FontFamily.*Segoe MDL2 Assets' -Because "$Rel : IconGlyph は Segoe MDL2 Assets を使う想定です"
+    }
+}
+
+# フォントサイズは 11 (補助) / 13 (本文) / 16 (見出し) の 3 段階 + アイコングリフ専用の 14px
+# だけに絞っている。新しいサイズが無秩序に増えるのを防ぐ回帰テスト。
+Describe 'フォントサイズが規定の段階に収まっている' -Tag 'ui' {
+
+    $sizeXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml',
+        'client/ConfigDialog.xaml',
+        'client/UserPrefsDialog.xaml'
+    )
+    It '<_>: FontSize が 11/13/14(アイコン)/16/22 以外を使っていない' -TestCases ($sizeXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        # Pester v5 の -TestCases It は Run フェーズで実行され、Describe 直下の
+        # プレーン変数 (Discovery フェーズのみ) を参照できない。It 内で定義する。
+        # 22 はダッシュボード KPI 数値など、コード側 (ReportViewer.ps1) で動的生成する
+        # 強調表示専用の最上位ティア。XAML には現れない想定だが許容はしておく。
+        $allowed = @(11, 13, 14, 16, 22)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $sizes = @([regex]::Matches($text, 'FontSize="(\d+)"') | ForEach-Object { [int]$_.Groups[1].Value } | Sort-Object -Unique)
+        $unexpected = @($sizes | Where-Object { $allowed -notcontains $_ })
+        $unexpected | Should -Be @() -Because ("$Rel : 想定外の FontSize があります (11/13/16 いずれかに寄せてください): " + ($unexpected -join ', '))
     }
 }

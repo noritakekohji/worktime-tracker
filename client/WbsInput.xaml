@@ -48,6 +48,15 @@
             <Setter Property="MinHeight" Value="28"/>
             <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
+        <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
+             混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
+        <Style x:Key="IconGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Padding" Value="12,5"/>
@@ -122,14 +131,30 @@
             <DockPanel>
                 <!-- 右端: ナビゲーションボタン -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="TrackerNavBtn" Content="⏱ 日次入力" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く"/>
-                    <Button x:Name="ReportNavBtn" Content="📈 レポート" Margin="0,0,8,0" Background="#1e293b" Foreground="#38bdf8" BorderBrush="#334155" ToolTip="集計レポート画面を開く"/>
-                    <Button x:Name="AdminBtn" Content="🛠 管理者" Margin="6,0,0,0" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569"/>
+                    <Button x:Name="TrackerNavBtn" Margin="0,0,4,0" Background="#1e293b" Foreground="#34d399" BorderBrush="#334155" ToolTip="日次入力画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE121;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="日次入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ReportNavBtn" Margin="0,0,8,0" Background="#1e293b" Foreground="#38bdf8" BorderBrush="#334155" ToolTip="集計レポート画面を開く">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9F9;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="レポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
+                    <Button x:Name="AdminBtn" Margin="6,0,0,0" Visibility="Collapsed" Background="#334155" Foreground="White" BorderBrush="#475569">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- 左側・中央: プロジェクト・年月・アクション -->
                 <WrapPanel VerticalAlignment="Center">
-                    <TextBlock Text="📊 WBS 実績入力" FontSize="17" FontWeight="Bold"
+                    <TextBlock Text="📊 WBS 実績入力" FontSize="16" FontWeight="Bold"
                                Foreground="White" VerticalAlignment="Center" Margin="0,0,18,0"/>
                     <Label Content="プロジェクト:"/>
                     <ComboBox x:Name="ProjectCombo" Width="260" Margin="0,0,12,0"
@@ -141,10 +166,20 @@
                     <ComboBox x:Name="YearCombo" Width="68" Margin="0,0,4,0" Background="White"/>
                     <Label Content="月:"/>
                     <ComboBox x:Name="MonthCombo" Width="52" Margin="0,0,12,0" Background="White"/>
-                    <Button x:Name="LoadBtn"  Content="📋 読込" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569" Margin="4,0,0,0"
-                            ToolTip="ローカルから読込のみ"/>
-                    <Button x:Name="PullBtn"  Content="📥 取得" Background="#0369a1" Foreground="White" BorderBrush="#0284c7" Margin="4,0,0,0"
-                            ToolTip="Gitlab からマスタ + 自分の当月実績を取得 → ローカルから読込"/>
+                    <Button x:Name="LoadBtn" Background="#1e293b" Foreground="#e2e8f0" BorderBrush="#475569" Margin="4,0,0,0"
+                            ToolTip="ローカルから読込のみ">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PullBtn" Background="#0369a1" Foreground="White" BorderBrush="#0284c7" Margin="4,0,0,0"
+                            ToolTip="Gitlab からマスタ + 自分の当月実績を取得 → ローカルから読込">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="取得" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </WrapPanel>
             </DockPanel>
         </Border>
@@ -160,7 +195,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock x:Name="StatusText" Text="プロジェクトと月を選択して「読込」を押してください"
-                               Foreground="#fef08a" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#fef08a" FontSize="11" FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                     <TextBlock x:Name="RemoteNoticeText" Visibility="Collapsed" Foreground="#fef08a" FontWeight="Bold" FontSize="11"
@@ -175,10 +210,20 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <ProgressBar x:Name="SyncProgress" Width="120" Height="12" Margin="8,0,4,0" VerticalAlignment="Center"
                                  Visibility="Collapsed" IsIndeterminate="True" Foreground="#34d399"/>
-                    <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"/>
-                    <Button x:Name="PushBtn" Content="📤 送信" Style="{StaticResource Primary}"
+                    <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="100">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PushBtn" Style="{StaticResource Primary}"
                             MinWidth="100" Margin="6,2,3,2"
-                            ToolTip="ローカル保存 + Gitlabへ送信 (gitlabモードのみ有効)"/>
+                            ToolTip="ローカル保存 + Gitlabへ送信 (gitlabモードのみ有効)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -199,8 +244,13 @@
                     <TextBlock DockPanel.Dock="Top" Text="📁 WBS 構成ツリー" FontWeight="Bold"
                                Foreground="{StaticResource EmeraldD}" Margin="0,0,0,8"/>
                     <Button DockPanel.Dock="Bottom" x:Name="AddRowBtn"
-                            Content="＋ 選択タスクに行を追加" IsEnabled="False" Margin="0,8,0,0"
-                            ToolTip="選択した工程/タスクグループに新規WBS項目を追加"/>
+                            IsEnabled="False" Margin="0,8,0,0"
+                            ToolTip="選択した工程/タスクグループに新規WBS項目を追加">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
+                            <TextBlock Text="選択タスクに行を追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                         <TreeView x:Name="WbsTree" ItemContainerStyle="{StaticResource TreeItemStyle}"
                                   Background="Transparent" BorderThickness="0"/>
@@ -230,7 +280,12 @@
                                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                     </DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                        <Button x:Name="DelRowBtn" Content="🗑 選択行を削除" IsEnabled="False" Padding="8,2" Margin="0,0,8,0"/>
+                        <Button x:Name="DelRowBtn" IsEnabled="False" Padding="8,2" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
+                                <TextBlock Text="選択行を削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <CheckBox x:Name="ShowDoneChk" Content="完了/中止も表示" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock x:Name="FilterStatusText" VerticalAlignment="Center"
                                    Foreground="{StaticResource Muted}" FontSize="11"/>
@@ -254,7 +309,7 @@
                               AlternatingRowBackground="#f8fafc"
                               GridLinesVisibility="All" HorizontalGridLinesBrush="#e2e8f0" VerticalGridLinesBrush="#e2e8f0"
                               BorderBrush="{StaticResource Border}" BorderThickness="1"
-                              RowHeight="30" ColumnHeaderHeight="34" FontSize="12"
+                              RowHeight="30" ColumnHeaderHeight="34" FontSize="13"
                               SelectionMode="Single" SelectionUnit="FullRow"
                               EnableColumnVirtualization="True"
                               EnableRowVirtualization="True"
@@ -346,11 +401,21 @@
                                           DisplayMemberPath="name" SelectedValuePath="code"
                                           IsEditable="True" IsTextSearchEnabled="True" TextSearch.TextPath="name"/>
                                 <Label Grid.Column="2" Content="工数:" Margin="8,0,4,0" Foreground="{StaticResource Muted}"/>
-                                <TextBox Grid.Column="3" x:Name="TaskEntryHours" TextAlignment="Right" Text="1.0"/>
+                                <TextBox Grid.Column="3" x:Name="TaskEntryHours" TextAlignment="Right" Text="1.0" FontSize="16" FontWeight="Bold"/>
                             </Grid>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button x:Name="TaskEntryAddBtn" Content="＋ 追加" Style="{StaticResource Primary}" MinWidth="80"/>
-                                <Button x:Name="TaskEntryDelBtn" Content="🗑 削除" Margin="6,2,0,2" IsEnabled="False"/>
+                                <Button x:Name="TaskEntryAddBtn" Style="{StaticResource Primary}" MinWidth="80">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
+                                        <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="TaskEntryDelBtn" Margin="6,2,0,2" IsEnabled="False">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
+                                        <TextBlock Text="削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -363,7 +428,7 @@
                               AlternatingRowBackground="#f8fafc"
                               GridLinesVisibility="All" HorizontalGridLinesBrush="#e2e8f0" VerticalGridLinesBrush="#e2e8f0"
                               BorderBrush="{StaticResource Border}" BorderThickness="1"
-                              RowHeight="28" ColumnHeaderHeight="32" FontSize="12"
+                              RowHeight="28" ColumnHeaderHeight="32" FontSize="13"
                               SelectionMode="Single">
                         <DataGrid.Resources>
                             <Style TargetType="DataGridColumnHeader">

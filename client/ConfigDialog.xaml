@@ -50,6 +50,15 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
+        <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
+             混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
+        <Style x:Key="IconGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="Margin" Value="3"/>
             <Setter Property="Padding" Value="14,6"/>
@@ -113,15 +122,30 @@
     <DockPanel Margin="20">
         <Border DockPanel.Dock="Top" Background="#064e3b" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
             <StackPanel>
-                <TextBlock Text="⚙ 接続設定" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                <TextBlock Text="保存先と同期方法を設定します" FontSize="12" Foreground="#a7f3d0" Margin="0,6,0,0"/>
+                <TextBlock Text="⚙ 接続設定" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="保存先と同期方法を設定します" FontSize="11" Foreground="#a7f3d0" Margin="0,6,0,0"/>
             </StackPanel>
         </Border>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button x:Name="TestBtn"   Content="🔌 接続テスト"/>
-            <Button x:Name="CancelBtn" Content="✕ キャンセル"/>
-            <Button x:Name="SaveBtn"   Content="💾 保存して開始" Style="{StaticResource Primary}" MinWidth="160"/>
+            <Button x:Name="TestBtn">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE701;" Style="{StaticResource IconGlyph}"/>
+                    <TextBlock Text="接続テスト" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="CancelBtn">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
+                    <TextBlock Text="キャンセル" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="160">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
+                    <TextBlock Text="保存して開始" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
         </StackPanel>
 
         <Border Style="{StaticResource Card}">
@@ -154,7 +178,12 @@
             <!-- ローカル保管先 (全モード共通・必須) -->
             <Label Grid.Row="2" Grid.Column="0" Content="ローカル保管先:"/>
             <TextBox Grid.Row="2" Grid.Column="1" x:Name="LocalRootBox"/>
-            <Button  Grid.Row="2" Grid.Column="2" x:Name="BrowseBtn" Content="📁 参照…"/>
+            <Button Grid.Row="2" Grid.Column="2" x:Name="BrowseBtn">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"/>
+                    <TextBlock Text="参照…" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
             <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
                        Text="master/ と data/ をここに保管 (デフォルト %LOCALAPPDATA%\worktime-tracker\store)"/>
 
@@ -183,11 +212,16 @@
             <!-- ログ出力先 (全モード共通・任意) -->
             <Label Grid.Row="13" Grid.Column="0" Content="ログ出力先:"/>
             <TextBox Grid.Row="13" Grid.Column="1" x:Name="LogDirBox"/>
-            <Button  Grid.Row="13" Grid.Column="2" x:Name="BrowseLogBtn" Content="📁 参照…"/>
+            <Button Grid.Row="13" Grid.Column="2" x:Name="BrowseLogBtn">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"/>
+                    <TextBlock Text="参照…" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
             <TextBlock Grid.Row="14" Grid.Column="1" Grid.ColumnSpan="2" FontSize="11"
                        Text="ブランクのとき出力なし (last_error.log / report_trace.log)"/>
 
-            <TextBlock Grid.Row="16" Grid.Column="0" Grid.ColumnSpan="3" x:Name="StatusText" FontSize="12" Margin="0,14,0,0" TextWrapping="Wrap"/>
+            <TextBlock Grid.Row="16" Grid.Column="0" Grid.ColumnSpan="3" x:Name="StatusText" FontSize="11" Margin="0,14,0,0" TextWrapping="Wrap"/>
         </Grid>
         </Border>
     </DockPanel>
