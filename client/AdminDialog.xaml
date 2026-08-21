@@ -4,23 +4,23 @@
     Title="🌸 管理者モード - マスタ編集"
     Height="760" Width="1200"
     WindowStartupLocation="CenterScreen"
-    Background="#831843"
+    Background="#0f172a"
     FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <SolidColorBrush x:Key="Bg"        Color="#fdf2f8"/>
+        <SolidColorBrush x:Key="Bg"        Color="#f8fafc"/>
         <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
-        <SolidColorBrush x:Key="Surface2"  Color="#fce7f3"/>
-        <SolidColorBrush x:Key="Border"    Color="#fbcfe8"/>
-        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#6b7280"/>
-        <SolidColorBrush x:Key="Sakura"    Color="#ec4899"/>
-        <SolidColorBrush x:Key="SakuraD"   Color="#db2777"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#f1f5f9"/>
+        <SolidColorBrush x:Key="Border"    Color="#cbd5e1"/>
+        <SolidColorBrush x:Key="Text"      Color="#0f172a"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#64748b"/>
+        <SolidColorBrush x:Key="Sakura"    Color="#be185d"/>
+        <SolidColorBrush x:Key="SakuraD"   Color="#9d174d"/>
         <SolidColorBrush x:Key="SakuraL"   Color="#fce7f3"/>
-        <SolidColorBrush x:Key="Soft"      Color="#fce7f3"/>
-        <SolidColorBrush x:Key="Rose"      Color="#fb7185"/>
+        <SolidColorBrush x:Key="Soft"      Color="#f1f5f9"/>
+        <SolidColorBrush x:Key="Rose"      Color="#e11d48"/>
 
         <Style TargetType="Label">
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -77,14 +77,14 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#fbcfe8"/>
+                                <Setter TargetName="b" Property="Background" Value="#e2e8f0"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#f9a8d4"/>
+                                <Setter TargetName="b" Property="Background" Value="#cbd5e1"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#f3f4f6"/>
-                                <Setter Property="Foreground" Value="#9ca3af"/>
+                                <Setter TargetName="b" Property="Background" Value="#f1f5f9"/>
+                                <Setter Property="Foreground" Value="#94a3b8"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -150,19 +150,19 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#831843" Padding="18,14">
+        <Border DockPanel.Dock="Top" Background="#0f172a" Padding="18,14">
             <DockPanel>
                 <TextBlock Text="🌸 マスタ編集" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
-                <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="#fbcfe8"/>
+                <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="#94a3b8"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                     <Button x:Name="ReloadBtn" Content="📋 再読込" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <Border DockPanel.Dock="Bottom" Background="#831843" Padding="18,14">
+        <Border DockPanel.Dock="Bottom" Background="#0f172a" Padding="18,14">
             <DockPanel>
-                <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#fbcfe8" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                     <Button x:Name="CloseBtn" Content="✕ 閉じる" Background="#9d174d" Foreground="White" BorderBrush="#9d174d"/>
                     <Button x:Name="SaveBtn" Content="💾 保存" Style="{StaticResource Primary}" MinWidth="100"
@@ -186,7 +186,7 @@
                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
                                   Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
-                                  AlternatingRowBackground="#fff1f7" GridLinesVisibility="None"
+                                  AlternatingRowBackground="#f8fafc" GridLinesVisibility="None"
                                   BorderBrush="{StaticResource Border}" BorderThickness="1"
                                   RowHeight="34" ColumnHeaderHeight="38" FontSize="13">
                             <DataGrid.Resources>
@@ -223,7 +223,7 @@
                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
                                   Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
-                                  AlternatingRowBackground="#fff1f7" GridLinesVisibility="None"
+                                  AlternatingRowBackground="#f8fafc" GridLinesVisibility="None"
                                   BorderBrush="{StaticResource Border}" BorderThickness="1"
                                   RowHeight="34" ColumnHeaderHeight="38" FontSize="13">
                             <DataGrid.Resources>
@@ -325,7 +325,7 @@
                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
                                   Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
-                                  AlternatingRowBackground="#fff1f7" GridLinesVisibility="None"
+                                  AlternatingRowBackground="#f8fafc" GridLinesVisibility="None"
                                   BorderBrush="{StaticResource Border}" BorderThickness="1"
                                   RowHeight="34" ColumnHeaderHeight="38" FontSize="13">
                             <DataGrid.Resources>
@@ -357,7 +357,7 @@
                                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   HeadersVisibility="Column"
                                   Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
-                                  AlternatingRowBackground="#fff1f7" GridLinesVisibility="None"
+                                  AlternatingRowBackground="#f8fafc" GridLinesVisibility="None"
                                   BorderBrush="{StaticResource Border}" BorderThickness="1"
                                   RowHeight="34" ColumnHeaderHeight="38" FontSize="13">
                             <DataGrid.Resources>
@@ -406,7 +406,7 @@
                                   HeadersVisibility="Column"
                                   Background="{StaticResource Surface}"
                                   RowBackground="{StaticResource Surface}"
-                                  AlternatingRowBackground="#fff1f7"
+                                  AlternatingRowBackground="#f8fafc"
                                   GridLinesVisibility="None"
                                   BorderBrush="{StaticResource Border}"
                                   BorderThickness="1"
@@ -454,7 +454,7 @@
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto"
                                  FontFamily="Consolas, Courier New" FontSize="12"
-                                 Background="#fffaf6" Foreground="{StaticResource Text}"
+                                 Background="#ffffff" Foreground="{StaticResource Text}"
                                  VerticalContentAlignment="Top" Margin="0,8,0,0"/>
                     </DockPanel>
                 </TabItem>

@@ -18,12 +18,12 @@
         <SolidColorBrush x:Key="Border"    Color="#cbd5e1"/>
         <SolidColorBrush x:Key="Text"      Color="#0f172a"/>
         <SolidColorBrush x:Key="TextMuted" Color="#64748b"/>
-        <SolidColorBrush x:Key="Emerald"   Color="#059669"/>
-        <SolidColorBrush x:Key="EmeraldD"  Color="#047857"/>
+        <SolidColorBrush x:Key="Emerald"   Color="#047857"/>
+        <SolidColorBrush x:Key="EmeraldD"  Color="#065f46"/>
         <SolidColorBrush x:Key="EmeraldL"  Color="#d1fae5"/>
         <SolidColorBrush x:Key="Soft"      Color="#ecfdf5"/>
         <SolidColorBrush x:Key="Sky"       Color="#0284c7"/>
-        <SolidColorBrush x:Key="Amber"     Color="#d97706"/>
+        <SolidColorBrush x:Key="Amber"     Color="#b45309"/>
         <SolidColorBrush x:Key="Rose"      Color="#e11d48"/>
 
         <Style TargetType="Label">
@@ -123,7 +123,7 @@
                                 <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#065f46"/>
+                                <Setter TargetName="b" Property="Background" Value="#064e3b"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="b" Property="Background" Value="#94a3b8"/>
@@ -287,6 +287,14 @@
                         </StackPanel>
                     </DockPanel>
 
+                    <!-- 一覧とその空状態メッセージを重ねる。0 件のときに「次に何をするか」を案内する -->
+                    <Grid>
+                    <TextBlock x:Name="EmptyListText" Panel.ZIndex="1"
+                               Visibility="Collapsed"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextAlignment="Center" TextWrapping="Wrap" Margin="24,60,24,0"
+                               FontSize="13" Foreground="{StaticResource TextMuted}"
+                               Text="この月の実績はまだありません。&#x0a;右のフォームから追加してください。"/>
                     <DataGrid x:Name="EntriesGrid"
                                AutoGenerateColumns="False"
                                IsReadOnly="True"
@@ -356,6 +364,7 @@
                             <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
+                    </Grid>
                 </DockPanel>
             </Border>
 

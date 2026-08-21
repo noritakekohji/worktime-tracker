@@ -371,7 +371,7 @@ $names = @(
     'EntryDate','PrevDayBtn','NextDayBtn','TodayBtn','YesterdayBtn','IsLeaveChk',
     'ProjectCombo','ProcessCombo','TaskGroupCombo','TaskCombo',
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
-    'EntriesGrid','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
+    'EntriesGrid','EmptyListText','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
     'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText','VersionText',
     'WbsNavBtn','ReportNavBtn'
 )
@@ -398,7 +398,14 @@ $Script:EditingItem = $null
 # 判定と加算は DataStore.ps1 の Test-IsLeaveEntry / Get-EntryHoursSum に集約している。
 function Update-HoursTotal {
     $ui.HoursTotalText.Text = '{0:N1} h' -f (Get-EntryHoursSum $Script:Entries)
+    Update-EmptyState
     Update-HoursDay
+}
+
+# 一覧が 0 件のときは白紙にせず、次にすべきことを案内する
+function Update-EmptyState {
+    if (-not $ui.EmptyListText) { return }
+    $ui.EmptyListText.Visibility = if ($Script:Entries.Count -eq 0) { 'Visible' } else { 'Collapsed' }
 }
 
 function Update-HoursDay {
@@ -1327,8 +1334,8 @@ $autoUpdateEnabled = if ($Script:Config.PSObject.Properties['auto_update_enabled
 Register-AutoUpdate -Window $Script:Window -Source $Script:Source -AppRoot (Split-Path $PSScriptRoot -Parent) `
                     -CurrentVersion $Script:AppVersion -Enabled $autoUpdateEnabled
 
-# ---- キーボードショートカット (A2) ----
-# Ctrl+S = 保存 / Ctrl+R = 再読込 / F5 = 再読込
+# ---- キーボードショートカット ----
+# Ctrl+S = 保存 / Ctrl+R, F5 = 再読込 / Enter = 追加 (編集中は更新) / Esc = クリア
 $Script:Window.Add_PreviewKeyDown({
     param($s, $e)
     $ctrl = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
@@ -1338,6 +1345,18 @@ $Script:Window.Add_PreviewKeyDown({
     } elseif ((($ctrl -and $e.Key -eq 'R') -or $e.Key -eq 'F5') -and $ui.ReloadBtn) {
         $ui.ReloadBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
         $e.Handled = $true
+    } elseif ($e.Key -eq 'Escape' -and $ui.ClearBtn) {
+        $ui.ClearBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    } elseif ($e.Key -eq 'Return' -and -not $ctrl) {
+        # 複数行入力できるコメント欄では改行を優先する
+        $focused = [System.Windows.Input.Keyboard]::FocusedElement
+        if ($focused -eq $ui.CommentBox) { return }
+        $target = if ($ui.UpdateBtn -and $ui.UpdateBtn.Visibility -eq 'Visible') { $ui.UpdateBtn } else { $ui.AddBtn }
+        if ($target) {
+            $target.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+            $e.Handled = $true
+        }
     }
 })
 

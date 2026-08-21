@@ -5,20 +5,20 @@
     Height="600" Width="640"
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
-    Background="#f6faf8"
+    Background="#f8fafc"
     FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <SolidColorBrush x:Key="Bg"        Color="#f6faf8"/>
+        <SolidColorBrush x:Key="Bg"        Color="#f8fafc"/>
         <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
-        <SolidColorBrush x:Key="Surface2"  Color="#ecfdf5"/>
-        <SolidColorBrush x:Key="Border"    Color="#cdebd6"/>
-        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
-        <SolidColorBrush x:Key="Muted"     Color="#6b7280"/>
-        <SolidColorBrush x:Key="Emerald"   Color="#10b981"/>
-        <SolidColorBrush x:Key="EmeraldD"  Color="#059669"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#f1f5f9"/>
+        <SolidColorBrush x:Key="Border"    Color="#cbd5e1"/>
+        <SolidColorBrush x:Key="Text"      Color="#0f172a"/>
+        <SolidColorBrush x:Key="Muted"     Color="#64748b"/>
+        <SolidColorBrush x:Key="Emerald"   Color="#047857"/>
+        <SolidColorBrush x:Key="EmeraldD"  Color="#065f46"/>
         <SolidColorBrush x:Key="EmeraldL"  Color="#a7f3d0"/>
 
         <Style TargetType="TextBlock">

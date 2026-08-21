@@ -111,6 +111,74 @@ Describe 'XAML パース' -Tag 'ui' {
     }
 }
 
+# 画面ごとにパレットが分岐すると「同じツールに見えない」状態に戻る。
+# 背景・枠線・文字色の共通トークンは全画面で同値であることを固定する
+# (アクセント色は画面を見分けるためのものなので対象外)。
+Describe '共通カラートークンが全画面で一致' -Tag 'ui' {
+
+    $expected = @{
+        'Bg'       = '#f8fafc'
+        'Surface'  = '#ffffff'
+        'Surface2' = '#f1f5f9'
+        'Border'   = '#cbd5e1'
+        'Text'     = '#0f172a'
+    }
+    $tokenCases = @(
+        @{ Label='Tracker';         Xaml='client/MainWindow.xaml' }
+        @{ Label='WbsInput';        Xaml='client/WbsInput.xaml' }
+        @{ Label='ReportViewer';    Xaml='reports/ReportViewer.xaml' }
+        @{ Label='AdminDialog';     Xaml='client/AdminDialog.xaml' }
+        @{ Label='UserPrefsDialog'; Xaml='client/UserPrefsDialog.xaml' }
+    )
+
+    It '<label>: Bg / Surface / Surface2 / Border / Text が共通値' -TestCases $tokenCases {
+        param($Label, $Xaml)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Xaml) -Raw
+        $mismatch = @()
+        foreach ($key in $expected.Keys) {
+            $m = [regex]::Match($text, ('x:Key="{0}"\s*Color="(#[0-9a-fA-F]{{6}})"' -f [regex]::Escape($key)))
+            if (-not $m.Success) { continue }   # そのトークンを持たない画面は対象外
+            if ($m.Groups[1].Value.ToLower() -ne $expected[$key]) {
+                $mismatch += ("{0}={1} (期待 {2})" -f $key, $m.Groups[1].Value, $expected[$key])
+            }
+        }
+        $mismatch | Should -Be @() -Because ("$Label : 共通トークンの値が他画面と違います: " + ($mismatch -join ', '))
+    }
+
+    It '白文字ボタンの背景はコントラスト比 4.5:1 以上' {
+        # WCAG AA / design-tokens.md の基準。ボタン文字は 12px 前後なので大文字例外は使えない
+        function Get-Luminance {
+            param([string]$Hex)
+            $h = $Hex.TrimStart('#')
+            # 各要素は括弧で囲む (囲まないと "x / 255.0, y" がカンマ優先で配列除算になる)
+            $ch = @(
+                ([Convert]::ToInt32($h.Substring(0, 2), 16) / 255.0),
+                ([Convert]::ToInt32($h.Substring(2, 2), 16) / 255.0),
+                ([Convert]::ToInt32($h.Substring(4, 2), 16) / 255.0)
+            )
+            $lin = foreach ($c in $ch) {
+                if ($c -le 0.03928) { $c / 12.92 } else { [Math]::Pow((($c + 0.055) / 1.055), 2.4) }
+            }
+            (0.2126 * $lin[0]) + (0.7152 * $lin[1]) + (0.0722 * $lin[2])
+        }
+        # 各画面の主ボタン (白文字) に使う色
+        $primaryColors = @{
+            'Tracker/WbsInput の主ボタン' = '#047857'
+            'Report の主ボタン'           = '#0369a1'
+            'Admin の主ボタン'            = '#be185d'
+            'Tracker の警告ボタン'        = '#b45309'
+            'Tracker の危険ボタン'        = '#e11d48'
+        }
+        $ng = @()
+        foreach ($name in $primaryColors.Keys) {
+            $l = Get-Luminance $primaryColors[$name]
+            $ratio = (1.0 + 0.05) / ($l + 0.05)
+            if ($ratio -lt 4.5) { $ng += ("{0} {1} = {2:N2}:1" -f $name, $primaryColors[$name], $ratio) }
+        }
+        $ng | Should -Be @() -Because ('白文字のコントラストが不足: ' + ($ng -join ', '))
+    }
+}
+
 # local_store のパスが長いと、フッタ左のテキストが幅を食ってボタンが画面外へ押し出されていた。
 # 「テキストは省略・ボタンは常に見える」を最小幅で検証する。
 Describe 'フッタは長いパスでもボタンが切れない' -Tag 'ui' {

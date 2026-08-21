@@ -323,7 +323,7 @@ foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','Pe
               'CaseAxisCombo','CaseAnalysisGrid','OpsAxisCombo','OpsAnalysisGrid',
               'CasePieCanvas','CasePieLegend','CaseBarCanvas',
               'OpsPieCanvas','OpsPieLegend','OpsBarCanvas',
-              'TrackerNavBtn','WbsNavBtn') {
+              'TrackerNavBtn','WbsNavBtn','EmptyDetailText') {
     $u[$n] = $win.FindName($n)
 }
 
@@ -701,6 +701,7 @@ function Apply-Filters {
     # 明細には休暇も残す (記録として見えている必要があるため)。
     # 一方、工数集計は休暇を除いた作業分だけで行う。
     $u.DetailGrid.ItemsSource = $rows
+    if ($u.EmptyDetailText) { $u.EmptyDetailText.Visibility = $(if ($rows.Count -eq 0) { 'Visible' } else { 'Collapsed' }) }
     $workRows = Get-WorkEntries $rows
     # 未入力検知は「休暇でも入力あり」として扱うため、休暇込みの行を別に保持する
     $Script:AllFilteredRows = $rows
@@ -764,35 +765,38 @@ function Build-Dashboard {
     $kpiPanel.Orientation = 'Horizontal'
     $kpiPanel.Margin = '0,0,0,18'
 
+    # 数値は本文色で統一する。色は状態 (成功/警告/エラー) にだけ使い、指標ごとの色分けはしない。
+    # 主指標 (総工数) だけアクセント色にして視線の起点を 1 つに絞る。
     $makeCard = {
-        param([string]$Title, [string]$Value, [string]$Color)
+        param([string]$Title, [string]$Value, [switch]$Primary)
         $b = New-Object System.Windows.Controls.Border
-        $b.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#f0f9ff')
-        $b.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#bae6fd')
+        $b.Background = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#f8fafc')
+        $b.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#cbd5e1')
         $b.BorderThickness = '1'
-        $b.CornerRadius = '8'
-        $b.Padding = '14'
+        $b.CornerRadius = '10'
+        $b.Padding = '16'
         $b.Margin = '0,0,10,10'
         $b.MinWidth = 160
         $sp = New-Object System.Windows.Controls.StackPanel
         $t1 = New-Object System.Windows.Controls.TextBlock
         $t1.Text = $Title; $t1.FontSize = 11
-        $t1.Foreground = [System.Windows.Media.Brushes]::SlateGray
+        $t1.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#64748b')
         $sp.Children.Add($t1) | Out-Null
         $t2 = New-Object System.Windows.Controls.TextBlock
         $t2.Text = $Value; $t2.FontSize = 22; $t2.FontWeight = 'Bold'
-        $t2.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($Color)
+        $numColor = if ($Primary) { '#0369a1' } else { '#0f172a' }
+        $t2.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom($numColor)
         $sp.Children.Add($t2) | Out-Null
         $b.Child = $sp
         return $b
     }
 
-    [void]$kpiPanel.Children.Add((& $makeCard '総工数'         ("{0:N1} h" -f $total)        '#0369a1'))
-    [void]$kpiPanel.Children.Add((& $makeCard 'メンバー数'     ("{0}" -f $memberCount)       '#059669'))
-    [void]$kpiPanel.Children.Add((& $makeCard 'プロジェクト数' ("{0}" -f $projectCount)      '#d97706'))
-    [void]$kpiPanel.Children.Add((& $makeCard '実績日数'       ("{0} 日" -f $dayCount)       '#7c3aed'))
-    [void]$kpiPanel.Children.Add((& $makeCard '日平均'         ("{0:N1} h/日" -f $avgPerDay) '#0891b2'))
-    [void]$kpiPanel.Children.Add((& $makeCard '一人平均'       ("{0:N1} h/人" -f $avgPerMember) '#db2777'))
+    [void]$kpiPanel.Children.Add((& $makeCard '総工数'         ("{0:N1} h" -f $total) -Primary))
+    [void]$kpiPanel.Children.Add((& $makeCard 'メンバー数'     ("{0}" -f $memberCount)))
+    [void]$kpiPanel.Children.Add((& $makeCard 'プロジェクト数' ("{0}" -f $projectCount)))
+    [void]$kpiPanel.Children.Add((& $makeCard '実績日数'       ("{0} 日" -f $dayCount)))
+    [void]$kpiPanel.Children.Add((& $makeCard '日平均'         ("{0:N1} h/日" -f $avgPerDay)))
+    [void]$kpiPanel.Children.Add((& $makeCard '一人平均'       ("{0:N1} h/人" -f $avgPerMember)))
     [void]$u.DashboardPanel.Children.Add($kpiPanel)
 
     # Top プロジェクト (上位 5)
@@ -2805,5 +2809,25 @@ if ($Script:Source.RemoteCtx) {
 $autoUpdateEnabled = if ($Script:Config.PSObject.Properties['auto_update_enabled']) { [bool]$Script:Config.auto_update_enabled } else { $true }
 Register-AutoUpdate -Window $win -Source $Script:Source -AppRoot (Split-Path $PSScriptRoot -Parent) `
                     -CurrentVersion $Script:AppVersion -Enabled $autoUpdateEnabled
+
+# ---- キーボードショートカット (日次入力 / WBS 入力と同じ割り当て) ----
+# Ctrl+R, F5 = 読込 / Enter = フィルタ適用 / Ctrl+E = CSV エクスポート
+$win.Add_PreviewKeyDown({
+    param($s, $e)
+    $ctrl = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+    if (((($ctrl -and $e.Key -eq 'R') -or $e.Key -eq 'F5')) -and $u.LoadAllBtn) {
+        $u.LoadAllBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    } elseif ($ctrl -and $e.Key -eq 'E' -and $u.ExportBtn) {
+        $u.ExportBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    } elseif ($e.Key -eq 'Return' -and -not $ctrl -and $u.ApplyBtn) {
+        # コンボボックスの入力確定を邪魔しないよう、ドロップダウンが開いている間は無視する
+        $focused = [System.Windows.Input.Keyboard]::FocusedElement
+        if ($focused -is [System.Windows.Controls.ComboBox] -and $focused.IsDropDownOpen) { return }
+        $u.ApplyBtn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))
+        $e.Handled = $true
+    }
+})
 
 [void]$win.ShowDialog()

@@ -4,21 +4,22 @@
     Title="WorkTime Report Viewer"
     Height="780" Width="1280"
     WindowStartupLocation="CenterScreen"
-    Background="#0c4a6e"
+    Background="#0f172a"
     FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <!-- 青パレット -->
-        <SolidColorBrush x:Key="Bg"        Color="#f0f9ff"/>
+        <!-- ベース (背景・枠線・文字色) は 3 画面共通のスレート系。
+             画面を見分けるアクセントだけ青にする (日次入力 / WBS 入力は緑、管理者は赤紫) -->
+        <SolidColorBrush x:Key="Bg"        Color="#f8fafc"/>
         <SolidColorBrush x:Key="Surface"   Color="#ffffff"/>
-        <SolidColorBrush x:Key="Surface2"  Color="#e0f2fe"/>
-        <SolidColorBrush x:Key="Border"    Color="#bae6fd"/>
-        <SolidColorBrush x:Key="Text"      Color="#1f2937"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#6b7280"/>
-        <SolidColorBrush x:Key="Sky"       Color="#0284c7"/>
-        <SolidColorBrush x:Key="SkyD"      Color="#0369a1"/>
+        <SolidColorBrush x:Key="Surface2"  Color="#f1f5f9"/>
+        <SolidColorBrush x:Key="Border"    Color="#cbd5e1"/>
+        <SolidColorBrush x:Key="Text"      Color="#0f172a"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#64748b"/>
+        <SolidColorBrush x:Key="Sky"       Color="#0369a1"/>
+        <SolidColorBrush x:Key="SkyD"      Color="#075985"/>
         <SolidColorBrush x:Key="SkyDark"   Color="#0c4a6e"/>
         <SolidColorBrush x:Key="SkyL"      Color="#7dd3fc"/>
         <SolidColorBrush x:Key="Soft"      Color="#e0f2fe"/>
@@ -49,14 +50,16 @@
             <Setter Property="Background" Value="{StaticResource Surface}"/>
         </Style>
 
+        <!-- ボタンの寸法・角丸・文字サイズは 3 画面で共通 (日次入力 / WBS 入力と同値) -->
         <Style TargetType="Button">
-            <Setter Property="Margin" Value="3"/>
-            <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="MinHeight" Value="30"/>
             <Setter Property="Background" Value="{StaticResource Surface2}"/>
-            <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -65,15 +68,19 @@
                         <Border x:Name="b" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#bae6fd"/>
+                                <Setter TargetName="b" Property="Background" Value="#e2e8f0"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#7dd3fc"/>
+                                <Setter TargetName="b" Property="Background" Value="#cbd5e1"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#f1f5f9"/>
+                                <Setter Property="Foreground" Value="#94a3b8"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -87,12 +94,16 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="b" Property="Background" Value="{StaticResource SkyD}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#94a3b8"/>
+                                <Setter Property="Foreground" Value="#e2e8f0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,8 +113,8 @@
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="14"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="8"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -195,37 +206,50 @@
 
         <!-- 期間フィルタ + クイック選択 + 集計軸フィルタ -->
         <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
+            <!-- ラベルと入力を 1 セット (StackPanel) にして WrapPanel へ入れる。
+                 こうしないと折り返し位置によってラベルだけ前の行に残り、対応関係が読めなくなる -->
             <WrapPanel Orientation="Horizontal">
-                <Label Content="期間:" VerticalAlignment="Center"/>
-                <DatePicker x:Name="FromDate" Width="140" VerticalAlignment="Center"/>
-                <Label Content="〜" Margin="6,0" VerticalAlignment="Center"/>
-                <DatePicker x:Name="ToDate" Width="140" VerticalAlignment="Center"/>
-                <Border Width="1" Background="{StaticResource Border}" Margin="16,2"/>
-                <Button x:Name="PeriodThisMonthBtn" Content="📅 当月"  Padding="10,2" Margin="2,0" ToolTip="今月の 1 日 〜 月末"/>
-                <Button x:Name="PeriodPrevMonthBtn" Content="📅 前月"  Padding="10,2" Margin="2,0" ToolTip="先月の 1 日 〜 月末"/>
-                <Button x:Name="PeriodThisFYBtn"    Content="📅 今年度" Padding="10,2" Margin="2,0" ToolTip="4 月 1 日 〜 翌 3 月末 (会計年度)"/>
-                <Border Width="1" Background="{StaticResource Border}" Margin="16,2"/>
-                <Label Content="会社:" VerticalAlignment="Center"/>
-                <ComboBox x:Name="CompanyFilter" MinWidth="160" Margin="4,0,0,0" VerticalAlignment="Center"
-                          DisplayMemberPath="display" SelectedValuePath="key"
-                          ToolTip="(全会社) で絞り込み解除。選択するとメンバー一覧もその会社に絞られる"/>
-                <Label Content="メンバー:" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                <ComboBox x:Name="MemberFilter" MinWidth="200" Margin="4,0,0,0" VerticalAlignment="Center"
-                          DisplayMemberPath="display" SelectedValuePath="id"
-                          ToolTip="(全メンバー) で絞り込み解除"/>
-                <Border Width="1" Background="{StaticResource Border}" Margin="16,2"/>
-                <Label Content="システム:" VerticalAlignment="Center"/>
-                <ComboBox x:Name="SystemFilter" MinWidth="180" Margin="4,0,0,0" VerticalAlignment="Center"
-                          DisplayMemberPath="display" SelectedValuePath="key"
-                          ToolTip="(全システム) で絞り込み解除"/>
-                <Label Content="業務種別:" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                <ComboBox x:Name="WorkTypeFilter" MinWidth="140" Margin="4,0,0,0" VerticalAlignment="Center"
-                          DisplayMemberPath="display" SelectedValuePath="key"
-                          ToolTip="(全業務種別) で絞り込み解除"/>
-                <Label Content="プロジェクト:" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                <ComboBox x:Name="ProjectFilter" MinWidth="220" Margin="4,0,0,0" VerticalAlignment="Center"
-                          DisplayMemberPath="display" SelectedValuePath="key"
-                          ToolTip="(全プロジェクト) で絞り込み解除"/>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Label Content="期間:"/>
+                    <DatePicker x:Name="FromDate" Width="140" Margin="4,0,0,0"/>
+                    <Label Content="〜" Margin="6,0"/>
+                    <DatePicker x:Name="ToDate" Width="140"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Button x:Name="PeriodThisMonthBtn" Content="📅 当月"  Padding="10,2" ToolTip="今月の 1 日 〜 月末"/>
+                    <Button x:Name="PeriodPrevMonthBtn" Content="📅 前月"  Padding="10,2" ToolTip="先月の 1 日 〜 月末"/>
+                    <Button x:Name="PeriodThisFYBtn"    Content="📅 今年度" Padding="10,2" ToolTip="4 月 1 日 〜 翌 3 月末 (会計年度)"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Label Content="会社:"/>
+                    <ComboBox x:Name="CompanyFilter" MinWidth="160" Margin="4,0,0,0"
+                              DisplayMemberPath="display" SelectedValuePath="key"
+                              ToolTip="(全会社) で絞り込み解除。選択するとメンバー一覧もその会社に絞られる"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Label Content="メンバー:"/>
+                    <ComboBox x:Name="MemberFilter" MinWidth="200" Margin="4,0,0,0"
+                              DisplayMemberPath="display" SelectedValuePath="id"
+                              ToolTip="(全メンバー) で絞り込み解除"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Label Content="システム:"/>
+                    <ComboBox x:Name="SystemFilter" MinWidth="180" Margin="4,0,0,0"
+                              DisplayMemberPath="display" SelectedValuePath="key"
+                              ToolTip="(全システム) で絞り込み解除"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
+                    <Label Content="業務種別:"/>
+                    <ComboBox x:Name="WorkTypeFilter" MinWidth="140" Margin="4,0,0,0"
+                              DisplayMemberPath="display" SelectedValuePath="key"
+                              ToolTip="(全業務種別) で絞り込み解除"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                    <Label Content="プロジェクト:"/>
+                    <ComboBox x:Name="ProjectFilter" MinWidth="220" Margin="4,0,0,0"
+                              DisplayMemberPath="display" SelectedValuePath="key"
+                              ToolTip="(全プロジェクト) で絞り込み解除"/>
+                </StackPanel>
             </WrapPanel>
         </Border>
 
@@ -607,6 +631,14 @@
                 <TabItem x:Name="GrpDetail" Header="📋 明細">
                     <TabControl x:Name="GrpDetailInner" Background="Transparent" BorderThickness="0">
                         <TabItem Header="📋 明細">
+                            <!-- 0 件のときは白紙にせず、フィルタを緩める案内を出す -->
+                            <Grid>
+                            <TextBlock x:Name="EmptyDetailText" Panel.ZIndex="1"
+                                       Visibility="Collapsed"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center" TextWrapping="Wrap" Margin="24,60,24,0"
+                                       FontSize="13" Foreground="{StaticResource TextMuted}"
+                                       Text="条件に一致する実績がありません。&#x0a;期間を広げるか、上のフィルタを (全メンバー) などに戻してください。"/>
                             <DataGrid x:Name="DetailGrid"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"
@@ -640,6 +672,7 @@
                                     <DataGridTextColumn Header="コメント" Binding="{Binding comment}" Width="*"/>
                                 </DataGrid.Columns>
                             </DataGrid>
+                            </Grid>
                         </TabItem>
                     </TabControl>
                 </TabItem>

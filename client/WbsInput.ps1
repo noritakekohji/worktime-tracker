@@ -156,7 +156,11 @@ foreach ($n in @('ProjectCombo','YearCombo','MonthCombo','LoadBtn','PullBtn','Ad
                   'TaskEntryHours','TaskEntryAddBtn','TaskEntryDelBtn',
                   'TaskEntriesGrid',
                   # ヘッダの画面遷移ボタン
-                  'TrackerNavBtn','ReportNavBtn')) {
+                  'TrackerNavBtn','ReportNavBtn',
+                  # 進捗表示 (計画に対する実績)
+                  'ProgressPanel','ProgressBarCtl','ProgressText',
+                  # 0 件時の案内
+                  'EmptyGridText')) {
     $ui[$n] = $Script:Window.FindName($n)
 }
 
@@ -725,6 +729,7 @@ function Load-WbsData {
 
         Build-GridColumns -Grid $ui.WbsGrid -Year $year -Month $month
         $ui.WbsGrid.ItemsSource = $dt.DefaultView
+        Update-EmptyState
 
         Build-WbsTree
         # 完了行フィルタを適用 (チェックボックス状態に従う)
@@ -742,14 +747,19 @@ function Load-WbsData {
             $pv = [string]$r["計画"]; $pn = 0.0
             if (-not [string]::IsNullOrWhiteSpace($pv) -and [double]::TryParse($pv, [ref]$pn)) { $totalPlan += $pn }
         }
+        # 進捗は文字 (█░) ではなく ProgressBar で描く。文字だと桁数でカード幅を超えて切れる
         $progressPct = if ($totalPlan -gt 0) { [Math]::Round(($totalHrs / $totalPlan) * 100.0, 0) } else { 0 }
-        $bar = ''
-        if ($totalPlan -gt 0) {
-            $filled = [Math]::Min(20, [Math]::Floor(($totalHrs / $totalPlan) * 20))
-            $bar = ' [' + ('█' * $filled) + ('░' * (20 - $filled)) + "] $progressPct%"
+        $ui.GridTitle.Text = ("📊 {0}  /  {1:D4}年{2:D2}月  /  {3}行  /  実績 {4:N1}h / 計画 {5:N1}h" -f `
+            $projItem.project_name, $year, $month, $dt.Rows.Count, $totalHrs, $totalPlan)
+        if ($ui.ProgressPanel -and $ui.ProgressBarCtl -and $ui.ProgressText) {
+            if ($totalPlan -gt 0) {
+                $ui.ProgressBarCtl.Value = [Math]::Min(100, $progressPct)
+                $ui.ProgressText.Text = ("{0}%" -f $progressPct)
+                $ui.ProgressPanel.Visibility = 'Visible'
+            } else {
+                $ui.ProgressPanel.Visibility = 'Collapsed'
+            }
         }
-        $ui.GridTitle.Text = ("📊 {0}  /  {1:D4}年{2:D2}月  /  {3}行  /  実績 {4:N1}h / 計画 {5:N1}h{6}" -f `
-            $projItem.project_name, $year, $month, $dt.Rows.Count, $totalHrs, $totalPlan, $bar)
         Set-Status ("読込完了: {0} 行 / 実績 {1:N1}h / 計画 {2:N1}h" -f $dt.Rows.Count, $totalHrs, $totalPlan) '#10b981'
     } catch {
         $detail = "$($_.Exception.Message)`n`n--- 位置 ---`n$($_.InvocationInfo.PositionMessage)`n`n--- ScriptStackTrace ---`n$($_.ScriptStackTrace)"
@@ -914,6 +924,13 @@ $ui.WbsTree.Add_SelectedItemChanged({
 })
 
 # 完了行のフィルタを適用 (チェックボックス OFF なら 状態='完了' を非表示)
+# グリッドが 0 行のときは白紙にせず、次にすべきことを案内する
+function Update-EmptyState {
+    if (-not $ui.EmptyGridText) { return }
+    $rows = if ($ui.WbsGrid -and $ui.WbsGrid.Items) { $ui.WbsGrid.Items.Count } else { 0 }
+    $ui.EmptyGridText.Visibility = if ($rows -eq 0) { 'Visible' } else { 'Collapsed' }
+}
+
 function Apply-DoneFilter {
     if (-not $Script:DataTable) {
         $ui.FilterStatusText.Text = ''
@@ -934,6 +951,7 @@ function Apply-DoneFilter {
     } else {
         $ui.FilterStatusText.Text = ''
     }
+    Update-EmptyState
 }
 $ui.ShowDoneChk.Add_Checked({   Apply-DoneFilter })
 $ui.ShowDoneChk.Add_Unchecked({ Apply-DoneFilter })
