@@ -5,7 +5,7 @@
     Height="760" Width="1200"
     WindowStartupLocation="CenterScreen"
     Background="#0f172a"
-    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontFamily="Yu Gothic UI, Meiryo UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
@@ -20,7 +20,6 @@
         <SolidColorBrush x:Key="SakuraD"   Color="#9d174d"/>
         <SolidColorBrush x:Key="SakuraL"   Color="#fce7f3"/>
         <SolidColorBrush x:Key="Soft"      Color="#f1f5f9"/>
-        <SolidColorBrush x:Key="Rose"      Color="#e11d48"/>
 
         <Style TargetType="Label">
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -64,6 +63,44 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調)。取得/保存/送信/削除等の
+             アクション種別による色分けを廃止し、全ボタンを同一の半透明チップ+縁取りに統一
+             (2026-08-22 ユーザー要望: macOS の Toolbar/Vibrancy 材質を参考)。
+             縁取りの不透明度はヘッダー背景 #0f172a に対し WCAG 1.4.11 (3:1 以上) を
+             確保できる値まで上げてある (18% 程度では 1.7:1 までしか出ない実測済み) -->
+        <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#14FFFFFF"/>
+            <Setter Property="Foreground" Value="#e2e8f0"/>
+            <Setter Property="BorderBrush" Value="#59FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#26FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#66FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#73FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Background" Value="#0AFFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#26FFFFFF"/>
+                                <Setter Property="Foreground" Value="#64748b"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <Style TargetType="Button">
             <Setter Property="Margin" Value="3"/>
@@ -99,28 +136,6 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Sakura}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{StaticResource SakuraD}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Background" Value="{StaticResource Rose}"/>
         </Style>
 
         <Style x:Key="Card" TargetType="Border">
@@ -164,7 +179,7 @@
                 <TextBlock Text="🌸 マスタ編集" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                 <TextBlock x:Name="StatusText" Margin="20,0,0,0" VerticalAlignment="Center" Foreground="#94a3b8"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="ReloadBtn" Background="#9d174d" Foreground="White" BorderBrush="#9d174d">
+                    <Button x:Name="ReloadBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="再読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -178,20 +193,20 @@
             <DockPanel>
                 <TextBlock x:Name="EditNote" Text="編集内容は『保存』を押すまで反映されません" Foreground="#94a3b8" FontSize="11" VerticalAlignment="Center"/>
                 <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button x:Name="CloseBtn" Background="#9d174d" Foreground="White" BorderBrush="#9d174d">
+                    <Button x:Name="CloseBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="閉じる" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="100"
+                    <Button x:Name="SaveBtn" MinWidth="100"
                             ToolTip="ローカルにマスタを保存 (リモートへの送信は別ボタン)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SendBtn" Style="{StaticResource Primary}" MinWidth="100" Margin="6,3,3,3"
+                    <Button x:Name="SendBtn" MinWidth="100" Margin="6,3,3,3"
                             ToolTip="ローカル保存 + Gitlab へ push (Gitlabモード時のみ有効)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
@@ -208,13 +223,13 @@
                 <TabItem Header="👥 メンバー">
                     <DockPanel Margin="6">
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="MemAddBtn" Style="{StaticResource Primary}">
+                            <Button x:Name="MemAddBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="MemDelBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="MemDelBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="選択行を削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -255,13 +270,13 @@
                 <TabItem Header="📁 プロジェクト">
                     <DockPanel Margin="6">
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="PrjAddBtn" Style="{StaticResource Primary}">
+                            <Button x:Name="PrjAddBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="PrjDelBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="PrjDelBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="選択行を削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -316,7 +331,7 @@
                             <DockPanel>
                                 <TextBlock Text="パターン一覧" FontWeight="Bold" Foreground="{StaticResource SakuraD}" DockPanel.Dock="Top" Margin="0,0,0,6"/>
                                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button x:Name="PatAddBtn" Style="{StaticResource Primary}">
+                                    <Button x:Name="PatAddBtn">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                             <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -328,7 +343,7 @@
                                             <TextBlock Text="複製" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="PatDelBtn" Style="{StaticResource Danger}">
+                                    <Button x:Name="PatDelBtn">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                             <TextBlock Text="削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -361,7 +376,7 @@
                                             <TextBlock Text="子を追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="PatNodeDelBtn" Style="{StaticResource Danger}" IsEnabled="False">
+                                    <Button x:Name="PatNodeDelBtn" IsEnabled="False">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                             <TextBlock Text="削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -397,13 +412,13 @@
                 <TabItem Header="🏷 カテゴリ">
                     <DockPanel Margin="6">
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="CatAddBtn" Style="{StaticResource Primary}">
+                            <Button x:Name="CatAddBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="CatDelBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="CatDelBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="選択行を削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -439,13 +454,13 @@
                         <TextBlock DockPanel.Dock="Top" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6"
                                    Text="社内休業日を登録します。WBS ガントチャートで土日と同じ灰色で表示されます。日付は yyyy-MM-dd 形式。"/>
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button x:Name="HolAddBtn" Style="{StaticResource Primary}">
+                            <Button x:Name="HolAddBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="HolDelBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="HolDelBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="選択行を削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -503,19 +518,19 @@
                                     <TextBlock Text="行追加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="OtherDelBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="OtherDelBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="選択行削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="OtherSaveBtn" Style="{StaticResource Primary}" MinWidth="160">
+                            <Button x:Name="OtherSaveBtn" MinWidth="160">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="ローカル保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="OtherPushBtn" Style="{StaticResource Primary}" MinWidth="180">
+                            <Button x:Name="OtherPushBtn" MinWidth="180">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="リモートへ送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -581,7 +596,7 @@
                                     <TextBlock Text="JSON 検証" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="JsonApplyBtn" Style="{StaticResource Primary}">
+                            <Button x:Name="JsonApplyBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE72A;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="編集内容に適用" Margin="6,0,0,0" VerticalAlignment="Center"/>

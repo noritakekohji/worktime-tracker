@@ -6,7 +6,7 @@
     MinHeight="600" MinWidth="960"
     WindowStartupLocation="CenterScreen"
     Background="#0f172a"
-    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontFamily="Yu Gothic UI, Meiryo UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
@@ -23,8 +23,6 @@
         <SolidColorBrush x:Key="EmeraldL"  Color="#d1fae5"/>
         <SolidColorBrush x:Key="Soft"      Color="#ecfdf5"/>
         <SolidColorBrush x:Key="Sky"       Color="#0284c7"/>
-        <SolidColorBrush x:Key="Amber"     Color="#b45309"/>
-        <SolidColorBrush x:Key="Rose"      Color="#e11d48"/>
 
         <Style TargetType="Label">
             <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -71,15 +69,16 @@
         <!-- 標準ボタン (ソフトグレー/ライトミント) -->
         <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
              混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
-        <!-- ヘッダー/フッターの濃色地に置くボタン。個別に Background/Foreground を
-             上書きする旧方式は、ボタン背景とヘッダー背景の明度差が WCAG 1.4.11
-             (非テキストコントラスト 3:1 以上推奨) を満たさず、ボタンがヘッダーに
-             溶けて見えなくなっていた (実機スクリーンショットで報告あり)。
-             色分けは文字色ではなくアイコンで表現し、文字は白に統一する -->
+        <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調)。取得/保存/送信/削除等の
+             アクション種別による色分けを廃止し、全ボタンを同一の半透明チップ+縁取りに統一
+             (2026-08-22 ユーザー要望: macOS の Toolbar/Vibrancy 材質を参考)。
+             縁取りの不透明度はヘッダー背景 #0f172a に対し WCAG 1.4.11 (3:1 以上) を
+             確保できる値まで上げてある (18% 程度では 1.7:1 までしか出ない実測済み) -->
         <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#64748b"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#94a3b8"/>
+            <Setter Property="Background" Value="#14FFFFFF"/>
+            <Setter Property="Foreground" Value="#e2e8f0"/>
+            <Setter Property="BorderBrush" Value="#59FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -91,42 +90,16 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#7c8ba1"/>
+                                <Setter TargetName="b" Property="Background" Value="#26FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#66FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#556174"/>
+                                <Setter TargetName="b" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#73FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#334155"/>
-                                <Setter Property="Foreground" Value="#64748b"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="HeaderButtonPrimary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#0369a1"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#0284c7"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#0284c7"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#075985"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#334155"/>
+                                <Setter TargetName="b" Property="Background" Value="#0AFFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#26FFFFFF"/>
                                 <Setter Property="Foreground" Value="#64748b"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -179,53 +152,9 @@
             </Setter>
         </Style>
 
-        <!-- メインアクション (エメラルド塗りつぶし) -->
-        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Emerald}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Emerald}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#064e3b"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#94a3b8"/>
-                                <Setter Property="Foreground" Value="#e2e8f0"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
 
-        <!-- セカンダリ (薄ミント塗り) -->
-        <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource EmeraldL}"/>
-            <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
-            <Setter Property="BorderBrush" Value="#a7f3d0"/>
-        </Style>
 
-        <!-- 警告 (アンバー) -->
-        <Style x:Key="Warning" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Background" Value="{StaticResource Amber}"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
 
-        <!-- 危険 (ローズ) -->
-        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Background" Value="{StaticResource Rose}"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
 
         <!-- クイック工数ボタン -->
         <Style x:Key="QuickHour" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -307,7 +236,7 @@
                             <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="PullBtn" Margin="4,0,0,0" Style="{StaticResource HeaderButtonPrimary}"
+                    <Button x:Name="PullBtn" Margin="4,0,0,0" Style="{StaticResource HeaderButton}"
                             ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
@@ -366,7 +295,7 @@
                             <TextBlock x:Name="HoursTotalText" Text="0.0 h" FontWeight="Bold" FontSize="16" Foreground="White"/>
                         </StackPanel>
                     </Border>
-                    <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="100">
+                    <Button x:Name="SaveBtn" MinWidth="100">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -374,7 +303,7 @@
                     </Button>
                     <ProgressBar x:Name="SyncProgress" Width="120" Height="12" Margin="8,0,4,0" VerticalAlignment="Center"
                                  Visibility="Collapsed" IsIndeterminate="True" Foreground="#34d399"/>
-                    <Button x:Name="PushBtn" Style="{StaticResource Primary}" MinWidth="100" Margin="6,2,3,2">
+                    <Button x:Name="PushBtn" MinWidth="100" Margin="6,2,3,2">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -417,7 +346,7 @@
                                     <TextBlock Text="編集" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="DeleteRowBtn" Style="{StaticResource Danger}">
+                            <Button x:Name="DeleteRowBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
                                     <TextBlock Text="削除" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -519,13 +448,13 @@
                                 <TextBlock Text="クリア" Margin="6,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <Button x:Name="UpdateBtn" Style="{StaticResource Warning}" Visibility="Collapsed" MinWidth="100">
+                        <Button x:Name="UpdateBtn" Visibility="Collapsed" MinWidth="100">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"/>
                                 <TextBlock Text="更新" Margin="6,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <Button x:Name="AddBtn" Style="{StaticResource Primary}" MinWidth="100">
+                        <Button x:Name="AddBtn" MinWidth="100">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"/>
                                 <TextBlock Text="追加" Margin="6,0,0,0" VerticalAlignment="Center"/>

@@ -419,17 +419,21 @@ Describe 'アイコングリフの既知の誤用が復活していない' -Tag 
 }
 
 # ヘッダー/フッターのボタンが背景色に溶けて見えなくなっていた実例 (2026-08-22)。
-# 文字色のコントラストだけでなく、ボタン自体の背景色がヘッダー背景色から
+# 文字色のコントラストだけでなく、ボタン自体の境界線がヘッダー背景色から
 # 十分に浮き上がっているか (WCAG 1.4.11 非テキストコントラスト、目安 3:1 以上) も検証する。
+# v1.10.2 では単色べた塗りだったが、同日中にユーザー要望 (macOS Vibrancy 参考) で
+# 半透明ガラス調 (ARGB, #AARRGGBB) の単一スタイルに再設計された。塗り (Background) は
+# あえて薄いため 3:1 を満たさなくてよいが、境界を定義する縁取り (BorderBrush) は満たす必要がある。
 Describe 'ヘッダーボタンは背景から十分にコントラストが取れている (WCAG 1.4.11)' -Tag 'ui' {
 
     $headerXamlFiles = @(
         'client/MainWindow.xaml',
         'client/WbsInput.xaml',
-        'reports/ReportViewer.xaml'
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml'
     )
 
-    It '<_>: HeaderButton / HeaderButtonPrimary スタイルが定義され、ヘッダー背景と 3:1 以上のコントラストを持つ' -TestCases ($headerXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+    It '<_>: HeaderButton スタイルが定義され、縁取りがヘッダー背景と 3:1 以上のコントラストを持つ' -TestCases ($headerXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
         param($Rel)
         function Get-Luminance {
             param([string]$Hex)
@@ -450,26 +454,73 @@ Describe 'ヘッダーボタンは背景から十分にコントラストが取�
             $hi = [Math]::Max($la, $lb); $lo = [Math]::Min($la, $lb)
             ($hi + 0.05) / ($lo + 0.05)
         }
+        function Get-BlendedHex {
+            # #AARRGGBB (前景、半透明) を背景色 #RRGGBB の上に合成した実効色を返す
+            param([string]$ArgbHex, [string]$BgHex)
+            $fh = $ArgbHex.TrimStart('#')
+            $a = [Convert]::ToInt32($fh.Substring(0, 2), 16) / 255.0
+            $fr = [Convert]::ToInt32($fh.Substring(2, 2), 16)
+            $fg = [Convert]::ToInt32($fh.Substring(4, 2), 16)
+            $fb = [Convert]::ToInt32($fh.Substring(6, 2), 16)
+            $bh = $BgHex.TrimStart('#')
+            $br = [Convert]::ToInt32($bh.Substring(0, 2), 16)
+            $bg = [Convert]::ToInt32($bh.Substring(2, 2), 16)
+            $bb = [Convert]::ToInt32($bh.Substring(4, 2), 16)
+            $r = [int][Math]::Round($fr * $a + $br * (1 - $a))
+            $g = [int][Math]::Round($fg * $a + $bg * (1 - $a))
+            $b = [int][Math]::Round($fb * $a + $bb * (1 - $a))
+            ('#{0:X2}{1:X2}{2:X2}' -f $r, $g, $b)
+        }
 
         $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
         $text | Should -Match 'x:Key="HeaderButton"' -Because "$Rel : ヘッダーボタン共通スタイルが見つかりません"
 
         $headerBg = '#0f172a'
-        foreach ($styleName in @('HeaderButton', 'HeaderButtonPrimary')) {
-            $m = [regex]::Match($text, ('x:Key="{0}"[\s\S]{{0,400}}?<Setter Property="Background" Value="(#[0-9a-fA-F]{{6}})"' -f $styleName))
-            $m.Success | Should -Be $true -Because "$Rel : $styleName の Background 定義が見つかりません"
-            $ratio = Get-ContrastRatio $m.Groups[1].Value $headerBg
-            $ratio | Should -BeGreaterOrEqual 3.0 -Because ("$Rel : $styleName の背景 {0} はヘッダー背景に対し {1:N2}:1 しかありません (3:1 以上が目安)" -f $m.Groups[1].Value, $ratio)
-        }
+        $m = [regex]::Match($text, 'x:Key="HeaderButton"[\s\S]{0,600}?<Setter Property="BorderBrush" Value="(#[0-9a-fA-F]{8})"')
+        $m.Success | Should -Be $true -Because "$Rel : HeaderButton の BorderBrush (#AARRGGBB) 定義が見つかりません"
+        $blended = Get-BlendedHex $m.Groups[1].Value $headerBg
+        $ratio = Get-ContrastRatio $blended $headerBg
+        $ratio | Should -BeGreaterOrEqual 3.0 -Because ("$Rel : HeaderButton の縁取り {0} (実効色 {1}) はヘッダー背景に対し {2:N2}:1 しかありません (3:1 以上が目安)" -f $m.Groups[1].Value, $blended, $ratio)
     }
 
     It '<_>: 画面遷移/ユーティリティボタンが個別の Background 上書きに戻っていない' -TestCases ($headerXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
         param($Rel)
         $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
         $offenders = New-Object 'System.Collections.Generic.List[string]'
-        foreach ($m in ([regex]::Matches($text, '<Button x:Name="(TrackerNavBtn|WbsNavBtn|ReportNavBtn|AdminBtn|UserPrefsBtn|SettingsBtn|ReloadBtn|LoadBtn|LoadAllBtn|PullBtn|OpenFolderBtn)"[^>]*>'))) {
+        foreach ($m in ([regex]::Matches($text, '<Button x:Name="(TrackerNavBtn|WbsNavBtn|ReportNavBtn|AdminBtn|UserPrefsBtn|SettingsBtn|ReloadBtn|LoadBtn|LoadAllBtn|PullBtn|OpenFolderBtn|CloseBtn)"[^>]*>'))) {
             if ($m.Value -match 'Background="#') { $offenders.Add($m.Groups[1].Value) }
         }
         $offenders.Count | Should -Be 0 -Because ("$Rel : ヘッダーボタンが Style ではなく個別 Background に戻っています: " + ($offenders -join ', '))
+    }
+}
+
+# 取得/保存/送信/削除等のアクション種別による個別色分けを廃止した実例 (2026-08-22)。
+# Primary(青)/Danger(赤)/Warning(アンバー) 等のセマンティックカラー style が
+# 復活していないか、全画面まとめて検証する。
+Describe 'ボタンのアクション別色分け (Primary/Danger/Warning) が復活していない' -Tag 'ui' {
+
+    $allButtonXamlFiles = @(
+        'client/MainWindow.xaml',
+        'client/WbsInput.xaml',
+        'reports/ReportViewer.xaml',
+        'client/AdminDialog.xaml',
+        'client/ConfigDialog.xaml',
+        'client/UserPrefsDialog.xaml'
+    )
+
+    It '<_>: Primary / Danger / Warning / Secondary / HeaderButtonPrimary スタイル定義が存在しない' -TestCases ($allButtonXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        foreach ($key in @('Primary', 'Danger', 'Warning', 'Secondary', 'HeaderButtonPrimary')) {
+            $text | Should -Not -Match ('x:Key="{0}"' -f $key) -Because "$Rel : $key スタイルはユーザー要望により廃止済み (全ボタン同一デザインに統一)"
+        }
+    }
+
+    It '<_>: ボタンが Primary / Danger / Warning / Secondary スタイルを参照していない' -TestCases ($allButtonXamlFiles | ForEach-Object { @{ Rel = $_ } }) {
+        param($Rel)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        foreach ($key in @('Primary', 'Danger', 'Warning', 'Secondary')) {
+            $text | Should -Not -Match ('Style="\{{StaticResource {0}\}}"' -f $key) -Because "$Rel : $key 参照が復活しています"
+        }
     }
 }

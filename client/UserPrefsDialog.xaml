@@ -6,7 +6,7 @@
     WindowStartupLocation="CenterScreen"
     ResizeMode="NoResize"
     Background="#f8fafc"
-    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontFamily="Yu Gothic UI, Meiryo UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
@@ -75,29 +75,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Emerald}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Emerald}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldD}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#047857"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -122,7 +99,7 @@
                     <TextBlock Text="キャンセル" Margin="6,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="SaveBtn" Style="{StaticResource Primary}" MinWidth="120">
+            <Button x:Name="SaveBtn" MinWidth="120">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
                     <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>

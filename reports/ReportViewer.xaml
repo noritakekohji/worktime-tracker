@@ -5,7 +5,7 @@
     Height="780" Width="1280"
     WindowStartupLocation="CenterScreen"
     Background="#0f172a"
-    FontFamily="Meiryo UI, Yu Gothic UI, Segoe UI"
+    FontFamily="Yu Gothic UI, Meiryo UI, Segoe UI"
     FontSize="13"
     TextOptions.TextFormattingMode="Display"
     TextOptions.TextRenderingMode="ClearType">
@@ -18,7 +18,6 @@
         <SolidColorBrush x:Key="Border"    Color="#cbd5e1"/>
         <SolidColorBrush x:Key="Text"      Color="#0f172a"/>
         <SolidColorBrush x:Key="TextMuted" Color="#64748b"/>
-        <SolidColorBrush x:Key="Sky"       Color="#0369a1"/>
         <SolidColorBrush x:Key="SkyD"      Color="#075985"/>
         <SolidColorBrush x:Key="SkyDark"   Color="#0c4a6e"/>
         <SolidColorBrush x:Key="SkyL"      Color="#7dd3fc"/>
@@ -53,15 +52,16 @@
         <!-- ボタンの寸法・角丸・文字サイズは 3 画面で共通 (日次入力 / WBS 入力と同値) -->
         <!-- ボタンアイコン用 (Segoe MDL2 Assets)。絵文字は環境によって色付き/モノクロが
              混在するため、アイコンとして使う箇所はこのグリフフォントに統一する -->
-        <!-- ヘッダー/フッターの濃色地に置くボタン。個別に Background/Foreground を
-             上書きする旧方式は、ボタン背景とヘッダー背景の明度差が WCAG 1.4.11
-             (非テキストコントラスト 3:1 以上推奨) を満たさず、ボタンがヘッダーに
-             溶けて見えなくなっていた (実機スクリーンショットで報告あり)。
-             色分けは文字色ではなくアイコンで表現し、文字は白に統一する -->
+        <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調)。取得/保存/送信/削除等の
+             アクション種別による色分けを廃止し、全ボタンを同一の半透明チップ+縁取りに統一
+             (2026-08-22 ユーザー要望: macOS の Toolbar/Vibrancy 材質を参考)。
+             縁取りの不透明度はヘッダー背景 #0f172a に対し WCAG 1.4.11 (3:1 以上) を
+             確保できる値まで上げてある (18% 程度では 1.7:1 までしか出ない実測済み) -->
         <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#64748b"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#94a3b8"/>
+            <Setter Property="Background" Value="#14FFFFFF"/>
+            <Setter Property="Foreground" Value="#e2e8f0"/>
+            <Setter Property="BorderBrush" Value="#59FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -73,42 +73,16 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#7c8ba1"/>
+                                <Setter TargetName="b" Property="Background" Value="#26FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#66FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#556174"/>
+                                <Setter TargetName="b" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#73FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#334155"/>
-                                <Setter Property="Foreground" Value="#64748b"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="HeaderButtonPrimary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#0369a1"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#0284c7"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#0284c7"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#075985"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#334155"/>
+                                <Setter TargetName="b" Property="Background" Value="#0AFFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#26FFFFFF"/>
                                 <Setter Property="Foreground" Value="#64748b"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -154,29 +128,6 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="b" Property="Background" Value="#f1f5f9"/>
                                 <Setter Property="Foreground" Value="#94a3b8"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource Sky}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{StaticResource SkyD}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#94a3b8"/>
-                                <Setter Property="Foreground" Value="#e2e8f0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -257,7 +208,7 @@
                             <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ReloadBtn" Margin="4,0,0,0" Style="{StaticResource HeaderButtonPrimary}"
+                    <Button x:Name="ReloadBtn" Margin="4,0,0,0" Style="{StaticResource HeaderButton}"
                             ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
@@ -297,13 +248,13 @@
                            Cursor="Hand" TextDecorations="Underline"
                            ToolTip="クリックで変更履歴 (CHANGELOG) を表示"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="ApplyBtn" Background="#0f766e" Foreground="White" BorderBrush="#0d9488">
+                    <Button x:Name="ApplyBtn">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE71C;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="フィルタ適用" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ExportBtn" Style="{StaticResource Primary}" MinWidth="150" Margin="4,0,0,0">
+                    <Button x:Name="ExportBtn" MinWidth="150" Margin="4,0,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="CSV エクスポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
