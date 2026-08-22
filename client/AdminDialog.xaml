@@ -63,6 +63,16 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ボタン内のラベル文字。Foreground を持たないのが肝で、キー付きスタイルを
+             当てることで暗黙の <Style TargetType="TextBlock"> (Foreground=濃色) を
+             回避し、親 Button の Foreground を継承させる。
+             これを付け忘れると、濃色チップの上に濃色の文字が乗って読めなくなる
+             (アイコンはキー付きの IconGlyph を使っていて暗黙スタイルの影響を
+             受けないため、アイコンだけ明るく文字だけ暗い、という形で露見した) -->
+        <Style x:Key="BtnLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
         <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調チップ)。
              アクション種別による色分けは行わず、全ボタンをこの単一スタイルに統一する
              (2026-08-22 ユーザー要望: macOS の Toolbar/Vibrancy 材質を参考)。
@@ -198,7 +208,7 @@
                     <Button x:Name="ReloadBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="再読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="再読込" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -212,21 +222,21 @@
                     <Button x:Name="CloseBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="閉じる" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="閉じる" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="SaveBtn" Style="{StaticResource HeaderButton}" MinWidth="100"
                             ToolTip="ローカルにマスタを保存 (リモートへの送信は別ボタン)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="保存" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="SendBtn" Style="{StaticResource HeaderButton}" MinWidth="100"
                             ToolTip="ローカル保存 + Gitlab へ push (Gitlabモード時のみ有効)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="送信" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

@@ -130,6 +130,16 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ボタン内のラベル文字。Foreground を持たないのが肝で、キー付きスタイルを
+             当てることで暗黙の <Style TargetType="TextBlock"> (Foreground=濃色) を
+             回避し、親 Button の Foreground を継承させる。
+             これを付け忘れると、濃色チップの上に濃色の文字が乗って読めなくなる
+             (アイコンはキー付きの IconGlyph を使っていて暗黙スタイルの影響を
+             受けないため、アイコンだけ明るく文字だけ暗い、という形で露見した) -->
+        <Style x:Key="BtnLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
 
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2"/>
@@ -209,32 +219,32 @@
                     <Button x:Name="WbsNavBtn" Style="{StaticResource HeaderButton}" ToolTip="WBS形式の実績入力画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="WBS入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="WBS入力" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="ReportNavBtn" Style="{StaticResource HeaderButton}" ToolTip="集計レポート画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE9F9;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="レポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="レポート" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
                     <Button x:Name="AdminBtn" Visibility="Collapsed" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="管理者" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="UserPrefsBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE734;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="お気に入り" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="お気に入り" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="SettingsBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="設定" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="設定" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -249,14 +259,14 @@
                             ToolTip="ローカルから当月データを再読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="読込" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="PullBtn" Style="{StaticResource HeaderButton}"
                             ToolTip="Gitlab からマスタ + 当月個人実績を取得 → ローカルから読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="取得" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="取得" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -314,7 +324,7 @@
                     <Button x:Name="SaveBtn" Style="{StaticResource HeaderButton}" MinWidth="100">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="保存" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <ProgressBar x:Name="SyncProgress" Width="120" Height="12" Margin="8,0,4,0" VerticalAlignment="Center"
@@ -322,13 +332,13 @@
                     <Button x:Name="PushBtn" Style="{StaticResource HeaderButton}" MinWidth="100">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="送信" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="送信" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="OpenFolderBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="開く" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="開く" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

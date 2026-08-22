@@ -565,6 +565,35 @@ Describe 'ヘッダーボタンの寸法と適用範囲' -Tag 'ui' {
         }
     }
 
+    # 濃色チップの上にラベルだけ濃色で描かれ、実機で読めなくなっていた実例 (2026-08-22)。
+    # 原因は暗黙の <Style TargetType="TextBlock"> (Foreground=濃色) がボタン内ラベルにも
+    # 適用されていたこと。アイコンはキー付きの IconGlyph を使うため暗黙スタイルの影響を
+    # 受けず、「アイコンだけ明るく文字だけ暗い」という形で露見した。
+    # ボタン内の TextBlock は必ずキー付きスタイルを当てて暗黙スタイルを回避する。
+    It '<Rel>: 濃色ボタン内の TextBlock はすべてキー付きスタイルを持つ' -TestCases $darkSurfaceButtons {
+        param($Rel, $Names)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $offenders = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($name in $Names) {
+            $m = [regex]::Match($text, ('<Button x:Name="{0}"[\s\S]*?</Button>' -f [regex]::Escape($name)))
+            $m.Success | Should -Be $true -Because "$Rel : ボタン $name のブロックが見つかりません"
+            foreach ($tb in ([regex]::Matches($m.Value, '<TextBlock\b[^>]*/>'))) {
+                if ($tb.Value -notmatch 'Style="\{StaticResource ') { $offenders.Add("$name : $($tb.Value)") }
+            }
+        }
+        $offenders.Count | Should -Be 0 `
+            -Because ("$Rel : キー付きスタイルの無い TextBlock は暗黙の <Style TargetType=`"TextBlock`"> (Foreground=濃色) を拾い、濃色チップ上で読めなくなります。BtnLabel を当ててください: " + ($offenders -join ' / '))
+    }
+
+    It '<Rel>: BtnLabel が Foreground を持たない (親 Button から継承させる)' -TestCases $darkSurfaceButtons {
+        param($Rel, $Names)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $m = [regex]::Match($text, 'x:Key="BtnLabel"[\s\S]*?</Style>')
+        $m.Success | Should -Be $true -Because "$Rel : BtnLabel スタイルが見つかりません"
+        $m.Value | Should -Not -Match '<Setter Property="Foreground"' `
+            -Because "$Rel : BtnLabel に Foreground を設定すると、親 Button の Foreground (無効時の減光を含む) を継承しなくなります"
+    }
+
     It '<Rel>: ヘッダーボタンに個別 Margin が指定されていない' -TestCases $darkSurfaceButtons {
         param($Rel, $Names)
         $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw

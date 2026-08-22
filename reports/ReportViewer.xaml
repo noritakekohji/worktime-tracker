@@ -113,6 +113,16 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <!-- ボタン内のラベル文字。Foreground を持たないのが肝で、キー付きスタイルを
+             当てることで暗黙の <Style TargetType="TextBlock"> (Foreground=濃色) を
+             回避し、親 Button の Foreground を継承させる。
+             これを付け忘れると、濃色チップの上に濃色の文字が乗って読めなくなる
+             (アイコンはキー付きの IconGlyph を使っていて暗黙スタイルの影響を
+             受けないため、アイコンだけ明るく文字だけ暗い、という形で露見した) -->
+        <Style x:Key="BtnLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
 
         <Style TargetType="Button">
             <Setter Property="Margin" Value="2"/>
@@ -196,13 +206,13 @@
                     <Button x:Name="TrackerNavBtn" Style="{StaticResource HeaderButton}" ToolTip="日次入力画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE121;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="日次入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="日次入力" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="WbsNavBtn" Style="{StaticResource HeaderButton}" ToolTip="WBS入力画面を開く">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="WBS入力" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="WBS入力" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Border Width="1" Margin="6,4" Background="#334155" VerticalAlignment="Stretch"/>
@@ -210,7 +220,7 @@
                             ToolTip="マスタ編集 / 他者データ編集">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE90F;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="管理者" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="管理者" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -221,14 +231,14 @@
                             ToolTip="ローカルから全データ再読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEA37;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="読込" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="読込" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="ReloadBtn" Style="{StaticResource HeaderButton}"
                             ToolTip="Gitlab からマスタ + 全データ取得 → ローカルから読込">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="取得" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="取得" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -267,13 +277,13 @@
                     <Button x:Name="ApplyBtn" Style="{StaticResource HeaderButton}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE71C;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="フィルタ適用" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="フィルタ適用" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="ExportBtn" Style="{StaticResource HeaderButton}" MinWidth="150">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>
-                            <TextBlock Text="CSV エクスポート" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="CSV エクスポート" Style="{StaticResource BtnLabel}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
