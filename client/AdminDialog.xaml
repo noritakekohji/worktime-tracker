@@ -63,38 +63,54 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-        <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調)。取得/保存/送信/削除等の
-             アクション種別による色分けを廃止し、全ボタンを同一の半透明チップ+縁取りに統一
+        <!-- ヘッダー/フッターの濃色地に置くボタン (すりガラス調チップ)。
+             アクション種別による色分けは行わず、全ボタンをこの単一スタイルに統一する
              (2026-08-22 ユーザー要望: macOS の Toolbar/Vibrancy 材質を参考)。
-             縁取りの不透明度はヘッダー背景 #0f172a に対し WCAG 1.4.11 (3:1 以上) を
-             確保できる値まで上げてある (18% 程度では 1.7:1 までしか出ない実測済み) -->
+
+             寸法・余白をこのスタイル側で完結させている理由:
+             既定 Button スタイル (Margin=2 / Padding=12,5 / FontWeight=SemiBold) を
+             継承したままだと、隣接ボタンの枠線どうしが接触して 1 つの塊に見え、
+             文字も枠に詰まって「線画のワイヤーフレーム」のような見た目になっていた。
+             チップ同士を確実に離すため Margin を左右 3 に固定し、
+             各ボタン側の個別 Margin 指定は撤去してある (再指定するとまた不揃いになる)。
+
+             塗り (Background) を 22% まで上げているのは、8% では地と区別がつかず
+             枠線だけが浮いて見えたため。枠線 35% はヘッダー背景 #0f172a に対し
+             WCAG 1.4.11 (非テキストコントラスト 3:1 以上) を満たす下限値 (実測 3.20:1)。
+             塗りだけでは 2.01:1 しか出ないので、枠線側で基準を担保している -->
         <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#14FFFFFF"/>
-            <Setter Property="Foreground" Value="#e2e8f0"/>
+            <Setter Property="Background" Value="#38FFFFFF"/>
+            <Setter Property="Foreground" Value="#f1f5f9"/>
             <Setter Property="BorderBrush" Value="#59FFFFFF"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="3,0"/>
+            <Setter Property="Padding" Value="13,7"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="b" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
                                 CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#26FFFFFF"/>
-                                <Setter TargetName="b" Property="BorderBrush" Value="#66FFFFFF"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="b" Property="Background" Value="#4DFFFFFF"/>
                                 <Setter TargetName="b" Property="BorderBrush" Value="#73FFFFFF"/>
                             </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#66FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#8CFFFFFF"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Background" Value="#0AFFFFFF"/>
-                                <Setter TargetName="b" Property="BorderBrush" Value="#26FFFFFF"/>
-                                <Setter Property="Foreground" Value="#64748b"/>
+                                <Setter TargetName="b" Property="Background" Value="#14FFFFFF"/>
+                                <Setter TargetName="b" Property="BorderBrush" Value="#30FFFFFF"/>
+                                <Setter Property="Foreground" Value="#7c8798"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -199,14 +215,14 @@
                             <TextBlock Text="閉じる" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SaveBtn" MinWidth="100"
+                    <Button x:Name="SaveBtn" Style="{StaticResource HeaderButton}" MinWidth="100"
                             ToolTip="ローカルにマスタを保存 (リモートへの送信は別ボタン)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE74E;" Style="{StaticResource IconGlyph}"/>
                             <TextBlock Text="保存" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SendBtn" MinWidth="100" Margin="6,3,3,3"
+                    <Button x:Name="SendBtn" Style="{StaticResource HeaderButton}" MinWidth="100"
                             ToolTip="ローカル保存 + Gitlab へ push (Gitlabモード時のみ有効)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyph}"/>

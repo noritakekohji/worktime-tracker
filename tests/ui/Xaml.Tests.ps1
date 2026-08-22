@@ -524,3 +524,56 @@ Describe 'ボタンのアクション別色分け (Primary/Danger/Warning) が�
         }
     }
 }
+
+# チップ再設計 (v1.11.0) で実機確認したときに見つかった 2 件の実例 (2026-08-22)。
+#  (1) HeaderButton が既定 Button スタイルの Margin=2 / Padding=12,5 / SemiBold を
+#      そのまま継承していたため、隣接ボタンの枠線どうしが接触して 1 つの塊に見え、
+#      文字も枠に詰まって「線画のワイヤーフレーム」のような見た目になっていた。
+#  (2) 濃色フッター上の 保存 / 送信 / フィルタ適用 等が明色の既定スタイルのままで、
+#      同じ濃色地に乗るヘッダーのチップと明らかに不揃いだった。
+# どちらもヘッドレスレンダリングの目視では見落とし、実機キャプチャの拡大で初めて判明した。
+Describe 'ヘッダーボタンの寸法と適用範囲' -Tag 'ui' {
+
+    # 濃色ヘッダー/フッター (Background="#0f172a") 上に置かれるボタン。
+    # ここに挙げたものは必ず HeaderButton スタイルを使う。
+    $darkSurfaceButtons = @(
+        @{ Rel = 'client/MainWindow.xaml';    Names = @('WbsNavBtn', 'ReportNavBtn', 'AdminBtn', 'UserPrefsBtn', 'SettingsBtn', 'ReloadBtn', 'PullBtn', 'SaveBtn', 'PushBtn', 'OpenFolderBtn') }
+        @{ Rel = 'client/WbsInput.xaml';      Names = @('TrackerNavBtn', 'ReportNavBtn', 'AdminBtn', 'LoadBtn', 'PullBtn', 'SaveBtn', 'PushBtn') }
+        @{ Rel = 'reports/ReportViewer.xaml'; Names = @('TrackerNavBtn', 'WbsNavBtn', 'AdminBtn', 'LoadAllBtn', 'ReloadBtn', 'ApplyBtn', 'ExportBtn') }
+        @{ Rel = 'client/AdminDialog.xaml';   Names = @('ReloadBtn', 'CloseBtn', 'SaveBtn', 'SendBtn') }
+    )
+
+    It '<Rel>: HeaderButton が寸法・余白・字面を自前で定義している' -TestCases $darkSurfaceButtons {
+        param($Rel, $Names)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $m = [regex]::Match($text, 'x:Key="HeaderButton"[\s\S]*?\n\s*</Style>')
+        $m.Success | Should -Be $true -Because "$Rel : HeaderButton スタイルが見つかりません"
+        foreach ($prop in @('Margin', 'Padding', 'MinHeight', 'FontSize', 'FontWeight')) {
+            $m.Value | Should -Match ('<Setter Property="{0}"' -f $prop) `
+                -Because "$Rel : HeaderButton が $prop を自前定義していません。既定 Button スタイル (Margin=2 / Padding=12,5 / SemiBold) を継承すると、隣接ボタンの枠線が接触して塊に見えます"
+        }
+    }
+
+    It '<Rel>: 濃色ヘッダー/フッター上のボタンはすべて HeaderButton を使っている' -TestCases $darkSurfaceButtons {
+        param($Rel, $Names)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        foreach ($name in $Names) {
+            $m = [regex]::Match($text, ('<Button x:Name="{0}"[^>]*?>' -f [regex]::Escape($name)))
+            $m.Success | Should -Be $true -Because "$Rel : ボタン $name が見つかりません"
+            $m.Value | Should -Match 'StaticResource HeaderButton' `
+                -Because "$Rel : $name は濃色地の上にあるので HeaderButton が必要です (既定スタイルだと明色ボタンになり浮きます)"
+        }
+    }
+
+    It '<Rel>: ヘッダーボタンに個別 Margin が指定されていない' -TestCases $darkSurfaceButtons {
+        param($Rel, $Names)
+        $text = Get-Content -LiteralPath (Resolve-Path-Local $Rel) -Raw
+        $offenders = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($name in $Names) {
+            $m = [regex]::Match($text, ('<Button x:Name="{0}"[^>]*?>' -f [regex]::Escape($name)))
+            if ($m.Success -and $m.Value -match '\sMargin="') { $offenders.Add($name) }
+        }
+        $offenders.Count | Should -Be 0 `
+            -Because ("$Rel : 個別 Margin はチップ間隔を不揃いにします。HeaderButton 側の Margin に一本化してください: " + ($offenders -join ', '))
+    }
+}

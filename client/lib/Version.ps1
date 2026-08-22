@@ -9,7 +9,7 @@
 # タイトルバー表示が同時に変わる。
 # 変更履歴は CHANGELOG.md を参照。
 
-$Script:AppVersion       = '1.11.0'
+$Script:AppVersion       = '1.11.1'
 $Script:AppName          = 'WorkTime Tracker'
 $Script:AppVersionTag    = "v$Script:AppVersion"
 
