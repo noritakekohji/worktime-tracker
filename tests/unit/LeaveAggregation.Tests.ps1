@@ -102,6 +102,23 @@ Describe 'Report / Tracker の集計配線' -Tag 'unit' {
         $script:TrackerSrc | Should -Match '\$ui\.IsLeaveChk\.Add_Unchecked'
     }
 
+    # 休暇にプロジェクトが紛れ込んでいた実例 (2026-08-22)。
+    # プロジェクトを選んでから休暇にチェックすると、コンボの選択が残ったまま
+    # Get-EntryFromForm がエントリを組み立てるため、休暇なのに project_code が入っていた。
+    It '休暇エントリにプロジェクト/工程/タスクが紛れ込まない' {
+        # データ生成側: 休暇なら UI の状態によらず必ず空にする
+        $script:TrackerSrc | Should -Match 'if \(\$isLeave\) \{[\s\S]{0,400}\$proj = \$null; \$proc = \$null; \$tg = \$null; \$task = \$null' `
+            -Because '休暇のとき Get-EntryFromForm がプロジェクト系を強制的に空にしていません'
+    }
+
+    It '休暇チェック中はプロジェクト系コンボを選べない' {
+        # UI 側: 選択を外し、操作も塞ぐ
+        $script:TrackerSrc | Should -Match 'function Set-LeaveFormState[\s\S]{0,1500}\$ui\.ProjectCombo\.SelectedIndex = -1' `
+            -Because '休暇チェック時にプロジェクトの選択を外していません'
+        $script:TrackerSrc | Should -Match 'function Set-LeaveFormState[\s\S]{0,2000}ProjectCombo, \$ui\.ProcessCombo, \$ui\.TaskGroupCombo, \$ui\.TaskCombo[\s\S]{0,200}IsEnabled = \(-not \$IsLeave\)' `
+            -Because '休暇チェック時にプロジェクト系コンボを無効化していません'
+    }
+
     It '休暇時間の併記は残っていない (合算しない)' {
         ([regex]::Matches($script:ViewerSrc,  '休暇 \{0:N1\} h')).Count | Should -Be 0
         ([regex]::Matches($script:TrackerSrc, '休暇 \{1:N1\} h')).Count | Should -Be 0

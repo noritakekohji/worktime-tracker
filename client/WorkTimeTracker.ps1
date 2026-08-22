@@ -826,16 +826,32 @@ foreach ($n in 'H025','H05','H1','H2','H4','H8') {
 # 休暇は作業工数ではないため、チェック中は工数を 0 に固定し入力させない。
 # 解除時は直前の値 (無ければ 1.0) に戻す。
 $Script:HoursBeforeLeave = '1.0'
+# 休暇チェック時に退避したプロジェクト (チェックを外したら選び直さずに済むよう戻す)
+$Script:ProjectBeforeLeave = ''
 function Set-LeaveFormState {
     param([bool]$IsLeave)
     if ($IsLeave) {
         if ($ui.HoursBox.Text -ne '0.0') { $Script:HoursBeforeLeave = $ui.HoursBox.Text }
         $ui.HoursBox.Text = '0.0'
+        # 休暇はプロジェクト/工程/タスクを持たない (チェックボックスの表記どおり)。
+        # 選択したままにすると、そのプロジェクトがエントリに紛れ込んでしまうため
+        # 退避してから選択を外す。工数欄と同じ「退避して戻す」方式に揃えている
+        $Script:ProjectBeforeLeave = [string]$ui.ProjectCombo.SelectedValue
+        $ui.ProjectCombo.SelectedIndex = -1
+        Reset-Cascade -From @('process','task_group','task')
     } else {
         if ($ui.HoursBox.Text -eq '0.0') { $ui.HoursBox.Text = $Script:HoursBeforeLeave }
+        if ($Script:ProjectBeforeLeave) {
+            $ui.ProjectCombo.SelectedValue = $Script:ProjectBeforeLeave
+        }
+        $Script:ProjectBeforeLeave = ''
     }
     $ui.HoursBox.IsEnabled = (-not $IsLeave)
     foreach ($btn in $Script:HoursQuickBtns) { $btn.IsEnabled = (-not $IsLeave) }
+    # 選択できてしまうと「入らないはずのプロジェクトを選んだ」状態になるので操作自体を塞ぐ
+    foreach ($cb in @($ui.ProjectCombo, $ui.ProcessCombo, $ui.TaskGroupCombo, $ui.TaskCombo)) {
+        $cb.IsEnabled = (-not $IsLeave)
+    }
 }
 $ui.IsLeaveChk.Add_Checked({   Set-LeaveFormState $true })
 $ui.IsLeaveChk.Add_Unchecked({ Set-LeaveFormState $false })
@@ -852,6 +868,14 @@ function Get-EntryFromForm {
 
     # 休暇チェック (フォームの IsLeaveChk) — エントリ属性として扱う
     $isLeave = [bool]$ui.IsLeaveChk.IsChecked
+
+    if ($isLeave) {
+        # 休暇はプロジェクト/工程/タスクを持たない。UI 側 (Set-LeaveFormState) でも
+        # 選択を外しているが、編集経路やコンボの状態に依存せず必ず空にする。
+        # ここを省くと、プロジェクト選択後に休暇へ切り替えたエントリに
+        # そのプロジェクトが残る (2026-08-22 の不具合)
+        $proj = $null; $proc = $null; $tg = $null; $task = $null
+    }
 
     if (-not $isLeave) {
         if (-not $proj) { throw 'プロジェクトを選択してください (休暇は ☑ 休暇 をチェック)' }
