@@ -422,21 +422,27 @@
                 <TabItem x:Name="GrpMember" Header="👥 メンバー">
                     <TabControl x:Name="GrpMemberInner" Background="Transparent" BorderThickness="0">
                         <TabItem Header="👥 メンバー別">
-                            <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="True" IsReadOnly="True"
-                                      CanUserAddRows="False" HeadersVisibility="Column"
-                                      Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
-                                      AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
-                                      BorderBrush="{StaticResource Border}" BorderThickness="1"
-                                      RowHeight="32" ColumnHeaderHeight="38">
-                                <DataGrid.Resources>
-                                    <Style TargetType="DataGridColumnHeader">
-                                        <Setter Property="Background" Value="{StaticResource Soft}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
-                                        <Setter Property="FontWeight" Value="Bold"/>
-                                        <Setter Property="Padding" Value="10,4"/>
-                                    </Style>
-                                </DataGrid.Resources>
-                            </DataGrid>
+                            <DockPanel Margin="10">
+                                <TextBlock DockPanel.Dock="Top" Text="メンバー × 月 工数マトリクス (空セル = その月の実績なし / 行ダブルクリックで明細へ)"
+                                           FontWeight="Bold" Foreground="{StaticResource SkyD}" Margin="0,0,0,8"/>
+                                <DataGrid x:Name="MemberSummaryGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                                          CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                          HeadersVisibility="Column"
+                                          Background="{StaticResource Surface}" RowBackground="{StaticResource Surface}"
+                                          AlternatingRowBackground="#f0f9ff" GridLinesVisibility="None"
+                                          BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                          RowHeight="32" ColumnHeaderHeight="38"
+                                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Resources>
+                                        <Style TargetType="DataGridColumnHeader">
+                                            <Setter Property="Background" Value="{StaticResource Soft}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource SkyD}"/>
+                                            <Setter Property="FontWeight" Value="Bold"/>
+                                            <Setter Property="Padding" Value="10,4"/>
+                                        </Style>
+                                    </DataGrid.Resources>
+                                </DataGrid>
+                            </DockPanel>
                         </TabItem>
         <TabItem Header="👥 負荷">
             <DockPanel Margin="10">

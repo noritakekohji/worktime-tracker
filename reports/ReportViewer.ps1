@@ -708,7 +708,8 @@ function Apply-Filters {
 
     $u.SummaryText.Text = "明細 $($rows.Count) 件 / 合計 {0:N1} h" -f (Get-EntryHoursSum $rows)
 
-    $u.MemberSummaryGrid.ItemsSource  = _SumBy $workRows 'member_id'    'メンバー'     { param($k) Resolve-MemberDisplay $k }
+    # メンバー別は月を列に展開したクロス集計で見せる (Build-MemberMonthSummary)
+    Build-MemberMonthSummary -Rows $workRows
     $u.ProjectSummaryGrid.ItemsSource = _SumBy $workRows 'project_code' 'プロジェクト' { param($k) Resolve-ProjectDisplay $k }
     $u.CategorySummaryGrid.ItemsSource= _SumBy $workRows 'category'     'カテゴリ'     { param($k) Resolve-CategoryDisplay $k }
     # システム別 / 会社別は集計キー自体をマスタから解決する
@@ -1589,7 +1590,8 @@ function _EnableDrillDown {
     })
 }
 
-foreach ($g in @($u.MemberSummaryGrid, $u.ProjectSummaryGrid, $u.CategorySummaryGrid, $u.SystemSummaryGrid, $u.CompanySummaryGrid)) {
+# MemberSummaryGrid は Set-PivotGrid で列を明示生成するため AutoGeneratingColumn は通らない
+foreach ($g in @($u.ProjectSummaryGrid, $u.CategorySummaryGrid, $u.SystemSummaryGrid, $u.CompanySummaryGrid)) {
     _HideInternalColumns $g
 }
 # カテゴリには共通フィルタが無いのでドリルダウン対象外
@@ -1736,7 +1738,10 @@ function Set-PivotGrid {
     _TraceMgr 'Set-PivotGrid' ("rows=$($rowArr.Count)")
 
     # 全行のキーをマージ (先頭行が代表だが、念のため union)
+    # 先頭 `_` のキーは列にせず、値だけ元の名前のまま行オブジェクトに残す
+    # (ドリルダウン用の `_key` 等。_EnableDrillDown が $item._key を読む)
     $orderedHeaders = New-Object System.Collections.Generic.List[string]
+    $hiddenKeys = New-Object System.Collections.Generic.List[string]
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'
     foreach ($r in $rowArr) {
         if ($null -eq $r) { continue }
@@ -1747,7 +1752,9 @@ function Set-PivotGrid {
         }
         foreach ($k in $keys) {
             $ks = [string]$k
-            if (-not $seen.Contains($ks)) { [void]$seen.Add($ks); $orderedHeaders.Add($ks) }
+            if ($seen.Contains($ks)) { continue }
+            [void]$seen.Add($ks)
+            if ($ks.StartsWith('_')) { $hiddenKeys.Add($ks) } else { $orderedHeaders.Add($ks) }
         }
     }
     if ($orderedHeaders.Count -eq 0) { _TraceMgr 'Set-PivotGrid' 'no headers'; return }
@@ -1795,6 +1802,16 @@ function Set-PivotGrid {
                 if ($p) { $val = $p.Value }
             }
             $obj[$safe] = if ($null -eq $val) { '' } else { [string]$val }
+        }
+        foreach ($hk in $hiddenKeys) {
+            $val = $null
+            if ($r -is [System.Collections.IDictionary]) {
+                if ($r.Contains($hk)) { $val = $r[$hk] }
+            } else {
+                $p = $r.PSObject.Properties[$hk]
+                if ($p) { $val = $p.Value }
+            }
+            $obj[$hk] = $val
         }
         $items.Add([pscustomobject]$obj)
     }
@@ -1932,6 +1949,82 @@ function Build-MemberLoad {
         })
     }
     $u.MissingEntriesGrid.ItemsSource = @($missing | Sort-Object -Property missing_count -Descending)
+}
+
+# 日付文字列 → 月キー (yyyy-MM)。解析できない場合は先頭 7 文字にフォールバック。
+function _MonthKey {
+    param([string]$Date)
+    if (-not $Date) { return '' }
+    $d = [datetime]::MinValue
+    if ([datetime]::TryParse($Date, [ref]$d)) { return $d.ToString('yyyy-MM') }
+    if ($Date.Length -ge 7) { return $Date.Substring(0, 7) }
+    return ''
+}
+
+# ---- メンバー × 月 クロス集計 (メンバー別タブ) ----
+# 期間内に実績がある月だけを列に展開する。末尾に 合計 / 件数、最終行に月合計。
+# `_key` は Set-PivotGrid が列にせず値だけ残すので、ドリルダウンは従来どおり効く。
+function Build-MemberMonthSummary {
+    param($Rows)
+    if (-not $u.MemberSummaryGrid) { return }
+    $u.MemberSummaryGrid.Columns.Clear()
+    $u.MemberSummaryGrid.ItemsSource = $null
+    if (-not $Rows -or $Rows.Count -eq 0) { return }
+
+    $months = New-Object 'System.Collections.Generic.SortedSet[string]'
+    $cells  = @{}   # member_id -> @{ yyyy-MM -> hours }
+    $counts = @{}   # member_id -> 件数
+    $totals = @{}   # member_id -> 工数
+    foreach ($r in $Rows) {
+        $mid = [string]$r.member_id
+        if (-not $mid) { continue }
+        $ym = _MonthKey ([string]$r.date)
+        if (-not $ym) { continue }
+        [void]$months.Add($ym)
+        if (-not $cells.ContainsKey($mid)) { $cells[$mid] = @{}; $counts[$mid] = 0; $totals[$mid] = 0.0 }
+        if (-not $cells[$mid].ContainsKey($ym)) { $cells[$mid][$ym] = 0.0 }
+        $h = [double]$r.hours
+        $cells[$mid][$ym] += $h
+        $counts[$mid]     += 1
+        $totals[$mid]     += $h
+    }
+    if ($cells.Count -eq 0) { return }
+
+    # 行順は従来のメンバー別集計と同じく工数の多い順
+    $memberIds = @($totals.GetEnumerator() | Sort-Object -Property Value -Descending | ForEach-Object { $_.Key })
+    $monthList = @($months)
+
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($mid in $memberIds) {
+        $row = [ordered]@{ 'メンバー' = (Resolve-MemberDisplay $mid) }
+        foreach ($ym in $monthList) {
+            $h = if ($cells[$mid].ContainsKey($ym)) { [double]$cells[$mid][$ym] } else { 0.0 }
+            $row[$ym] = if ($h -gt 0) { '{0:N1}' -f $h } else { '' }
+        }
+        $row['合計'] = '{0:N1}' -f $totals[$mid]
+        $row['件数'] = [string]$counts[$mid]
+        $row['_key'] = $mid
+        $out.Add([pscustomobject]$row)
+    }
+
+    # フッタ風: 月合計行
+    $footer = [ordered]@{ 'メンバー' = '◆ 月合計' }
+    $grand = 0.0
+    $grandCount = 0
+    foreach ($ym in $monthList) {
+        $sum = 0.0
+        foreach ($mid in $memberIds) {
+            if ($cells[$mid].ContainsKey($ym)) { $sum += [double]$cells[$mid][$ym] }
+        }
+        $footer[$ym] = '{0:N1}' -f $sum
+        $grand += $sum
+    }
+    foreach ($mid in $memberIds) { $grandCount += [int]$counts[$mid] }
+    $footer['合計'] = '{0:N1}' -f $grand
+    $footer['件数'] = [string]$grandCount
+    $out.Add([pscustomobject]$footer)
+
+    Set-PivotGrid -Grid $u.MemberSummaryGrid -Rows $out -FirstColWidth 200
 }
 
 # ---- メンバー × プロジェクト クロス集計 ----
