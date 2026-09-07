@@ -182,6 +182,7 @@ function Resolve-ProjectName {
     param([string]$Code)
     if (-not $Code) { return '' }
     $p = (_BuildMasterIndexes).Project[$Code]
+    if ($p -and $p.unit_name) { return [string]$p.unit_name }
     if ($p -and $p.project_name) { return [string]$p.project_name }
     return ''
 }
@@ -2474,7 +2475,7 @@ function Build-WorkTypeMix {
 }
 
 # ---- 業務種別ドリルダウン共通ヘルパ ----
-# プロジェクトコードから work_type / project_name / target_system を解決
+# プロジェクトコードから work_type / unit_name / target_system を解決
 function _ProjectAttr {
     param([string]$ProjCode, [string]$Attr)
     $p = $Script:Projects | Where-Object { [string]$_.unit_code -eq $ProjCode } | Select-Object -First 1
@@ -2485,7 +2486,8 @@ function _ProjectAttr {
 # 行ラベルの表示文字列
 function _RowLabelForCase {
     param([string]$Code)
-    $n = _ProjectAttr -ProjCode $Code -Attr 'project_name'
+    $n = _ProjectAttr -ProjCode $Code -Attr 'unit_name'
+    if (-not $n) { $n = _ProjectAttr -ProjCode $Code -Attr 'project_name' }
     if ($n) { return "$Code  $n" }
     return $Code
 }

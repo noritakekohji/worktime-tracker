@@ -38,7 +38,9 @@ function Show-UserPrefsDialog {
         if (-not $p.unit_code) { continue }
         $uc = [string]$p.unit_code
         $cb = New-Object System.Windows.Controls.CheckBox
-        $cb.Content = ('[{0}] {1}  {2}' -f $uc, $p.project_name, $(if ($p.unit_name) { "($($p.unit_name))" } else { '' }))
+        $projectDisplay = if ($p.unit_name) { [string]$p.unit_name } else { [string]$p.project_name }
+        $unitDisplay = if ($p.unit_name) { "($($p.project_name))" } else { '' }
+        $cb.Content = ('[{0}] {1}  {2}' -f $uc, $projectDisplay, $unitDisplay)
         $cb.Tag = $uc
         $cb.IsChecked = $favSet.Contains($uc)
         $u.ProjectsList.Items.Add($cb) | Out-Null

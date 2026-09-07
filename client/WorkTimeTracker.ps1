@@ -527,7 +527,7 @@ function Build-ProjectComboItems {
         $isFav = $favs.Contains([string]$p.unit_code)
         $star  = if ($isFav) { '⭐ ' } else { '' }
         $disp = if ($p.unit_name) {
-            "{0}[{1}] {2} ({3})" -f $star, $p.unit_code, $p.project_name, $p.unit_name
+            "{0}[{1}] {2} ({3})" -f $star, $p.unit_code, $p.unit_name, $p.project_name
         } else {
             "{0}[{1}] {2}" -f $star, $p.unit_code, $p.project_name
         }
@@ -573,7 +573,8 @@ function Resolve-EntryNames {
     $projName = $ProjCode; $procName = ''; $tgName = ''; $taskName = ''
     $proj = $Script:Projects | Where-Object { $_.unit_code -eq $ProjCode } | Select-Object -First 1
     if ($proj) {
-        if ($proj.project_name) { $projName = [string]$proj.project_name }
+        if ($proj.unit_name) { $projName = [string]$proj.unit_name }
+        elseif ($proj.project_name) { $projName = [string]$proj.project_name }
         $ptn = Get-TaskPatternFor -Project $proj
         if ($ptn -and $ptn.processes) {
             $proc = @($ptn.processes) | Where-Object { $_.code -eq $ProcCode } | Select-Object -First 1
@@ -911,7 +912,7 @@ function Get-EntryFromForm {
     return [pscustomobject]@{
         date            = $d.ToString('yyyy-MM-dd')
         project_code    = if ($proj) { [string]$proj.unit_code }    else { '' }
-        project_name    = if ($proj) { [string]$proj.project_name } else { if ($isLeave) { '(休暇)' } else { '' } }
+        project_name    = if ($proj) { if ($proj.unit_name) { [string]$proj.unit_name } else { [string]$proj.project_name } } else { if ($isLeave) { '(休暇)' } else { '' } }
         process_code    = if ($proc) { [string]$proc.code } else { '' }
         process_name    = if ($proc) { [string]$proc.name } else { '' }
         task_group_code = if ($tg)   { [string]$tg.code }   else { '' }

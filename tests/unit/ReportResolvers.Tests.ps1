@@ -40,8 +40,9 @@ BeforeAll {
             [pscustomobject]@{ id='E003'; name='鈴木一郎';                        active=$true }
         )
         $script:Projects = @(
-            [pscustomobject]@{ unit_code='ABC001'; project_name='顧客管理刷新'; target_system='CRM'; work_type='案件対応'; task_pattern_id='PT1' },
-            [pscustomobject]@{ unit_code='XYZ999'; project_name='運用保守';     target_system='ERP'; work_type='維持運用'; task_pattern_id='PT2' },
+            # 登録済みデータの project_name / unit_name が逆でも、画面には論理名を表示する。
+            [pscustomobject]@{ unit_code='ABC001'; project_name='営業一部'; unit_name='顧客管理刷新'; target_system='CRM'; work_type='案件対応'; task_pattern_id='PT1' },
+            [pscustomobject]@{ unit_code='XYZ999'; project_name='基盤運用部'; unit_name='運用保守';     target_system='ERP'; work_type='維持運用'; task_pattern_id='PT2' },
             [pscustomobject]@{ unit_code='NOPAT'; project_name='パターン無し' }
         )
         $script:Categories = @(
@@ -92,7 +93,7 @@ Describe 'メンバー / プロジェクト / カテゴリの名称解決' -Tag 
         Resolve-MemberCompany 'NOPE' | Should -Be ''
     }
 
-    It 'プロジェクト名と対象システムを引ける' {
+    It '登録済みの逆転した名称でも案件名称と対象システムを引ける' {
         Resolve-ProjectName 'ABC001'         | Should -Be '顧客管理刷新'
         Resolve-ProjectDisplay 'ABC001'      | Should -Be 'ABC001  顧客管理刷新'
         Resolve-ProjectTargetSystem 'ABC001' | Should -Be 'CRM'

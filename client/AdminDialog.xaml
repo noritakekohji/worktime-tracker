@@ -326,8 +326,8 @@
                             </DataGrid.Resources>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="ユニットコード" Binding="{Binding unit_code, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                                <DataGridTextColumn Header="案件名称" Binding="{Binding project_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
-                                <DataGridTextColumn Header="ユニット名称" Binding="{Binding unit_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
+                                <DataGridTextColumn Header="案件名称" Binding="{Binding unit_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                                <DataGridTextColumn Header="ユニット名称" Binding="{Binding project_name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                                 <DataGridTextColumn Header="対象システム" Binding="{Binding target_system, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>
                                 <DataGridTextColumn Header="業務種別 (案件対応/維持運用/その他)" Binding="{Binding work_type, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
                                 <DataGridTextColumn Header="期間 FROM (YYYY-MM-DD)" Binding="{Binding period_from, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="140"/>

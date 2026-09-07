@@ -212,13 +212,13 @@ $ui.MonthCombo.SelectedItem = $now.Month
 #         文字列内の "[$var]" も型キャストと誤解析されるため同様
 $projItems = @($Script:Projects | ForEach-Object {
     $uc   = if ($_.unit_code)    { [string]$_.unit_code }    else { [string]$_.id }
-    $pn   = if ($_.project_name) { [string]$_.project_name } else { [string]$_.name }
-    $un   = [string]$_.unit_name
-    $disp = if ($un) { '[' + $uc + '] ' + $pn + ' (' + $un + ')' } else { '[' + $uc + '] ' + $pn }
+    $storedUnitName = if ($_.project_name) { [string]$_.project_name } else { [string]$_.name }
+    $projectDisplay = if ($_.unit_name) { [string]$_.unit_name } else { $storedUnitName }
+    $disp = if ($_.unit_name) { '[' + $uc + '] ' + $projectDisplay + ' (' + $storedUnitName + ')' } else { '[' + $uc + '] ' + $projectDisplay }
     [pscustomobject]@{
         unit_code       = $uc
-        project_name    = $pn
-        unit_name       = $un
+        project_name    = $projectDisplay
+        unit_name       = $storedUnitName
         task_pattern_id = [string]$_.task_pattern_id
         display         = $disp
     }
