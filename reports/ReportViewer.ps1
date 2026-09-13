@@ -312,7 +312,7 @@ $win = [Windows.Markup.XamlReader]::Load($reader)
 $win.Title = Format-WindowTitle -ScreenName 'Report'
 # (フッタ VersionText は FindName 後にセット)
 $u = @{}
-foreach ($n in 'FromDate','ToDate','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','CompanyFilter','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
+foreach ($n in 'FromDate','ToDate','PeriodPreviousSelectedMonthBtn','PeriodNextSelectedMonthBtn','PeriodThisMonthBtn','PeriodPrevMonthBtn','PeriodThisFYBtn','CompanyFilter','MemberFilter','SystemFilter','WorkTypeFilter','ProjectFilter','ApplyBtn','ReloadBtn','LoadAllBtn','ExportBtn','AdminBtn',
               'MainTabs','GrpOverview','GrpMember','GrpProject','GrpCheck','GrpDetail',
               'GrpOverviewInner','GrpMemberInner','GrpProjectInner','GrpCheckInner','GrpDetailInner','MissingTab',
               'DetailGrid','MemberSummaryGrid','ProjectSummaryGrid','CategorySummaryGrid','SystemSummaryGrid','CompanySummaryGrid','SummaryText','StatusText','VersionText','RemoteNoticeText','AnalysisPanel',
@@ -389,6 +389,31 @@ function _SetPeriodPrevMonth {
     $prev = (Get-Date -Year $t.Year -Month $t.Month -Day 1).AddMonths(-1)
     $u.FromDate.SelectedDate = $prev
     $u.ToDate.SelectedDate   = ($prev.AddMonths(1)).AddDays(-1)
+}
+function _GetMonthBounds {
+    param([datetime]$MonthDate, [int]$OffsetMonths = 0)
+    # Get-Date -Year/-Month/-Day は時刻部分を現在時刻のまま残すため、
+    # DatePicker の日付比較がぶれないよう明示的に 00:00:00 を作る。
+    $firstDay = [datetime]::new($MonthDate.Year, $MonthDate.Month, 1).AddMonths($OffsetMonths)
+    return [pscustomobject]@{
+        From = $firstDay
+        To   = $firstDay.AddMonths(1).AddDays(-1)
+    }
+}
+function _ShiftPeriodMonth {
+    param([int]$OffsetMonths)
+    # 月範囲が選択されている前提で、開始日を基準に前後の月全体へ移動する。
+    # 開始日が未指定のときも安全に当月から移動できる。
+    $baseDate = if ($u.FromDate.SelectedDate) {
+        [datetime]$u.FromDate.SelectedDate
+    } elseif ($u.ToDate.SelectedDate) {
+        [datetime]$u.ToDate.SelectedDate
+    } else {
+        [datetime]::Today
+    }
+    $bounds = _GetMonthBounds -MonthDate $baseDate -OffsetMonths $OffsetMonths
+    $u.FromDate.SelectedDate = $bounds.From
+    $u.ToDate.SelectedDate   = $bounds.To
 }
 function _SetPeriodThisFY {
     # 会計年度: 4 月始まり〜翌 3 月末
@@ -1516,6 +1541,8 @@ $u.ReloadBtn.Add_Click({
 $u.ApplyBtn.Add_Click({ _Diag "ApplyBtn click"; _SafeApplyFilters })
 
 # 期間クイック選択ボタン → 期間を設定して即フィルタ適用
+$u.PeriodPreviousSelectedMonthBtn.Add_Click({ _ShiftPeriodMonth -OffsetMonths -1; if ($Script:AllEntries) { _SafeApplyFilters } })
+$u.PeriodNextSelectedMonthBtn.Add_Click({     _ShiftPeriodMonth -OffsetMonths  1; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodThisMonthBtn.Add_Click({ _SetPeriodThisMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodPrevMonthBtn.Add_Click({ _SetPeriodPrevMonth; if ($Script:AllEntries) { _SafeApplyFilters } })
 $u.PeriodThisFYBtn.Add_Click({    _SetPeriodThisFY;    if ($Script:AllEntries) { _SafeApplyFilters } })

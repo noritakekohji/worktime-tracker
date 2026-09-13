@@ -297,9 +297,17 @@
             <WrapPanel Orientation="Horizontal">
                 <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
                     <Label Content="期間:"/>
+                    <Button x:Name="PeriodPreviousSelectedMonthBtn" Padding="8,2" Margin="4,0,0,0"
+                            ToolTip="選択中の月の 1 か月前へ移動">
+                        <TextBlock Text="&#xE76B;" Style="{StaticResource IconGlyph}"/>
+                    </Button>
                     <DatePicker x:Name="FromDate" Width="140" Margin="4,0,0,0"/>
                     <Label Content="〜" Margin="6,0"/>
                     <DatePicker x:Name="ToDate" Width="140"/>
+                    <Button x:Name="PeriodNextSelectedMonthBtn" Padding="8,2" Margin="4,0,0,0"
+                            ToolTip="選択中の月の 1 か月後へ移動">
+                        <TextBlock Text="&#xE76C;" Style="{StaticResource IconGlyph}"/>
+                    </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,2,16,2">
                     <Button x:Name="PeriodThisMonthBtn" Padding="10,2" ToolTip="今月の 1 日 〜 月末">

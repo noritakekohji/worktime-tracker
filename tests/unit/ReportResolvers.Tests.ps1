@@ -18,7 +18,8 @@ BeforeAll {
         'Resolve-MemberName','Resolve-MemberDisplay','Resolve-MemberCompany',
         'Resolve-ProjectName','Resolve-ProjectDisplay','Resolve-ProjectTargetSystem',
         'Resolve-CategoryName','Resolve-CategoryDisplay',
-        'Resolve-ProjectTaskPattern','Resolve-ProcessName','Resolve-TaskGroupName','Resolve-TaskName'
+        'Resolve-ProjectTaskPattern','Resolve-ProcessName','Resolve-TaskGroupName','Resolve-TaskName',
+        '_GetMonthBounds'
     )
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:ViewerPath, [ref]$null, [ref]$null)
     $defs = $ast.FindAll({
@@ -65,6 +66,23 @@ BeforeAll {
                 )}
             )}
         )
+    }
+}
+
+Describe '_GetMonthBounds' -Tag 'unit' {
+
+    It '指定月の前月を月初から月末まで返す' {
+        $result = _GetMonthBounds -MonthDate ([datetime]'2026-01-15') -OffsetMonths -1
+
+        $result.From | Should -Be ([datetime]'2025-12-01')
+        $result.To   | Should -Be ([datetime]'2025-12-31')
+    }
+
+    It '指定月の翌月を月初から月末まで返す' {
+        $result = _GetMonthBounds -MonthDate ([datetime]'2026-01-15') -OffsetMonths 1
+
+        $result.From | Should -Be ([datetime]'2026-02-01')
+        $result.To   | Should -Be ([datetime]'2026-02-28')
     }
 }
 

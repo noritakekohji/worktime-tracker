@@ -110,6 +110,21 @@ Describe 'フィルタの二重定義がない' -Tag 'ui' {
     }
 }
 
+Describe '期間の月移動ボタン' -Tag 'ui' {
+
+    It '選択中の月を前後へ移動する左右ボタンがある' {
+        foreach ($n in 'PeriodPreviousSelectedMonthBtn','PeriodNextSelectedMonthBtn') {
+            $script:Win.FindName($n) | Should -Not -BeNullOrEmpty -Because "$n が期間フィルタに必要"
+        }
+    }
+
+    It '左右ボタンは選択中の月を基準に 1 か月移動する' {
+        $src = Get-Content -LiteralPath $script:ViewerPath -Raw -Encoding UTF8
+        $src | Should -Match 'PeriodPreviousSelectedMonthBtn\.Add_Click\(\{\s*_ShiftPeriodMonth\s+-OffsetMonths\s+-1'
+        $src | Should -Match 'PeriodNextSelectedMonthBtn\.Add_Click\(\{\s*_ShiftPeriodMonth\s+-OffsetMonths\s+1'
+    }
+}
+
 Describe '遅延構築ビューの置き場所宣言' -Tag 'ui' {
 
     It 'ビューが 1 つ以上宣言されている' {
