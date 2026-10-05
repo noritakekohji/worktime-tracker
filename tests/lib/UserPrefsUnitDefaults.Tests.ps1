@@ -101,6 +101,25 @@ Describe '最近の組み合わせの表示件数' -Tag 'unit' {
     }
 }
 
+Describe '初期プロジェクト' -Tag 'unit' {
+    BeforeEach {
+        Remove-Item -LiteralPath (Get-UserPrefsPath) -Force -ErrorAction SilentlyContinue
+    }
+
+    It '未設定なら空文字' {
+        Get-InitialProject -MemberId 'E001' | Should -Be ''
+    }
+
+    It '保存・解除ができ、他のキーを消さない' {
+        Set-UnitDefault -MemberId 'E001' -UnitCode 'ABC001' -Default @{ process_code = 'DSN' }
+        Set-InitialProject -MemberId 'E001' -UnitCode 'ABC001'
+        Get-InitialProject -MemberId 'E001' | Should -Be 'ABC001'
+        (Get-UnitDefault -MemberId 'E001' -UnitCode 'ABC001').process_code | Should -Be 'DSN'
+        Set-InitialProject -MemberId 'E001' -UnitCode ''
+        Get-InitialProject -MemberId 'E001' | Should -Be ''
+    }
+}
+
 Describe 'お気に入り切替' -Tag 'unit' {
     BeforeEach {
         Remove-Item -LiteralPath (Get-UserPrefsPath) -Force -ErrorAction SilentlyContinue

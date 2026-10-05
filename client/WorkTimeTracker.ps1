@@ -1240,6 +1240,19 @@ function Clear-Form {
     $ui.FormHeader.Text = '新規エントリ'
     $ui.AddBtn.Visibility = 'Visible'
     $ui.UpdateBtn.Visibility = 'Collapsed'
+    Select-InitialProject
+}
+
+# 個人設定の初期プロジェクトを選ぶ (起動時・クリア時)。通常の選択として扱うため、
+# 📌 既定があれば工程〜コメントも入る。無効化・削除済みなら何もしない
+function Select-InitialProject {
+    if (-not $Script:CurrentMember) { return }
+    try {
+        $code = Get-InitialProject -MemberId ([string]$Script:CurrentMember.id)
+        if (-not $code) { return }
+        Clear-ProjectFilter
+        $ui.ProjectCombo.SelectedValue = $code
+    } catch { Write-FatalLog "Select-InitialProject: $_" }
 }
 
 # ---- 追加 ----
@@ -1813,5 +1826,8 @@ $Script:Window.Add_PreviewKeyDown({
         }
     }
 })
+
+# 起動時の初期プロジェクト (個人設定)。ハンドラ登録後に選ぶことで 📌 既定も適用される
+Select-InitialProject
 
 [void]$Script:Window.ShowDialog()

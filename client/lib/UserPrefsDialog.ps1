@@ -20,7 +20,7 @@ function Show-UserPrefsDialog {
     $win = [Windows.Markup.XamlReader]::Load($reader)
 
     $u = @{}
-    foreach ($n in 'MemberLabel','ProjectsList','SaveBtn','CancelBtn','RecentCountCombo') {
+    foreach ($n in 'MemberLabel','ProjectsList','SaveBtn','CancelBtn','RecentCountCombo','InitialProjectCombo') {
         $u[$n] = $win.FindName($n)
     }
     $u.MemberLabel.Text = ("対象: {0} ({1})" -f $MemberId, $MemberName)
@@ -43,6 +43,24 @@ function Show-UserPrefsDialog {
     $u.RecentCountCombo.SelectedValuePath = 'value'
     $u.RecentCountCombo.ItemsSource = $countItems
     $u.RecentCountCombo.SelectedValue = $curCount
+
+    # 初期プロジェクト: (なし) + 有効なプロジェクト。無効化済みのプロジェクトが設定されていれば、それも残して見せる
+    $initItems = New-Object System.Collections.Generic.List[object]
+    $initItems.Add([pscustomobject]@{ value = ''; label = '(なし)' })
+    $curInit = [string]$prefs['initial_project']
+    foreach ($p in @($Projects)) {
+        if (-not $p.unit_code) { continue }
+        $uc = [string]$p.unit_code
+        if (-not $p.active -and $uc -ne $curInit) { continue }
+        $nm = if ($p.unit_name) { [string]$p.unit_name } else { [string]$p.project_name }
+        $suffix = if ($p.active) { '' } else { ' (無効)' }
+        $initItems.Add([pscustomobject]@{ value = $uc; label = ('[{0}] {1}{2}' -f $uc, $nm, $suffix) })
+    }
+    $u.InitialProjectCombo.DisplayMemberPath = 'label'
+    $u.InitialProjectCombo.SelectedValuePath = 'value'
+    $u.InitialProjectCombo.ItemsSource = $initItems
+    $u.InitialProjectCombo.SelectedValue = $curInit
+    if ($null -eq $u.InitialProjectCombo.SelectedItem) { $u.InitialProjectCombo.SelectedIndex = 0 }
     foreach ($p in @($prefs.favorite_projects)) {
         if ($p) { [void]$favSet.Add([string]$p) }
     }
@@ -102,6 +120,7 @@ function Show-UserPrefsDialog {
         # 読み直してから差分だけ反映する (unit_defaults 等ほかのキーを消さない)
         $newPrefs = Get-UserPrefs -MemberId $MemberId
         $newPrefs['favorite_projects'] = $favs.ToArray()
+        $newPrefs['initial_project'] = [string]$u.InitialProjectCombo.SelectedValue
         if ($null -ne $u.RecentCountCombo.SelectedValue) {
             $newPrefs['recent_combo_count'] = _NormalizeRecentComboCount $u.RecentCountCombo.SelectedValue
         }

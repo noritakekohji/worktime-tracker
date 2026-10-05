@@ -8,7 +8,8 @@
 #         "ABC001": { "process_code": "DSN", "task_group_code": "DB", "task_code": "ERD",
 #                     "category": "DESIGN", "hours": 2.0, "comment": "" }
 #       },
-#       "recent_combo_count": 5
+#       "recent_combo_count": 5,
+#       "initial_project": "ABC001"
 #     },
 #     ...
 #   }
@@ -61,7 +62,21 @@ function Get-UserPrefs {
     $p['favorite_projects'] = [string[]]@(@($p['favorite_projects']) | Where-Object { $_ } | ForEach-Object { [string]$_ })
     $p['unit_defaults'] = _ToUnitDefaultsTable $p['unit_defaults']
     $p['recent_combo_count'] = _NormalizeRecentComboCount $p['recent_combo_count']
+    $p['initial_project'] = if ($null -eq $p['initial_project']) { '' } else { [string]$p['initial_project'] }
     return $p
+}
+
+# 日次入力の起動時・クリア時に選択するプロジェクト (unit_code)。'' = 選択しない
+function Get-InitialProject {
+    param([Parameter(Mandatory)][string]$MemberId)
+    return [string](Get-UserPrefs -MemberId $MemberId)['initial_project']
+}
+
+function Set-InitialProject {
+    param([Parameter(Mandatory)][string]$MemberId, [AllowEmptyString()][string]$UnitCode = '')
+    $prefs = Get-UserPrefs -MemberId $MemberId
+    $prefs['initial_project'] = $UnitCode
+    Set-UserPrefs -MemberId $MemberId -Prefs $prefs
 }
 
 # 日次入力「最近の組み合わせ」の表示件数。0 = 非表示
