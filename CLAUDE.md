@@ -74,6 +74,7 @@ if ($b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
 | AdminBtn を押しても無反応 | 旧 `.role -eq 'admin'` が残っている (roles 配列スキーマで silent return) | `Has-Role -Member $m -Role 'admin'` に置換。`tests/unit/RoleUsage.Tests.ps1` が検出 |
 | DataGrid の表が完全に空 | `AutoGenerateColumns="False"` + `<DataGrid.Columns>` 未定義 + PS で `.Columns.Add` していない | `tests/ui/DataGridColumns.Tests.ps1` が検出 |
 | `引数の型が一致しません` (AutoGen Binding) | 列名に `/` `(` `)` ` ` `~` 等が含まれ、Binding パス解析が失敗 | `Set-PivotGrid` ヘルパで内部プロパティを `col0..colN` にリネーム |
+| `プロパティ 'Filter' が見つかりません` (CollectionView) | `GetDefaultView()` の戻り値 (ICollectionView) は IEnumerable なので、関数から `return $view` すると要素に展開される | `return ,$view`。`if ($v)` もコレクション扱いになりうるため `$null -ne $v` で判定 (`tests/ui/ProjectComboFilter.Tests.ps1`) |
 | 単一要素配列が unwrap されて WPF が型変換失敗 | PS 5.1 で関数 return が単一要素配列を unwrap | **`return ,$arr`** (カンマ演算子) を使う。`Write-Output -NoEnumerate` は関数の唯一の出力だと結局展開されて効かない (検証済み) |
 | `ItemsSource` に `PSCustomObject を IEnumerable に変換できません` | 集計結果が 1 行のときだけ関数 return が unwrap される。フィルタで 1 件に絞ったときだけ再現するため気づきにくい | 返す側を `return ,$arr` にする。呼出側は `@()` で囲まない (囲むと二重ラップ) |
 | 本番に既に壊れた形のマスタが残っている | 保存側を直しても既存ファイルは直らない。`"roles":"admin"` / `"wbs_items":{...}` 等 | `Get-Master*` が読込時に `_AsArray` で配列へ正規化する。全消費者に `@()` を書いて回らない (漏れる)。一度保存し直せばファイルも自己修復する |
@@ -182,20 +183,23 @@ tests/
 │   ├── Member.Tests.ps1
 │   ├── AllScripts.Tests.ps1       # 全 .ps1 構文 + BOM チェック
 │   ├── PSScriptAnalyzer.Tests.ps1 # 静的解析
-│   └── RoleUsage.Tests.ps1        # .role -eq 'admin' 残骸検出
+│   ├── RoleUsage.Tests.ps1        # .role -eq 'admin' 残骸検出
+│   └── EntryAssist.Tests.ps1      # 日次入力の補助ロジック (直前日 / 最近の組合せ / 未入力日)
 ├── lib/
 │   ├── DataStore.Tests.ps1
 │   ├── Bootstrap.Tests.ps1
 │   ├── Roles.Tests.ps1
-│   └── ProjectWbsItems.Tests.ps1
+│   ├── ProjectWbsItems.Tests.ps1
+│   └── UserPrefsUnitDefaults.Tests.ps1  # ユニット別デフォルト / お気に入り切替
 ├── ui/
 │   ├── Xaml.Tests.ps1             # XAML パース + FindName 整合
-│   └── DataGridColumns.Tests.ps1  # AutoGen=False + 列定義なし 検出
+│   ├── DataGridColumns.Tests.ps1  # AutoGen=False + 列定義なし 検出
+│   └── ProjectComboFilter.Tests.ps1  # プロジェクト候補の絞り込み (ICollectionView 展開事故)
 └── integration/EndToEnd.Tests.ps1
 ```
 
 実行: `tests\run-tests.cmd` または `tests\Invoke-Tests.ps1`  
-現在 **119 ケース PASS**。
+現在 **451 ケース PASS** (2026-10-05 時点)。
 
 **新機能を追加したら、回帰防止テストを必ず追加すること**:
 - 過去事故と同じ pattern を tests/ で検出させる

@@ -192,6 +192,15 @@
             <Setter Property="FontWeight" Value="Bold"/>
         </Style>
 
+        <!-- 小さなチップ型ボタン (最近の組み合わせ / 未入力日) -->
+        <Style x:Key="ChipButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="Margin" Value="0,1,4,1"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+        </Style>
+
         <!-- カードコンテナ -->
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
@@ -360,6 +369,13 @@
                             <TextBlock x:Name="ListTitle" Text="📋 当月エントリ一覧" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="CopyPrevDayBtn"
+                                    ToolTip="フォームの日付より前で直近の入力日の実績 (休暇を除く) を、フォームの日付の行として一括追加します">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="直前日をコピー" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="DuplicateBtn">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyph}"/>
@@ -380,6 +396,17 @@
                             </Button>
                         </StackPanel>
                     </DockPanel>
+
+                    <!-- 当月の未入力平日 (今日まで)。クリックでその日をフォームの日付にする -->
+                    <Border x:Name="MissingDaysBorder" DockPanel.Dock="Top" Visibility="Collapsed"
+                            Margin="0,0,0,8" Padding="8,4" CornerRadius="6"
+                            Background="#fff7ed" BorderBrush="#fdba74" BorderThickness="1">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left" Text="⚠ 未入力の平日:" Foreground="#9a3412"
+                                       FontWeight="SemiBold" Margin="0,0,8,0"/>
+                            <WrapPanel x:Name="MissingDaysPanel"/>
+                        </DockPanel>
+                    </Border>
 
                     <!-- 一覧とその空状態メッセージを重ねる。0 件のときに「次に何をするか」を案内する -->
                     <Grid>
@@ -488,6 +515,7 @@
                         </Button>
                     </StackPanel>
 
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <Label Content="日付  (バックデートOK)" Margin="0,2,0,0"/>
                         <StackPanel Orientation="Horizontal">
@@ -512,10 +540,36 @@
                                   Margin="0,10,0,4" FontWeight="SemiBold"
                                   ToolTip="ON にすると有給休暇/半休/特別休暇 等を記録できます。プロジェクト等の選択は不要になります"/>
 
-                        <Label Content="プロジェクト (ユニット)" Margin="0,4,0,0"/>
-                        <ComboBox x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"
-                                  IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True"
-                                  TextSearch.TextPath="display"/>
+                        <DockPanel x:Name="RecentCombosArea" Visibility="Collapsed" Margin="0,2,0,0"
+                                   ToolTip="最近使ったプロジェクト〜カテゴリの組み合わせ。クリックで入力します">
+                            <TextBlock DockPanel.Dock="Left" Text="最近:" Foreground="{StaticResource TextMuted}"
+                                       VerticalAlignment="Top" Margin="2,5,6,0"/>
+                            <WrapPanel x:Name="RecentCombosPanel"/>
+                        </DockPanel>
+
+                        <Label Content="プロジェクト (ユニット)  ※コード・名称の一部を入力して絞り込み" Margin="0,4,0,0"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- IsTextSearchEnabled は False: 入力文字での絞り込みは PS 側 (CollectionView.Filter) で行う -->
+                            <ComboBox Grid.Column="0" x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"
+                                      IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True"/>
+                            <!-- Content は PS 側で FavoriteStar (E734) / FavoriteStarFill (E735) を切り替える -->
+                            <Button Grid.Column="1" x:Name="FavToggleBtn" Content="&#xE734;" MinWidth="32" MinHeight="26"
+                                    Margin="4,1,0,1" Padding="4,0" FontFamily="Segoe MDL2 Assets" FontSize="14" IsEnabled="False"
+                                    ToolTip="選択中のプロジェクトをお気に入りに登録 / 解除"/>
+                            <Button Grid.Column="2" x:Name="SaveDefaultBtn" MinHeight="26" Margin="4,1,0,1" Padding="4,0"
+                                    IsEnabled="False"
+                                    ToolTip="いまのフォームの内容 (工程〜コメント) を、このユニットを選んだときのデフォルトとして登録">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE718;" Style="{StaticResource IconGlyph}"/>
+                                    <TextBlock Text="既定に登録" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
 
                         <Label Content="工程" Margin="0,3,0,0"/>
                         <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
@@ -547,9 +601,10 @@
                         </StackPanel>
 
                         <Label Content="コメント (任意)" Margin="0,4,0,0"/>
-                        <TextBox x:Name="CommentBox" Height="52" AcceptsReturn="True" TextWrapping="Wrap"
+                        <TextBox x:Name="CommentBox" Height="44" AcceptsReturn="True" TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
                     </StackPanel>
+                    </ScrollViewer>
                 </DockPanel>
             </Border>
         </Grid>

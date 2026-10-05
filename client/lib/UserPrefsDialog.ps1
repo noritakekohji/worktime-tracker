@@ -32,18 +32,48 @@ function Show-UserPrefsDialog {
         if ($p) { [void]$favSet.Add([string]$p) }
     }
 
-    # CheckBox 一覧構築
+    # 既定 (ユニット別デフォルト) の登録状況。解除は保存時にまとめて反映する
+    $unitDefaults = $prefs['unit_defaults']
+    $removeSet = New-Object System.Collections.Generic.HashSet[string]
+
+    # 行 = お気に入り CheckBox + (既定があれば) 解除ボタン
     $cbList = New-Object System.Collections.Generic.List[object]
     foreach ($p in @($Projects)) {
         if (-not $p.unit_code) { continue }
         $uc = [string]$p.unit_code
+        $row = New-Object System.Windows.Controls.DockPanel
+        $row.LastChildFill = $true
         $cb = New-Object System.Windows.Controls.CheckBox
         $projectDisplay = if ($p.unit_name) { [string]$p.unit_name } else { [string]$p.project_name }
         $unitDisplay = if ($p.unit_name) { "($($p.project_name))" } else { '' }
-        $cb.Content = ('[{0}] {1}  {2}' -f $uc, $projectDisplay, $unitDisplay)
+        $mark = if ($unitDefaults.ContainsKey($uc)) { '  📌' } else { '' }
+        $cb.Content = ('[{0}] {1}  {2}{3}' -f $uc, $projectDisplay, $unitDisplay, $mark)
         $cb.Tag = $uc
         $cb.IsChecked = $favSet.Contains($uc)
-        $u.ProjectsList.Items.Add($cb) | Out-Null
+        if ($unitDefaults.ContainsKey($uc)) {
+            $d = $unitDefaults[$uc]
+            $cb.ToolTip = ("既定: 工程={0} / タスクグループ={1} / タスク={2} / カテゴリ={3} / 工数={4} / コメント={5}" -f `
+                $d['process_code'], $d['task_group_code'], $d['task_code'], $d['category'], $d['hours'], $d['comment'])
+            $btn = New-Object System.Windows.Controls.Button
+            $btn.Content = '既定を解除'
+            $btn.Tag = $uc
+            $btn.MinHeight = 24
+            $btn.Padding = '8,0'
+            $btn.FontSize = 11
+            $btn.Add_Click({
+                param($s, $e)
+                $code = [string]$s.Tag
+                if ($removeSet.Contains($code)) {
+                    [void]$removeSet.Remove($code); $s.Content = '既定を解除'
+                } else {
+                    [void]$removeSet.Add($code); $s.Content = '解除を取消 (保存で確定)'
+                }
+            })
+            [System.Windows.Controls.DockPanel]::SetDock($btn, 'Right')
+            [void]$row.Children.Add($btn)
+        }
+        [void]$row.Children.Add($cb)
+        $u.ProjectsList.Items.Add($row) | Out-Null
         $cbList.Add($cb)
     }
 
@@ -54,7 +84,10 @@ function Show-UserPrefsDialog {
         foreach ($cb in $cbList) {
             if ($cb.IsChecked) { $favs.Add([string]$cb.Tag) }
         }
-        $newPrefs = @{ favorite_projects = $favs.ToArray() }
+        # 読み直してから差分だけ反映する (unit_defaults 等ほかのキーを消さない)
+        $newPrefs = Get-UserPrefs -MemberId $MemberId
+        $newPrefs['favorite_projects'] = $favs.ToArray()
+        foreach ($code in $removeSet) { [void]$newPrefs['unit_defaults'].Remove($code) }
         Set-UserPrefs -MemberId $MemberId -Prefs $newPrefs
         $script:Result = $true
         $win.Close()

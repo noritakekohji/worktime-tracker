@@ -77,6 +77,7 @@ $libDir = Join-Path $PSScriptRoot 'lib'
 . (Join-Path $libDir 'Credential.ps1')
 . (Join-Path $libDir 'GitLab.ps1')
 . (Join-Path $libDir 'DataStore.ps1')
+. (Join-Path $libDir 'EntryAssist.ps1')
 . (Join-Path $libDir 'SyncMonitor.ps1')
 . (Join-Path $libDir 'AutoUpdate.ps1')
 . (Join-Path $libDir 'ConfigDialog.ps1')
@@ -316,6 +317,12 @@ $Script:Members      = @($ctx['Members'])
 $Script:Projects     = @($ctx['Projects'])
 $Script:Categories   = @($ctx['Categories'])
 $Script:TaskPatterns = @($ctx['TaskPatterns'])
+# 祝日は未入力の平日の判定にだけ使う。読めなくても入力は続けられるので致命扱いにしない
+function Load-TrackerHolidays {
+    try { $Script:Holidays = @(Get-MasterHolidays -Source $Script:Source) }
+    catch { $Script:Holidays = @(); Write-FatalLog "holidays.json 読込失敗: $_" }
+}
+Load-TrackerHolidays
 Write-FatalLog ("Loaded: Members={0} Projects={1} Categories={2} TaskPatterns={3}" -f $Script:Members.Count, $Script:Projects.Count, $Script:Categories.Count, $Script:TaskPatterns.Count)
 
 function Reload-Masters {
@@ -332,9 +339,10 @@ function Reload-Masters {
         $Script:Projects     = @(Get-MasterProjects     -Source $Script:Source)
         $Script:Categories   = @(Get-MasterCategories   -Source $Script:Source)
         $Script:TaskPatterns = @(Get-MasterTaskPatterns -Source $Script:Source)
+        Load-TrackerHolidays
         # UI 反映: プロジェクト / カテゴリ / 現在の作業者
         if ($ui -and $ui.ProjectCombo) {
-            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
+            Set-ProjectComboItems -Preserve
         }
         if ($ui -and $ui.CategoryCombo) {
             $ui.CategoryCombo.ItemsSource = @($Script:Categories)
@@ -374,7 +382,9 @@ $names = @(
     'CategoryCombo','HoursBox','CommentBox','ClearBtn','AddBtn','UpdateBtn','TaskDescBorder','TaskDescText',
     'EntriesGrid','EmptyListText','EditRowBtn','DeleteRowBtn','DuplicateBtn','SaveBtn','HoursTotalText','HoursDayText',
     'AdminBtn','SettingsBtn','UserPrefsBtn','OpenFolderBtn','PushBtn','FormHeader','ListTitle','ModeText','VersionText',
-    'WbsNavBtn','ReportNavBtn'
+    'WbsNavBtn','ReportNavBtn',
+    'CopyPrevDayBtn','RecentCombosArea','RecentCombosPanel','FavToggleBtn','SaveDefaultBtn',
+    'MissingDaysBorder','MissingDaysPanel'
 )
 $ui = @{}
 foreach ($n in $names) { $ui[$n] = $Script:Window.FindName($n) }
@@ -401,6 +411,8 @@ function Update-HoursTotal {
     $ui.HoursTotalText.Text = '{0:N1} h' -f (Get-EntryHoursSum $Script:Entries)
     Update-EmptyState
     Update-HoursDay
+    Update-RecentCombos
+    Update-MissingDays
 }
 
 # 一覧が 0 件のときは白紙にせず、次にすべきことを案内する
@@ -419,6 +431,82 @@ function Update-HoursDay {
         if ([string]$e.date -eq $dStr) { [void]$dayEntries.Add($e) }
     }
     $ui.HoursDayText.Text = '{0:N1} h' -f (Get-EntryHoursSum $dayEntries.ToArray())
+}
+
+# 最近の組み合わせ (表示月の実績から最大 5 件)。クリックでプロジェクト〜カテゴリを入力する
+function Update-RecentCombos {
+    if (-not $ui.RecentCombosPanel) { return }
+    $ui.RecentCombosPanel.Children.Clear()
+    $combos = Get-RecentEntryCombos -Entries $Script:Entries -Max 5
+    $chipStyle = $Script:Window.FindResource('ChipButton')
+    foreach ($c in $combos) {
+        $n = Resolve-EntryNames -ProjCode $c.project_code -ProcCode $c.process_code -TgCode $c.task_group_code `
+                                -TaskCode $c.task_code -CatCode $c.category
+        $leaf = @($n.task_name, $n.task_group_name, $n.process_name) | Where-Object { $_ } | Select-Object -First 1
+        $label = if ($leaf) { '{0} / {1}' -f $n.project_name, $leaf } else { [string]$n.project_name }
+        $b = New-Object System.Windows.Controls.Button
+        $b.Style = $chipStyle
+        $b.Content = $label
+        $b.Tag = $c
+        $b.ToolTip = ("[{0}] {1}`n{2} / {3} / {4}`nカテゴリ: {5}" -f $c.project_code, $n.project_name,
+                      $n.process_name, $n.task_group_name, $n.task_name, $n.category_name)
+        $b.Add_Click({ param($s, $e) Apply-RecentCombo -Combo $s.Tag })
+        [void]$ui.RecentCombosPanel.Children.Add($b)
+    }
+    $ui.RecentCombosArea.Visibility = if ($combos.Count -gt 0) { 'Visible' } else { 'Collapsed' }
+}
+
+function Apply-RecentCombo {
+    param($Combo)
+    try {
+        if ($ui.IsLeaveChk.IsChecked) { $ui.IsLeaveChk.IsChecked = $false }
+        Select-ProjectCode $Combo.project_code
+        if (-not $ui.ProjectCombo.SelectedItem) {
+            Set-Status ("[{0}] は現在選択できません (無効化された可能性があります)" -f $Combo.project_code) '#f38ba8'
+            return
+        }
+        $lost = Select-CascadeCodes -ProcessCode $Combo.process_code -TaskGroupCode $Combo.task_group_code -TaskCode $Combo.task_code
+        if ($Combo.category) { [void](_SelectComboValue $ui.CategoryCombo $Combo.category) }
+        if ($lost) {
+            Set-Status ("最近の組み合わせを入力しました ({0} は現在の候補に無いため先頭を選択)" -f $lost) '#f9e2af'
+        } else {
+            Set-Status '最近の組み合わせを入力しました。工数を確認して『追加』してください' '#89b4fa'
+        }
+        $ui.HoursBox.Focus() | Out-Null
+        $ui.HoursBox.SelectAll()
+    } catch {
+        Set-Status "入力に失敗: $($_.Exception.Message)" '#f38ba8'
+    }
+}
+
+# 表示月の未入力平日 (今日まで)。クリックでフォームの日付をその日にする
+function Update-MissingDays {
+    if (-not $ui.MissingDaysPanel) { return }
+    $ui.MissingDaysPanel.Children.Clear()
+    $y = [int]$ui.YearCombo.SelectedItem
+    $m = [int]$ui.MonthCombo.SelectedItem
+    $days = Get-MissingWeekdays -Entries $Script:Entries -Year $y -Month $m -Holidays $Script:Holidays -Today ([datetime]::Today)
+    $ja = [System.Globalization.CultureInfo]::GetCultureInfo('ja-JP')
+    $chipStyle = $Script:Window.FindResource('ChipButton')
+    $maxShow = 12
+    foreach ($d in ($days | Select-Object -First $maxShow)) {
+        $dt = [datetime]::ParseExact($d, 'yyyy-MM-dd', $null)
+        $b = New-Object System.Windows.Controls.Button
+        $b.Style = $chipStyle
+        $b.Content = $dt.ToString('M/d(ddd)', $ja)
+        $b.Tag = $dt
+        $b.ToolTip = 'この日をフォームの日付にする'
+        $b.Add_Click({ param($s, $e) $ui.EntryDate.SelectedDate = [datetime]$s.Tag })
+        [void]$ui.MissingDaysPanel.Children.Add($b)
+    }
+    if ($days.Count -gt $maxShow) {
+        $more = New-Object System.Windows.Controls.TextBlock
+        $more.Text = ('ほか {0} 日' -f ($days.Count - $maxShow))
+        $more.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFrom('#9a3412')
+        $more.Margin = '4,0,0,0'
+        [void]$ui.MissingDaysPanel.Children.Add($more)
+    }
+    $ui.MissingDaysBorder.Visibility = if ($days.Count -gt 0) { 'Visible' } else { 'Collapsed' }
 }
 
 function Set-Status {
@@ -522,6 +610,10 @@ function Load-UserPrefsFav {
 function Build-ProjectComboItems {
     # お気に入りを先頭に並べ替え、表示に ⭐ プレフィックス
     $favs = Load-UserPrefsFav
+    $defCodes = New-Object System.Collections.Generic.HashSet[string]
+    if ($Script:CurrentMember) {
+        foreach ($c in (Get-UnitDefaultCodes -MemberId ([string]$Script:CurrentMember.id))) { [void]$defCodes.Add($c) }
+    }
     $allActive = @($Script:Projects | Where-Object { $_.active })
     $items = foreach ($p in $allActive) {
         $isFav = $favs.Contains([string]$p.unit_code)
@@ -531,6 +623,8 @@ function Build-ProjectComboItems {
         } else {
             "{0}[{1}] {2}" -f $star, $p.unit_code, $p.project_name
         }
+        $hasDefault = $defCodes.Contains([string]$p.unit_code)
+        if ($hasDefault) { $disp += '  📌' }
         [pscustomobject]@{
             unit_code       = [string]$p.unit_code
             project_name    = [string]$p.project_name
@@ -542,6 +636,7 @@ function Build-ProjectComboItems {
             period_to       = [string]$p.period_to
             display         = $disp
             is_favorite     = $isFav
+            has_default     = $hasDefault
         }
     }
     # お気に入り優先でソート (お気に入り内は unit_code 順、その他は unit_code 順)
@@ -551,7 +646,152 @@ function Build-ProjectComboItems {
     $sorted = @($items | Sort-Object @{Expression='is_favorite'; Descending=$true}, @{Expression='unit_code'; Descending=$false})
     Write-Output -NoEnumerate -InputObject $sorted
 }
-$ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
+# ---- プロジェクト候補の絞り込み / 選択ヘルパ ----
+# ProjectCombo は編集可能。入力文字で候補を絞り込む (Test-ProjectFilterMatch: コード・名称の部分一致)。
+# 絞り込み中は候補外の項目を SelectedValue で選べないため、コードから選択するときは
+# 必ず Select-ProjectCode を通して絞り込みを解除する。
+# SuppressTemplate > 0 の間はユニット別デフォルト (テンプレート) を適用しない
+# (編集・複製の読込や休暇解除の復元で、入力済みの値を上書きしないため)。
+$Script:ProjectFilterText = ''
+$Script:SuppressTemplate = 0
+
+function Get-ProjectComboView {
+    if (-not $ui.ProjectCombo.ItemsSource) { return $null }
+    # ICollectionView は IEnumerable なので、そのまま return すると要素に展開されてしまう
+    return ,([System.Windows.Data.CollectionViewSource]::GetDefaultView($ui.ProjectCombo.ItemsSource))
+}
+
+function Clear-ProjectFilter {
+    if (-not $Script:ProjectFilterText) { return }
+    $Script:ProjectFilterText = ''
+    $v = Get-ProjectComboView
+    if ($null -ne $v) { $v.Refresh() }
+}
+
+function Select-ProjectCode {
+    param([string]$Code)
+    $Script:SuppressTemplate++
+    try {
+        Clear-ProjectFilter
+        if ($Code) { $ui.ProjectCombo.SelectedValue = $Code } else { $ui.ProjectCombo.SelectedIndex = -1 }
+    } finally { $Script:SuppressTemplate-- }
+}
+
+function _SelectComboValue {
+    # Value が候補 (.code) にあれば選択して $true。無ければ選択を変えずに $false
+    param($Combo, [string]$Value)
+    if (-not $Value) { return $false }
+    foreach ($it in $Combo.Items) {
+        if ([string]$it.code -eq $Value) { $Combo.SelectedItem = $it; return $true }
+    }
+    return $false
+}
+
+function Select-CascadeCodes {
+    # 工程 → タスクグループ → タスク を順に選ぶ。途中で候補に無ければ以降は先頭選択のまま。
+    # 戻り値: 見つからなかった段の名前 (無ければ '')
+    param([string]$ProcessCode, [string]$TaskGroupCode, [string]$TaskCode)
+    foreach ($step in @(
+        @{ combo = $ui.ProcessCombo;   value = $ProcessCode;   label = '工程' },
+        @{ combo = $ui.TaskGroupCombo; value = $TaskGroupCode; label = 'タスクグループ' },
+        @{ combo = $ui.TaskCombo;      value = $TaskCode;      label = 'タスク' }
+    )) {
+        if (-not $step.value) { continue }
+        if (-not (_SelectComboValue $step.combo $step.value)) { return $step.label }
+    }
+    return ''
+}
+
+function Set-ProjectComboItems {
+    # 候補を作り直す。-Preserve なら選択中のプロジェクト〜タスクを維持する
+    # (ItemsSource 差し替えで選択が外れ、カスケードが先頭に戻るのを防ぐ)
+    param([switch]$Preserve)
+    $snap = $null
+    if ($Preserve -and $ui.ProjectCombo.SelectedItem) {
+        $snap = @{
+            project = [string]$ui.ProjectCombo.SelectedValue
+            process = [string]$ui.ProcessCombo.SelectedValue
+            group   = [string]$ui.TaskGroupCombo.SelectedValue
+            task    = [string]$ui.TaskCombo.SelectedValue
+        }
+    }
+    $Script:SuppressTemplate++
+    try {
+        $Script:ProjectFilterText = ''
+        $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
+        $v = Get-ProjectComboView
+        if ($null -ne $v) {
+            $v.Filter = [Predicate[object]]{ param($o) Test-ProjectFilterMatch -Item $o -Text $Script:ProjectFilterText }
+        }
+        if ($snap) {
+            Select-ProjectCode $snap.project
+            [void](Select-CascadeCodes -ProcessCode $snap.process -TaskGroupCode $snap.group -TaskCode $snap.task)
+        }
+    } finally { $Script:SuppressTemplate-- }
+    Update-ProjectActionButtons
+}
+
+function Update-ProjectActionButtons {
+    if (-not $ui.FavToggleBtn) { return }
+    $p = $ui.ProjectCombo.SelectedItem
+    $enabled = ($null -ne $p) -and -not [bool]$ui.IsLeaveChk.IsChecked
+    $ui.FavToggleBtn.IsEnabled   = $enabled
+    $ui.SaveDefaultBtn.IsEnabled = $enabled
+    # Segoe MDL2 Assets: E735 = FavoriteStarFill / E734 = FavoriteStar
+    $ui.FavToggleBtn.Content = if ($p -and $p.is_favorite) { [string][char]0xE735 } else { [string][char]0xE734 }
+    $ui.FavToggleBtn.ToolTip = if ($p -and $p.is_favorite) { 'お気に入りを解除' } else { 'お気に入りに登録 (一覧の先頭に表示)' }
+}
+
+# ユニット別デフォルト (テンプレート) をフォームに適用する。
+# カテゴリ・工数は上書き、コメントは空欄のときだけ入れる (先に書いたメモを消さない)
+function Apply-UnitDefault {
+    param([string]$UnitCode)
+    if (-not $Script:CurrentMember -or -not $UnitCode) { return }
+    $def = Get-UnitDefault -MemberId ([string]$Script:CurrentMember.id) -UnitCode $UnitCode
+    if (-not $def) { return }
+    $missed = New-Object System.Collections.Generic.List[string]
+    $lost = Select-CascadeCodes -ProcessCode ([string]$def['process_code']) `
+                                -TaskGroupCode ([string]$def['task_group_code']) -TaskCode ([string]$def['task_code'])
+    if ($lost) { $missed.Add($lost) }
+    $cat = [string]$def['category']
+    if ($cat -and -not (_SelectComboValue $ui.CategoryCombo $cat)) { $missed.Add('カテゴリ') }
+    $h = 0.0
+    if ([double]::TryParse([string]$def['hours'], [ref]$h) -and $h -gt 0) {
+        $ui.HoursBox.Text = $h.ToString('0.0#')
+    }
+    $cmt = [string]$def['comment']
+    if ($cmt -and [string]::IsNullOrWhiteSpace($ui.CommentBox.Text)) { $ui.CommentBox.Text = $cmt }
+    if ($missed.Count -gt 0) {
+        Set-Status ("📌 既定を適用しました。{0} は現在の候補に無いため先頭を選択しています (既定の登録し直しを推奨)" -f ($missed -join '・')) '#f9e2af'
+    } else {
+        Set-Status ("📌 [{0}] の既定を適用しました" -f $UnitCode) '#a6e3a1'
+    }
+}
+
+Set-ProjectComboItems
+
+# 入力文字で候補を絞り込む。選択済み項目の表示文字列と一致している間は絞り込まない
+$ui.ProjectCombo.AddHandler([System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
+    [System.Windows.Controls.TextChangedEventHandler]{
+        try {
+            $t = [string]$ui.ProjectCombo.Text
+            $sel = $ui.ProjectCombo.SelectedItem
+            $ft = if ($sel -and $t -eq [string]$sel.display) { '' } else { $t.Trim() }
+            if ($ft -eq $Script:ProjectFilterText) { return }
+            $Script:ProjectFilterText = $ft
+            $v = Get-ProjectComboView
+            if ($null -ne $v) { $v.Refresh() }
+            if ($ft -and $ui.ProjectCombo.IsKeyboardFocusWithin -and -not $ui.ProjectCombo.IsDropDownOpen) {
+                $ui.ProjectCombo.IsDropDownOpen = $true
+                # ドロップダウンを開くと入力欄が全選択され、次の 1 文字で上書きされてしまうため
+                # キャレットを末尾に戻す (開く処理の後に走らせる)
+                $ui.ProjectCombo.Dispatcher.BeginInvoke([action]{
+                    $tb = $ui.ProjectCombo.Template.FindName('PART_EditableTextBox', $ui.ProjectCombo)
+                    if ($tb) { $tb.SelectionStart = $tb.Text.Length; $tb.SelectionLength = 0 }
+                }, [System.Windows.Threading.DispatcherPriority]::Input) | Out-Null
+            }
+        } catch { Write-FatalLog "ProjectCombo filter: $_" }
+    })
 
 function Get-TaskPatternFor {
     param($Project)
@@ -671,6 +911,11 @@ $ui.ProjectCombo.Add_SelectionChanged({
         $filtered = _FilterByWbs-Processes -AllProcs @($pattern.processes) -Project $p
         $ui.ProcessCombo.ItemsSource = @($filtered)
         if ($ui.ProcessCombo.Items.Count -gt 0) { $ui.ProcessCombo.SelectedIndex = 0 }
+    }
+    Update-ProjectActionButtons
+    if ($p -and $Script:SuppressTemplate -le 0) {
+        try { Apply-UnitDefault -UnitCode ([string]$p.unit_code) }
+        catch { Write-FatalLog "Apply-UnitDefault: $_"; Set-Status "既定の適用に失敗: $($_.Exception.Message)" '#f38ba8' }
     }
 })
 $ui.ProcessCombo.Add_SelectionChanged({
@@ -838,12 +1083,20 @@ function Set-LeaveFormState {
         # 選択したままにすると、そのプロジェクトがエントリに紛れ込んでしまうため
         # 退避してから選択を外す。工数欄と同じ「退避して戻す」方式に揃えている
         $Script:ProjectBeforeLeave = [string]$ui.ProjectCombo.SelectedValue
+        $Script:CascadeBeforeLeave = @{
+            process = [string]$ui.ProcessCombo.SelectedValue
+            group   = [string]$ui.TaskGroupCombo.SelectedValue
+            task    = [string]$ui.TaskCombo.SelectedValue
+        }
         $ui.ProjectCombo.SelectedIndex = -1
         Reset-Cascade -From @('process','task_group','task')
     } else {
         if ($ui.HoursBox.Text -eq '0.0') { $ui.HoursBox.Text = $Script:HoursBeforeLeave }
         if ($Script:ProjectBeforeLeave) {
-            $ui.ProjectCombo.SelectedValue = $Script:ProjectBeforeLeave
+            Select-ProjectCode $Script:ProjectBeforeLeave
+            # 工程〜タスクも休暇チェック前の選択に戻す (先頭に戻ると選び直しになるため)
+            $cb = $Script:CascadeBeforeLeave
+            if ($cb) { [void](Select-CascadeCodes -ProcessCode $cb.process -TaskGroupCode $cb.group -TaskCode $cb.task) }
         }
         $Script:ProjectBeforeLeave = ''
     }
@@ -853,6 +1106,7 @@ function Set-LeaveFormState {
     foreach ($cb in @($ui.ProjectCombo, $ui.ProcessCombo, $ui.TaskGroupCombo, $ui.TaskCombo)) {
         $cb.IsEnabled = (-not $IsLeave)
     }
+    Update-ProjectActionButtons
 }
 $ui.IsLeaveChk.Add_Checked({   Set-LeaveFormState $true })
 $ui.IsLeaveChk.Add_Unchecked({ Set-LeaveFormState $false })
@@ -935,7 +1189,8 @@ function Get-EntryFromForm {
 function Set-FormFromEntry {
     param($Entry)
     try { $ui.EntryDate.SelectedDate = [datetime]::Parse($Entry.date) } catch {}
-    $ui.ProjectCombo.SelectedValue   = $Entry.project_code
+    # 既定 (テンプレート) は適用しない: 行の値をそのまま復元する
+    Select-ProjectCode ([string]$Entry.project_code)
     $ui.ProcessCombo.SelectedValue   = $Entry.process_code
     $ui.TaskGroupCombo.SelectedValue = $Entry.task_group_code
     $ui.TaskCombo.SelectedValue      = $Entry.task_code
@@ -950,7 +1205,8 @@ function Set-FormFromEntry {
 
 function Clear-Form {
     $ui.EntryDate.SelectedDate = [datetime]::Today
-    $ui.ProjectCombo.SelectedIndex = -1
+    Select-ProjectCode ''
+    $ui.ProjectCombo.Text = ''
     Reset-Cascade -From @('process','task_group','task')
     $ui.CategoryCombo.SelectedIndex = -1
     $ui.HoursBox.Text = '1.0'
@@ -1029,6 +1285,140 @@ $ui.DuplicateBtn.Add_Click({
     Clear-Form
     Set-FormFromEntry -Entry $sel
     Set-Status "選択行をフォームに複製しました。値を編集して『追加』してください。" '#89b4fa'
+})
+
+# ---- お気に入り切替 (☆/★) ----
+$ui.FavToggleBtn.Add_Click({
+    try {
+        $p = $ui.ProjectCombo.SelectedItem
+        if (-not $p -or -not $Script:CurrentMember) { return }
+        $toFav = -not [bool]$p.is_favorite
+        Set-FavoriteProject -MemberId ([string]$Script:CurrentMember.id) -UnitCode ([string]$p.unit_code) -IsFavorite $toFav
+        Set-ProjectComboItems -Preserve
+        $msg = if ($toFav) { 'お気に入りに登録しました' } else { 'お気に入りを解除しました' }
+        Set-Status ("⭐ [{0}] {1}" -f $p.unit_code, $msg) '#10b981'
+    } catch {
+        Show-ErrorDialog -Title 'お気に入りエラー' -Message $_.Exception.Message -Detail $_.ScriptStackTrace
+    }
+})
+
+# ---- 既定 (ユニット別デフォルト) に登録 ----
+$ui.SaveDefaultBtn.Add_Click({
+    try {
+        $p = $ui.ProjectCombo.SelectedItem
+        if (-not $p -or -not $Script:CurrentMember) { return }
+        $mid = [string]$Script:CurrentMember.id
+        $uc  = [string]$p.unit_code
+        $h = 0.0
+        if (-not [double]::TryParse($ui.HoursBox.Text, [ref]$h) -or $h -lt 0) { $h = 0.0 }
+        $def = @{
+            process_code    = [string]$ui.ProcessCombo.SelectedValue
+            task_group_code = [string]$ui.TaskGroupCombo.SelectedValue
+            task_code       = [string]$ui.TaskCombo.SelectedValue
+            category        = [string]$ui.CategoryCombo.SelectedValue
+            hours           = $h
+            comment         = [string]$ui.CommentBox.Text
+        }
+        $nm = { param($c) if ($c.SelectedItem) { [string]$c.SelectedItem.name } else { '(なし)' } }
+        $hoursText = if ($h -gt 0) { '{0} h' -f $h.ToString('0.0#') } else { '(変更しない)' }
+        $cmtText = if ($def.comment) { $def.comment } else { '(なし)' }
+        $overwrite = if (Get-UnitDefault -MemberId $mid -UnitCode $uc) { "`n※ 登録済みの既定を上書きします。" } else { '' }
+        $msg = ("[{0}] を選んだときに、次の値を自動で入力します。{1}`n`n" +
+                "工程: {2}`nタスクグループ: {3}`nタスク: {4}`nカテゴリ: {5}`n工数: {6}`nコメント: {7}`n`n登録しますか?") -f `
+               $uc, $overwrite, (& $nm $ui.ProcessCombo), (& $nm $ui.TaskGroupCombo), (& $nm $ui.TaskCombo),
+               (& $nm $ui.CategoryCombo), $hoursText, $cmtText
+        $r = [System.Windows.MessageBox]::Show($msg, '既定に登録', 'OKCancel', 'Question')
+        if ($r -ne 'OK') { return }
+        Set-UnitDefault -MemberId $mid -UnitCode $uc -Default $def
+        Set-ProjectComboItems -Preserve
+        Set-Status ("📌 [{0}] の既定を登録しました (解除は『お気に入り』画面から)" -f $uc) '#10b981'
+    } catch {
+        Show-ErrorDialog -Title '既定の登録エラー' -Message $_.Exception.Message -Detail $_.ScriptStackTrace
+    }
+})
+
+# ---- 直前の入力日の実績をこの日にコピー ----
+$ui.CopyPrevDayBtn.Add_Click({
+    try {
+        $d = $ui.EntryDate.SelectedDate
+        if (-not $d) { throw '日付を選択してください' }
+        $d = ([datetime]$d).Date
+        $vy = [int]$ui.YearCombo.SelectedItem
+        $vm = [int]$ui.MonthCombo.SelectedItem
+        if ($d.Year -ne $vy -or $d.Month -ne $vm) {
+            throw ("コピー先の日付 ({0}) は表示中の {1}/{2} の日付にしてください" -f $d.ToString('yyyy-MM-dd'), $vy, $vm)
+        }
+        $src = Find-PreviousWorkDayEntries -Entries $Script:Entries -Date $d
+        if ($src.Count -eq 0) {
+            # 月初は前月ファイルにしか直前の実績が無いので、前月分も探す
+            $prev = (New-Object -TypeName datetime -ArgumentList $vy, $vm, 1).AddMonths(-1)
+            $more = @(Load-MonthEntries -Source $Script:Source -MemberId ([string]$Script:CurrentMember.id) -Year $prev.Year -Month $prev.Month)
+            $src = Find-PreviousWorkDayEntries -Entries $more -Date $d
+        }
+        if ($src.Count -eq 0) {
+            Set-Status '直前の入力日の実績が見つかりませんでした' '#f9e2af'
+            return
+        }
+        $srcDate = _EaStr $src[0].date
+        $target = $d.ToString('yyyy-MM-dd')
+        # 対象期間外のプロジェクトはコピーしない (追加時と同じ制約)。確認の前に除外して件数を正しく見せる
+        $copyable = New-Object System.Collections.Generic.List[object]
+        $skipped = New-Object System.Collections.Generic.List[string]
+        foreach ($e in $src) {
+            $pc = _EaStr $e.project_code
+            $proj = Find-ProjectByCode -Code $pc
+            $pf = [datetime]::MinValue; $pt = [datetime]::MinValue
+            if ($proj -and (($proj.period_from -and [datetime]::TryParse([string]$proj.period_from, [ref]$pf) -and $d -lt $pf) -or
+                            ($proj.period_to   -and [datetime]::TryParse([string]$proj.period_to,   [ref]$pt) -and $d -gt $pt))) {
+                if (-not $skipped.Contains($pc)) { $skipped.Add($pc) }
+                continue
+            }
+            $copyable.Add($e)
+        }
+        $skipNote = if ($skipped.Count -gt 0) { "`n※ 対象期間外のプロジェクト ({0}) の行はコピーしません。" -f ($skipped -join ', ') } else { '' }
+        if ($copyable.Count -eq 0) {
+            [System.Windows.MessageBox]::Show(("{0} の実績はすべて {1} が対象期間外のためコピーできません。{2}" -f $srcDate, $target, $skipNote),
+                '直前の入力日の実績をコピー', 'OK', 'Information') | Out-Null
+            return
+        }
+        $existing = @($Script:Entries | Where-Object { [string]$_.date -eq $target }).Count
+        $note = if ($existing -gt 0) { "`n※ {0} には既に {1} 件あります (追加になります)。" -f $target, $existing } else { '' }
+        $msg = ("{0} の実績 {1} 件 ({2:N1} h) を {3} にコピーします。{4}{5}`n`nコピー後に工数やコメントを確認してください。" -f `
+                $srcDate, $copyable.Count, (Get-EntryHoursSum $copyable.ToArray()), $target, $note, $skipNote)
+        $r = [System.Windows.MessageBox]::Show($msg, '直前の入力日の実績をコピー', 'OKCancel', 'Question')
+        if ($r -ne 'OK') { return }
+
+        foreach ($e in $copyable) {
+            $pc  = _EaStr $e.project_code
+            $prc = _EaStr $e.process_code; $tgc = _EaStr $e.task_group_code
+            $tkc = _EaStr $e.task_code;    $ctc = _EaStr $e.category
+            $n = Resolve-EntryNames -ProjCode $pc -ProcCode $prc -TgCode $tgc -TaskCode $tkc -CatCode $ctc
+            $hours = 0.0
+            [void][double]::TryParse((_EaStr $e.hours), [ref]$hours)
+            $Script:Entries.Add([pscustomobject]@{
+                date            = $target
+                project_code    = $pc
+                project_name    = $n.project_name
+                process_code    = $prc
+                process_name    = $n.process_name
+                task_group_code = $tgc
+                task_group_name = $n.task_group_name
+                task_code       = $tkc
+                task_name       = $n.task_name
+                category        = $ctc
+                category_name   = $n.category_name
+                is_leave        = $false
+                hours           = $hours
+                comment         = _EaStr $e.comment
+                dirty           = 'yes'
+                dirty_mark      = '●'
+            })
+        }
+        Update-HoursTotal
+        Set-Status ("{0} の実績 {1} 件を {2} にコピーしました (未保存)" -f $srcDate, $copyable.Count, $target) '#89b4fa'
+    } catch {
+        [System.Windows.MessageBox]::Show($_.Exception.Message, 'コピーできません', 'OK', 'Warning') | Out-Null
+    }
 })
 
 # ---- 保存ロジック (共通) ----
@@ -1142,8 +1532,8 @@ $ui.UserPrefsBtn.Add_Click({
                                         -MemberName ([string]$Script:CurrentMember.name) `
                                         -Projects $Script:Projects
         if ($changed) {
-            # Project Combo を再構築 (お気に入りが上に来る)
-            $ui.ProjectCombo.ItemsSource = Build-ProjectComboItems
+            # Project Combo を再構築 (お気に入りが上に来る)。入力中の選択は維持する
+            Set-ProjectComboItems -Preserve
             Set-Status '個人設定を保存しました。プロジェクト一覧を更新。' '#10b981'
         }
     } catch {
@@ -1175,7 +1565,8 @@ $ui.SettingsBtn.Add_Click({
         if (Has-Role -Member $Script:CurrentMember -Role 'admin') { $ui.AdminBtn.Visibility = 'Visible' } else { $ui.AdminBtn.Visibility = 'Collapsed' }
 
         $ui.CategoryCombo.ItemsSource = $Script:Categories
-        $ui.ProjectCombo.ItemsSource  = Build-ProjectComboItems
+        Load-TrackerHolidays
+        Set-ProjectComboItems
         Load-ViewMonth
     }
 })
@@ -1378,6 +1769,16 @@ $Script:Window.Add_PreviewKeyDown({
         # 複数行入力できるコメント欄では改行を優先する
         $focused = [System.Windows.Input.Keyboard]::FocusedElement
         if ($focused -eq $ui.CommentBox) { return }
+        # プロジェクト欄で絞り込み中は、Enter で候補を確定する (追加はしない)
+        $filtering = $Script:ProjectFilterText -and -not $ui.ProjectCombo.SelectedItem
+        if ($ui.ProjectCombo.IsKeyboardFocusWithin -and ($ui.ProjectCombo.IsDropDownOpen -or $filtering)) {
+            if ($filtering -and $ui.ProjectCombo.Items.Count -gt 0) {
+                $ui.ProjectCombo.SelectedItem = $ui.ProjectCombo.Items[0]
+            }
+            $ui.ProjectCombo.IsDropDownOpen = $false
+            $e.Handled = $true
+            return
+        }
         $target = if ($ui.UpdateBtn -and $ui.UpdateBtn.Visibility -eq 'Visible') { $ui.UpdateBtn } else { $ui.AddBtn }
         if ($target) {
             $target.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent)))

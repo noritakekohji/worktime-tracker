@@ -109,7 +109,7 @@
 
         <DockPanel>
             <TextBlock DockPanel.Dock="Top"
-                       Text="お気に入りプロジェクトを選択してください。選択したプロジェクトはプロジェクト一覧の先頭に表示されます。"
+                       Text="お気に入りプロジェクトを選択してください。選択したプロジェクトはプロジェクト一覧の先頭に表示されます。&#x0a;📌 は既定 (ユニットを選んだときに自動入力する値) が登録済みです。既定は日次入力フォームの『既定に登録』で登録できます。"
                        Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <Border Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
