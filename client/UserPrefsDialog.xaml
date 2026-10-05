@@ -108,8 +108,13 @@
         </StackPanel>
 
         <DockPanel>
+            <!-- 日次入力の「最近の組み合わせ」表示件数 (0 = 非表示) -->
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                <TextBlock Text="日次入力の「最近の組み合わせ」の表示件数:" Margin="0,0,8,0"/>
+                <ComboBox x:Name="RecentCountCombo" Width="110"/>
+            </StackPanel>
             <TextBlock DockPanel.Dock="Top"
-                       Text="お気に入りプロジェクトを選択してください。選択したプロジェクトはプロジェクト一覧の先頭に表示されます。&#x0a;📌 は既定 (ユニットを選んだときに自動入力する値) が登録済みです。既定は日次入力フォームの『既定に登録』で登録できます。"
+                       Text="お気に入りプロジェクトを選択してください。選択したプロジェクトはプロジェクト一覧の先頭に表示されます。&#x0a;📌 は既定 (ユニットを選んだときに自動入力する値) が登録済みです。既定は日次入力フォームのプロジェクト欄右の『📌 既定』ボタンで登録できます。"
                        Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <Border Style="{StaticResource Card}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

@@ -20,7 +20,7 @@ function Show-UserPrefsDialog {
     $win = [Windows.Markup.XamlReader]::Load($reader)
 
     $u = @{}
-    foreach ($n in 'MemberLabel','ProjectsList','SaveBtn','CancelBtn') {
+    foreach ($n in 'MemberLabel','ProjectsList','SaveBtn','CancelBtn','RecentCountCombo') {
         $u[$n] = $win.FindName($n)
     }
     $u.MemberLabel.Text = ("対象: {0} ({1})" -f $MemberId, $MemberName)
@@ -28,6 +28,21 @@ function Show-UserPrefsDialog {
     # 既存設定読込
     $prefs = Get-UserPrefs -MemberId $MemberId
     $favSet = New-Object System.Collections.Generic.HashSet[string]
+
+    # 最近の組み合わせの表示件数 (保存値が選択肢に無ければ選択肢に足して保持する)
+    $countItems = New-Object System.Collections.Generic.List[object]
+    foreach ($c in @(0, 3, 5, 8, 10)) {
+        $label = if ($c -eq 0) { '0 (表示しない)' } else { '{0} 件' -f $c }
+        $countItems.Add([pscustomobject]@{ value = $c; label = $label })
+    }
+    $curCount = [int]$prefs['recent_combo_count']
+    if (-not ($countItems | Where-Object { $_.value -eq $curCount })) {
+        $countItems.Add([pscustomobject]@{ value = $curCount; label = ('{0} 件' -f $curCount) })
+    }
+    $u.RecentCountCombo.DisplayMemberPath = 'label'
+    $u.RecentCountCombo.SelectedValuePath = 'value'
+    $u.RecentCountCombo.ItemsSource = $countItems
+    $u.RecentCountCombo.SelectedValue = $curCount
     foreach ($p in @($prefs.favorite_projects)) {
         if ($p) { [void]$favSet.Add([string]$p) }
     }
@@ -87,6 +102,9 @@ function Show-UserPrefsDialog {
         # 読み直してから差分だけ反映する (unit_defaults 等ほかのキーを消さない)
         $newPrefs = Get-UserPrefs -MemberId $MemberId
         $newPrefs['favorite_projects'] = $favs.ToArray()
+        if ($null -ne $u.RecentCountCombo.SelectedValue) {
+            $newPrefs['recent_combo_count'] = _NormalizeRecentComboCount $u.RecentCountCombo.SelectedValue
+        }
         foreach ($code in $removeSet) { [void]$newPrefs['unit_defaults'].Remove($code) }
         Set-UserPrefs -MemberId $MemberId -Prefs $newPrefs
         $script:Result = $true

@@ -7,7 +7,8 @@
 #       "unit_defaults": {
 #         "ABC001": { "process_code": "DSN", "task_group_code": "DB", "task_code": "ERD",
 #                     "category": "DESIGN", "hours": 2.0, "comment": "" }
-#       }
+#       },
+#       "recent_combo_count": 5
 #     },
 #     ...
 #   }
@@ -59,7 +60,31 @@ function Get-UserPrefs {
     if (-not $p.ContainsKey('favorite_projects')) { $p['favorite_projects'] = @() }
     $p['favorite_projects'] = [string[]]@(@($p['favorite_projects']) | Where-Object { $_ } | ForEach-Object { [string]$_ })
     $p['unit_defaults'] = _ToUnitDefaultsTable $p['unit_defaults']
+    $p['recent_combo_count'] = _NormalizeRecentComboCount $p['recent_combo_count']
     return $p
+}
+
+# 日次入力「最近の組み合わせ」の表示件数。0 = 非表示
+$Script:RecentComboCountDefault = 5
+$Script:RecentComboCountMax     = 10
+
+function _NormalizeRecentComboCount {
+    param($Value)
+    $n = 0
+    if ($null -eq $Value -or -not [int]::TryParse([string]$Value, [ref]$n)) { return $Script:RecentComboCountDefault }
+    return [Math]::Max(0, [Math]::Min($Script:RecentComboCountMax, $n))
+}
+
+function Get-RecentComboCount {
+    param([Parameter(Mandatory)][string]$MemberId)
+    return [int](Get-UserPrefs -MemberId $MemberId)['recent_combo_count']
+}
+
+function Set-RecentComboCount {
+    param([Parameter(Mandatory)][string]$MemberId, [Parameter(Mandatory)][int]$Count)
+    $prefs = Get-UserPrefs -MemberId $MemberId
+    $prefs['recent_combo_count'] = _NormalizeRecentComboCount $Count
+    Set-UserPrefs -MemberId $MemberId -Prefs $prefs
 }
 
 function _ToUnitDefaultsTable {

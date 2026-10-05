@@ -201,6 +201,33 @@
             <Setter Property="FontWeight" Value="Normal"/>
         </Style>
 
+        <!-- 入力カード: 区分見出し / 行 / ラベル -->
+        <Style x:Key="FormSection" TargetType="DockPanel">
+            <Setter Property="Margin" Value="0,10,0,4"/>
+        </Style>
+        <Style x:Key="FormSectionTitle" TargetType="TextBlock">
+            <Setter Property="DockPanel.Dock" Value="Left"/>
+            <Setter Property="Foreground" Value="{StaticResource EmeraldD}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style x:Key="FormSectionRule" TargetType="Border">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Background" Value="{StaticResource Border}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="FormRow" TargetType="DockPanel">
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="LastChildFill" Value="True"/>
+        </Style>
+        <Style x:Key="FormLabel" TargetType="TextBlock">
+            <Setter Property="DockPanel.Dock" Value="Left"/>
+            <Setter Property="Width" Value="84"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <!-- カードコンテナ -->
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource Surface}"/>
@@ -516,93 +543,113 @@
                     </StackPanel>
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <!-- 入力カード: ラベル左 (幅固定) + 入力欄右。「いつ / 何を / どれだけ」の 3 区分 -->
                     <StackPanel>
-                        <Label Content="日付  (バックデートOK)" Margin="0,2,0,0"/>
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="PrevDayBtn" Content="◀" MinWidth="32" Margin="0,1,2,1" MinHeight="26" ToolTip="前日 (-1日)"/>
-                            <DatePicker x:Name="EntryDate" Width="140"/>
-                            <Button x:Name="NextDayBtn" Content="▶" MinWidth="32" Margin="2,1,4,1" MinHeight="26" ToolTip="翌日 (+1日)"/>
-                            <Button x:Name="TodayBtn" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
-                                    <TextBlock Text="今日" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="YesterdayBtn" MinWidth="58" Margin="2,1,0,1" MinHeight="26" Padding="4,2">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE72B;" Style="{StaticResource IconGlyph}"/>
-                                    <TextBlock Text="昨日" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-
-                        <CheckBox x:Name="IsLeaveChk" Content="🏖 休暇 (プロジェクト/工程/タスク不要)"
-                                  Margin="0,10,0,4" FontWeight="SemiBold"
-                                  ToolTip="ON にすると有給休暇/半休/特別休暇 等を記録できます。プロジェクト等の選択は不要になります"/>
-
-                        <DockPanel x:Name="RecentCombosArea" Visibility="Collapsed" Margin="0,2,0,0"
-                                   ToolTip="最近使ったプロジェクト〜カテゴリの組み合わせ。クリックで入力します">
-                            <TextBlock DockPanel.Dock="Left" Text="最近:" Foreground="{StaticResource TextMuted}"
-                                       VerticalAlignment="Top" Margin="2,5,6,0"/>
-                            <WrapPanel x:Name="RecentCombosPanel"/>
+                        <!-- ── いつ ── -->
+                        <DockPanel Style="{StaticResource FormSection}">
+                            <TextBlock Text="いつ" Style="{StaticResource FormSectionTitle}"/>
+                            <Border Style="{StaticResource FormSectionRule}"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="日付" Style="{StaticResource FormLabel}" ToolTip="バックデート (過去日) も入力できます"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="PrevDayBtn" Content="◀" MinWidth="30" Margin="0,1,2,1" MinHeight="26" ToolTip="前日 (-1日)"/>
+                                <DatePicker x:Name="EntryDate" Width="122"/>
+                                <Button x:Name="NextDayBtn" Content="▶" MinWidth="30" Margin="2,1,4,1" MinHeight="26" ToolTip="翌日 (+1日)"/>
+                                <Button x:Name="TodayBtn" MinWidth="56" Margin="0,1,0,1" MinHeight="26" Padding="4,2">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"/>
+                                        <TextBlock Text="今日" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="YesterdayBtn" MinWidth="56" Margin="2,1,0,1" MinHeight="26" Padding="4,2">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE72B;" Style="{StaticResource IconGlyph}"/>
+                                        <TextBlock Text="昨日" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="" Style="{StaticResource FormLabel}"/>
+                            <CheckBox x:Name="IsLeaveChk" Content="🏖 休暇 (プロジェクト / 工程 / タスク不要)" FontWeight="SemiBold"
+                                      ToolTip="ON にすると有給休暇/半休/特別休暇 等を記録できます。プロジェクト等の選択は不要になります"/>
                         </DockPanel>
 
-                        <Label Content="プロジェクト (ユニット)  ※コード・名称の一部を入力して絞り込み" Margin="0,4,0,0"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <!-- IsTextSearchEnabled は False: 入力文字での絞り込みは PS 側 (CollectionView.Filter) で行う -->
-                            <ComboBox Grid.Column="0" x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"
-                                      IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True"/>
+                        <!-- ── 何を ── -->
+                        <DockPanel Style="{StaticResource FormSection}">
+                            <TextBlock Text="何を" Style="{StaticResource FormSectionTitle}"/>
+                            <Border Style="{StaticResource FormSectionRule}"/>
+                        </DockPanel>
+                        <DockPanel x:Name="RecentCombosArea" Style="{StaticResource FormRow}" Visibility="Collapsed"
+                                   ToolTip="最近使ったプロジェクト〜カテゴリの組み合わせ。クリックで入力します (件数は『お気に入り』画面で変更)">
+                            <TextBlock Text="最近" Style="{StaticResource FormLabel}" VerticalAlignment="Top" Margin="0,4,0,0"/>
+                            <WrapPanel x:Name="RecentCombosPanel"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="プロジェクト" Style="{StaticResource FormLabel}"/>
                             <!-- Content は PS 側で FavoriteStar (E734) / FavoriteStarFill (E735) を切り替える -->
-                            <Button Grid.Column="1" x:Name="FavToggleBtn" Content="&#xE734;" MinWidth="32" MinHeight="26"
-                                    Margin="4,1,0,1" Padding="4,0" FontFamily="Segoe MDL2 Assets" FontSize="14" IsEnabled="False"
-                                    ToolTip="選択中のプロジェクトをお気に入りに登録 / 解除"/>
-                            <Button Grid.Column="2" x:Name="SaveDefaultBtn" MinHeight="26" Margin="4,1,0,1" Padding="4,0"
+                            <Button DockPanel.Dock="Right" x:Name="SaveDefaultBtn" MinHeight="26" Margin="4,1,0,1" Padding="4,0"
                                     IsEnabled="False"
-                                    ToolTip="いまのフォームの内容 (工程〜コメント) を、このユニットを選んだときのデフォルトとして登録">
+                                    ToolTip="いまのフォームの内容 (工程〜コメント) を、このユニットを選んだときの既定 (デフォルト) として登録">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE718;" Style="{StaticResource IconGlyph}"/>
-                                    <TextBlock Text="既定に登録" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="既定" Margin="4,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                        </Grid>
-
-                        <Label Content="工程" Margin="0,3,0,0"/>
-                        <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                        <Label Content="タスクグループ" Margin="0,3,0,0"/>
-                        <ComboBox x:Name="TaskGroupCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                        <Label Content="タスク" Margin="0,3,0,0"/>
-                        <ComboBox x:Name="TaskCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                        <Border x:Name="TaskDescBorder" Margin="0,4,0,0" Padding="8,6" CornerRadius="4"
+                            <Button DockPanel.Dock="Right" x:Name="FavToggleBtn" Content="&#xE734;" MinWidth="30" MinHeight="26"
+                                    Margin="4,1,0,1" Padding="4,0" FontFamily="Segoe MDL2 Assets" FontSize="14" IsEnabled="False"
+                                    ToolTip="選択中のプロジェクトをお気に入りに登録 / 解除"/>
+                            <!-- IsTextSearchEnabled は False: 入力文字での絞り込みは PS 側 (CollectionView.Filter) で行う -->
+                            <ComboBox x:Name="ProjectCombo" DisplayMemberPath="display" SelectedValuePath="unit_code"
+                                      IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True"
+                                      ToolTip="コード・名称の一部を入力すると候補を絞り込みます (Enter で確定)"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="工程" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="ProcessCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="タスクG" Style="{StaticResource FormLabel}" ToolTip="タスクグループ"/>
+                            <ComboBox x:Name="TaskGroupCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="タスク" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="TaskCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+                        </DockPanel>
+                        <Border x:Name="TaskDescBorder" Margin="84,2,0,0" Padding="8,6" CornerRadius="4"
                                 Background="#fffbeb" BorderBrush="#fcd34d" BorderThickness="1"
                                 Visibility="Collapsed">
                             <TextBlock x:Name="TaskDescText" TextWrapping="Wrap" FontSize="11" Foreground="#92400e"/>
                         </Border>
 
-                        <Label Content="作業カテゴリ" Margin="0,4,0,0"/>
-                        <ComboBox x:Name="CategoryCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
-
-                        <Label Content="工数 (時間)" Margin="0,4,0,0"/>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox x:Name="HoursBox" Text="1.0" FontSize="16" FontWeight="Bold" Width="76"/>
-                            <Button x:Name="H025" Content="0.25" Style="{StaticResource QuickHour}" Tag="0.25" Margin="3,1,1,1"/>
-                            <Button x:Name="H05"  Content="0.5"  Style="{StaticResource QuickHour}" Tag="0.5"  Margin="2,1"/>
-                            <Button x:Name="H1"   Content="1"    Style="{StaticResource QuickHour}" Tag="1"    Margin="2,1"/>
-                            <Button x:Name="H2"   Content="2"    Style="{StaticResource QuickHour}" Tag="2"    Margin="2,1"/>
-                            <Button x:Name="H4"   Content="4"    Style="{StaticResource QuickHour}" Tag="4"    Margin="2,1"/>
-                            <Button x:Name="H8"   Content="8"    Style="{StaticResource QuickHour}" Tag="8"    Margin="2,1"/>
-                        </StackPanel>
-
-                        <Label Content="コメント (任意)" Margin="0,4,0,0"/>
-                        <TextBox x:Name="CommentBox" Height="44" AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                        <!-- ── どれだけ ── -->
+                        <DockPanel Style="{StaticResource FormSection}">
+                            <TextBlock Text="どれだけ" Style="{StaticResource FormSectionTitle}"/>
+                            <Border Style="{StaticResource FormSectionRule}"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="カテゴリ" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="CategoryCombo" DisplayMemberPath="name" SelectedValuePath="code"/>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="工数 (h)" Style="{StaticResource FormLabel}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="HoursBox" Text="1.0" FontSize="16" FontWeight="Bold" Width="54"/>
+                                <Button x:Name="H025" Content="0.25" Style="{StaticResource QuickHour}" Tag="0.25" Margin="4,1,1,1"/>
+                                <Button x:Name="H05"  Content="0.5"  Style="{StaticResource QuickHour}" Tag="0.5"/>
+                                <Button x:Name="H1"   Content="1"    Style="{StaticResource QuickHour}" Tag="1"/>
+                                <Button x:Name="H2"   Content="2"    Style="{StaticResource QuickHour}" Tag="2"/>
+                                <Button x:Name="H4"   Content="4"    Style="{StaticResource QuickHour}" Tag="4"/>
+                                <Button x:Name="H8"   Content="8"    Style="{StaticResource QuickHour}" Tag="8"/>
+                            </StackPanel>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource FormRow}">
+                            <TextBlock Text="コメント" Style="{StaticResource FormLabel}" VerticalAlignment="Top" Margin="0,6,0,0"
+                                       ToolTip="任意"/>
+                            <TextBox x:Name="CommentBox" Height="64" AcceptsReturn="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                        </DockPanel>
                     </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

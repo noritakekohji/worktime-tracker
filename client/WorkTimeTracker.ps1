@@ -433,11 +433,20 @@ function Update-HoursDay {
     $ui.HoursDayText.Text = '{0:N1} h' -f (Get-EntryHoursSum $dayEntries.ToArray())
 }
 
-# 最近の組み合わせ (表示月の実績から最大 5 件)。クリックでプロジェクト〜カテゴリを入力する
+# 最近の組み合わせ (表示月の実績から、個人設定の件数まで)。クリックでプロジェクト〜カテゴリを入力する。
+# 件数は保存のたびにファイルを読まないよう Load-RecentComboCount でキャッシュする (0 = 非表示)
+$Script:RecentComboCount = 5
+function Load-RecentComboCount {
+    if (-not $Script:CurrentMember) { return }
+    try { $Script:RecentComboCount = Get-RecentComboCount -MemberId ([string]$Script:CurrentMember.id) }
+    catch { Write-FatalLog "recent_combo_count 読込失敗: $_" }
+}
+
 function Update-RecentCombos {
     if (-not $ui.RecentCombosPanel) { return }
     $ui.RecentCombosPanel.Children.Clear()
-    $combos = Get-RecentEntryCombos -Entries $Script:Entries -Max 5
+    if ($Script:RecentComboCount -le 0) { $ui.RecentCombosArea.Visibility = 'Collapsed'; return }
+    $combos = Get-RecentEntryCombos -Entries $Script:Entries -Max $Script:RecentComboCount
     $chipStyle = $Script:Window.FindResource('ChipButton')
     foreach ($c in $combos) {
         $n = Resolve-EntryNames -ProjCode $c.project_code -ProcCode $c.process_code -TgCode $c.task_group_code `
@@ -769,6 +778,20 @@ function Apply-UnitDefault {
 }
 
 Set-ProjectComboItems
+Load-RecentComboCount
+
+# 表示名が欄より長いと末尾側が表示されてコード・名称が読めないため、選択後は先頭から見せる
+# (選択の確定より後に走らせないと WPF の全選択で末尾に戻される)
+function Show-ProjectTextFromStart {
+    $ui.ProjectCombo.Dispatcher.BeginInvoke([action]{
+        if (-not $ui.ProjectCombo.SelectedItem) { return }
+        $tb = $ui.ProjectCombo.Template.FindName('PART_EditableTextBox', $ui.ProjectCombo)
+        if ($tb) { $tb.Select(0, 0); $tb.ScrollToHome() }
+    }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
+}
+$ui.ProjectCombo.Add_DropDownClosed({
+    try { Show-ProjectTextFromStart } catch { Write-FatalLog "ProjectCombo DropDownClosed: $_" }
+})
 
 # 入力文字で候補を絞り込む。選択済み項目の表示文字列と一致している間は絞り込まない
 $ui.ProjectCombo.AddHandler([System.Windows.Controls.Primitives.TextBoxBase]::TextChangedEvent,
@@ -913,6 +936,7 @@ $ui.ProjectCombo.Add_SelectionChanged({
         if ($ui.ProcessCombo.Items.Count -gt 0) { $ui.ProcessCombo.SelectedIndex = 0 }
     }
     Update-ProjectActionButtons
+    if ($p -and -not $ui.ProjectCombo.IsDropDownOpen) { Show-ProjectTextFromStart }
     if ($p -and $Script:SuppressTemplate -le 0) {
         try { Apply-UnitDefault -UnitCode ([string]$p.unit_code) }
         catch { Write-FatalLog "Apply-UnitDefault: $_"; Set-Status "既定の適用に失敗: $($_.Exception.Message)" '#f38ba8' }
@@ -1534,6 +1558,8 @@ $ui.UserPrefsBtn.Add_Click({
         if ($changed) {
             # Project Combo を再構築 (お気に入りが上に来る)。入力中の選択は維持する
             Set-ProjectComboItems -Preserve
+            Load-RecentComboCount
+            Update-RecentCombos
             Set-Status '個人設定を保存しました。プロジェクト一覧を更新。' '#10b981'
         }
     } catch {
@@ -1567,6 +1593,7 @@ $ui.SettingsBtn.Add_Click({
         $ui.CategoryCombo.ItemsSource = $Script:Categories
         Load-TrackerHolidays
         Set-ProjectComboItems
+        Load-RecentComboCount
         Load-ViewMonth
     }
 })

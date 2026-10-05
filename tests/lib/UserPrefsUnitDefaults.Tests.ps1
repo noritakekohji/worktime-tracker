@@ -72,6 +72,35 @@ Describe 'ユニット別デフォルト' -Tag 'unit' {
     }
 }
 
+Describe '最近の組み合わせの表示件数' -Tag 'unit' {
+    BeforeEach {
+        Remove-Item -LiteralPath (Get-UserPrefsPath) -Force -ErrorAction SilentlyContinue
+    }
+
+    It '未設定なら既定の 5' {
+        Get-RecentComboCount -MemberId 'E001' | Should -Be 5
+    }
+
+    It '保存した値が読み戻せ、他のキーを消さない' {
+        Set-FavoriteProject -MemberId 'E001' -UnitCode 'ABC001' -IsFavorite $true
+        Set-RecentComboCount -MemberId 'E001' -Count 3
+        Get-RecentComboCount -MemberId 'E001' | Should -Be 3
+        @((Get-UserPrefs -MemberId 'E001').favorite_projects) | Should -Be @('ABC001')
+    }
+
+    It '0 (非表示) を保存できる' {
+        Set-RecentComboCount -MemberId 'E001' -Count 0
+        Get-RecentComboCount -MemberId 'E001' | Should -Be 0
+    }
+
+    It '範囲外や数値でない値は 0〜10 に丸める / 既定に戻す' {
+        Set-RecentComboCount -MemberId 'E001' -Count 99
+        Get-RecentComboCount -MemberId 'E001' | Should -Be 10
+        Set-UserPrefs -MemberId 'E001' -Prefs @{ recent_combo_count = 'abc' }
+        Get-RecentComboCount -MemberId 'E001' | Should -Be 5
+    }
+}
+
 Describe 'お気に入り切替' -Tag 'unit' {
     BeforeEach {
         Remove-Item -LiteralPath (Get-UserPrefsPath) -Force -ErrorAction SilentlyContinue
