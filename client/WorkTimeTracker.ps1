@@ -486,7 +486,8 @@ function Apply-RecentCombo {
     param($Combo)
     try {
         if ($ui.IsLeaveChk.IsChecked) { $ui.IsLeaveChk.IsChecked = $false }
-        Select-ProjectCode $Combo.project_code
+        Select-ProjectCode $Combo.project_code -ProcessCode $Combo.process_code `
+                           -TaskGroupCode $Combo.task_group_code -TaskCode $Combo.task_code
         if (-not $ui.ProjectCombo.SelectedItem) {
             Set-Status ("[{0}] は現在選択できません (無効化された可能性があります)" -f $Combo.project_code) '#f38ba8'
             return
@@ -642,13 +643,24 @@ function Build-ProjectComboItems {
         foreach ($c in (Get-UnitDefaultCodes -MemberId ([string]$Script:CurrentMember.id))) { [void]$defCodes.Add($c) }
     }
     $allActive = @($Script:Projects | Where-Object { $_.active })
+    # 同じユニットコードに複数パターンがあるときは、表示にパターン名を添えて見分ける
+    $unitCounts = @{}
+    foreach ($p in $allActive) { $k = [string]$p.unit_code; $unitCounts[$k] = 1 + [int]$unitCounts[$k] }
+    $idx = 0
     $items = foreach ($p in $allActive) {
+        $idx++
         $isFav = $favs.Contains([string]$p.unit_code)
         $star  = if ($isFav) { '⭐ ' } else { '' }
         $disp = if ($p.unit_name) {
             "{0}[{1}] {2} ({3})" -f $star, $p.unit_code, $p.unit_name, $p.project_name
         } else {
             "{0}[{1}] {2}" -f $star, $p.unit_code, $p.project_name
+        }
+        if ($unitCounts[[string]$p.unit_code] -gt 1) {
+            # Get-TaskPatternFor はこの関数の初回呼出し (起動時) より後で定義されるため使わない
+            $ptn = @($Script:TaskPatterns) | Where-Object { [string]$_.id -eq [string]$p.task_pattern_id } | Select-Object -First 1
+            $ptnLabel = if ($ptn -and $ptn.name) { [string]$ptn.name } else { [string]$p.task_pattern_id }
+            $disp += ('  ‹{0}›' -f $ptnLabel)
         }
         $hasDefault = $defCodes.Contains([string]$p.unit_code)
         if ($hasDefault) { $disp += '  📌' }
@@ -664,6 +676,8 @@ function Build-ProjectComboItems {
             display         = $disp
             is_favorite     = $isFav
             has_default     = $hasDefault
+            # 同じユニットコードの別パターンと区別する一意キー (選択の維持・復元に使う)
+            item_key        = ('{0}|{1}|{2}' -f $p.unit_code, $p.task_pattern_id, $idx)
         }
     }
     # お気に入り優先でソート (お気に入り内は unit_code 順、その他は unit_code 順)
@@ -696,11 +710,22 @@ function Clear-ProjectFilter {
 }
 
 function Select-ProjectCode {
-    param([string]$Code)
+    # Code のプロジェクトを選ぶ (既定は適用しない)。同じユニットコードに複数パターンがあるときは
+    # ItemKey (一意キー) か、工程〜タスクのコードを含むパターンの項目を選ぶ。
+    # SelectedValue だと常に先頭の項目になり、A2 の実績を開くと A1 のパターンで表示されてしまう
+    param([string]$Code, [string]$ProcessCode, [string]$TaskGroupCode, [string]$TaskCode, [string]$ItemKey)
     $Script:SuppressTemplate++
     try {
         Clear-ProjectFilter
-        if ($Code) { $ui.ProjectCombo.SelectedValue = $Code } else { $ui.ProjectCombo.SelectedIndex = -1 }
+        if (-not $Code) { $ui.ProjectCombo.SelectedIndex = -1; return }
+        $items = @($ui.ProjectCombo.ItemsSource)
+        $target = $null
+        if ($ItemKey) { $target = $items | Where-Object { [string]$_.item_key -eq $ItemKey } | Select-Object -First 1 }
+        if (-not $target) {
+            $target = Find-ProjectForCodes -Items $items -Patterns $Script:TaskPatterns -UnitCode $Code `
+                                           -ProcessCode $ProcessCode -TaskGroupCode $TaskGroupCode -TaskCode $TaskCode
+        }
+        if ($target) { $ui.ProjectCombo.SelectedItem = $target } else { $ui.ProjectCombo.SelectedIndex = -1 }
     } finally { $Script:SuppressTemplate-- }
 }
 
@@ -737,6 +762,7 @@ function Set-ProjectComboItems {
     if ($Preserve -and $ui.ProjectCombo.SelectedItem) {
         $snap = @{
             project = [string]$ui.ProjectCombo.SelectedValue
+            key     = [string]$ui.ProjectCombo.SelectedItem.item_key
             process = [string]$ui.ProcessCombo.SelectedValue
             group   = [string]$ui.TaskGroupCombo.SelectedValue
             task    = [string]$ui.TaskCombo.SelectedValue
@@ -751,7 +777,7 @@ function Set-ProjectComboItems {
             $v.Filter = [Predicate[object]]{ param($o) Test-ProjectFilterMatch -Item $o -Text $Script:ProjectFilterText }
         }
         if ($snap) {
-            Select-ProjectCode $snap.project
+            Select-ProjectCode $snap.project -ItemKey $snap.key -ProcessCode $snap.process -TaskGroupCode $snap.group -TaskCode $snap.task
             [void](Select-CascadeCodes -ProcessCode $snap.process -TaskGroupCode $snap.group -TaskCode $snap.task)
         }
     } finally { $Script:SuppressTemplate-- }
@@ -852,7 +878,9 @@ function Find-ProjectByCode {
 function Resolve-EntryNames {
     param([string]$ProjCode, [string]$ProcCode, [string]$TgCode, [string]$TaskCode, [string]$CatCode)
     $projName = $ProjCode; $procName = ''; $tgName = ''; $taskName = ''
-    $proj = $Script:Projects | Where-Object { $_.unit_code -eq $ProjCode } | Select-Object -First 1
+    # 同じユニットコードに複数パターンがあるときは、コードを含むパターンのプロジェクトで名前を引く
+    $proj = Find-ProjectForCodes -Items $Script:Projects -Patterns $Script:TaskPatterns -UnitCode $ProjCode `
+                                 -ProcessCode $ProcCode -TaskGroupCode $TgCode -TaskCode $TaskCode
     if ($proj) {
         if ($proj.unit_name) { $projName = [string]$proj.unit_name }
         elseif ($proj.project_name) { $projName = [string]$proj.project_name }
@@ -1125,6 +1153,7 @@ function Set-LeaveFormState {
         # 選択したままにすると、そのプロジェクトがエントリに紛れ込んでしまうため
         # 退避してから選択を外す。工数欄と同じ「退避して戻す」方式に揃えている
         $Script:ProjectBeforeLeave = [string]$ui.ProjectCombo.SelectedValue
+        $Script:ProjectKeyBeforeLeave = if ($ui.ProjectCombo.SelectedItem) { [string]$ui.ProjectCombo.SelectedItem.item_key } else { '' }
         $Script:CascadeBeforeLeave = @{
             process = [string]$ui.ProcessCombo.SelectedValue
             group   = [string]$ui.TaskGroupCombo.SelectedValue
@@ -1135,7 +1164,7 @@ function Set-LeaveFormState {
     } else {
         if ($ui.HoursBox.Text -eq '0.0') { $ui.HoursBox.Text = $Script:HoursBeforeLeave }
         if ($Script:ProjectBeforeLeave) {
-            Select-ProjectCode $Script:ProjectBeforeLeave
+            Select-ProjectCode $Script:ProjectBeforeLeave -ItemKey $Script:ProjectKeyBeforeLeave
             # 工程〜タスクも休暇チェック前の選択に戻す (先頭に戻ると選び直しになるため)
             $cb = $Script:CascadeBeforeLeave
             if ($cb) { [void](Select-CascadeCodes -ProcessCode $cb.process -TaskGroupCode $cb.group -TaskCode $cb.task) }
@@ -1232,7 +1261,8 @@ function Set-FormFromEntry {
     param($Entry)
     try { $ui.EntryDate.SelectedDate = [datetime]::Parse($Entry.date) } catch {}
     # 既定 (テンプレート) は適用しない: 行の値をそのまま復元する
-    Select-ProjectCode ([string]$Entry.project_code)
+    Select-ProjectCode ([string]$Entry.project_code) -ProcessCode ([string]$Entry.process_code) `
+                       -TaskGroupCode ([string]$Entry.task_group_code) -TaskCode ([string]$Entry.task_code)
     $ui.ProcessCombo.SelectedValue   = $Entry.process_code
     $ui.TaskGroupCombo.SelectedValue = $Entry.task_group_code
     $ui.TaskCombo.SelectedValue      = $Entry.task_code

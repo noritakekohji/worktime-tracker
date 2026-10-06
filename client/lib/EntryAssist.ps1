@@ -83,6 +83,33 @@ function Get-MissingWeekdays {
     return ,$out.ToArray()
 }
 
+function Find-ProjectForCodes {
+    # 同じユニットコードで別パターンのプロジェクトがあるとき、実績に記録された工程〜タスクのコードを
+    # 含むパターンの項目を選ぶ (実績にはユニットコードしか残らないため)。
+    # 一致の深さ (工程 1 / タスクグループ 2 / タスク 3) が最も大きい項目。同点・不一致なら先頭。
+    # Items: unit_code / task_pattern_id を持つ項目 (マスタのプロジェクトやコンボ項目)
+    param($Items, $Patterns, [string]$UnitCode, [string]$ProcessCode, [string]$TaskGroupCode, [string]$TaskCode)
+    $best = $null; $bestScore = -1
+    foreach ($it in @($Items)) {
+        if ($null -eq $it -or (_EaStr $it.unit_code) -ne $UnitCode) { continue }
+        $score = 0
+        $ptn = @($Patterns) | Where-Object { $_ -and (_EaStr $_.id) -eq (_EaStr $it.task_pattern_id) } | Select-Object -First 1
+        $proc = if ($ptn -and $ProcessCode) { @($ptn.processes) | Where-Object { $_ -and (_EaStr $_.code) -eq $ProcessCode } | Select-Object -First 1 }
+        if ($proc) {
+            $score = 1
+            $tg = if ($TaskGroupCode) { @($proc.task_groups) | Where-Object { $_ -and (_EaStr $_.code) -eq $TaskGroupCode } | Select-Object -First 1 }
+            if ($tg) {
+                $score = 2
+                # タスクグループ全体 ('-' / 空) はグループ一致で十分
+                if (-not $TaskCode -or $TaskCode -eq '-' -or
+                    (@($tg.tasks) | Where-Object { $_ -and (_EaStr $_.code) -eq $TaskCode })) { $score = 3 }
+            }
+        }
+        if ($score -gt $bestScore) { $best = $it; $bestScore = $score }
+    }
+    return $best
+}
+
 function Test-ProjectFilterMatch {
     # プロジェクト候補の絞り込み。空白区切りの語をすべて含めば一致 (大小無視)
     param($Item, [string]$Text)

@@ -31,6 +31,44 @@ BeforeAll {
     . ([scriptblock]::Create((($defs | ForEach-Object { $_.Extent.Text }) -join "`n")))
 }
 
+Describe '起動時の候補構築で未定義関数を呼ばない' -Tag 'ui' {
+    # 起動時にトップレベルで Set-ProjectComboItems を呼ぶ時点で、そこから (推移的に) 呼ばれる
+    # Tracker 内の関数がすべて定義済みであること。
+    # 同じユニットコードが複数あるときだけ通る分岐で、後方定義の Get-TaskPatternFor を呼んで
+    # 起動時に落ちた (開発中に発生)。分岐の条件に関係なく静的に検出する
+    It 'Set-ProjectComboItems の初回呼出しより前に、呼ばれる関数が定義されている' {
+        $path = Join-Path $script:RepoRoot 'client/WorkTimeTracker.ps1'
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        $defs = @{}
+        foreach ($f in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
+            if (-not $defs.ContainsKey($f.Name)) { $defs[$f.Name] = $f }
+        }
+        # トップレベル (関数・スクリプトブロック引数の外) の最初の呼出し行
+        $firstCall = $ast.EndBlock.Statements | Where-Object {
+            $_ -isnot [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $_.Extent.Text -match '^\s*Set-ProjectComboItems\b'
+        } | Select-Object -First 1
+        $firstCall | Should -Not -BeNullOrEmpty
+        $callLine = $firstCall.Extent.StartLineNumber
+
+        $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+        $queue = New-Object 'System.Collections.Generic.Queue[string]'
+        $queue.Enqueue('Set-ProjectComboItems')
+        $late = New-Object System.Collections.Generic.List[string]
+        while ($queue.Count -gt 0) {
+            $name = $queue.Dequeue()
+            if (-not $seen.Add($name)) { continue }
+            $fn = $defs[$name]
+            if ($fn.Extent.StartLineNumber -gt $callLine) { $late.Add("$name (line $($fn.Extent.StartLineNumber))") }
+            foreach ($cmd in $fn.Body.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
+                $cn = $cmd.GetCommandName()
+                if ($cn -and $defs.ContainsKey($cn)) { $queue.Enqueue($cn) }
+            }
+        }
+        $late | Should -BeNullOrEmpty -Because "起動時の呼出し (line $callLine) より後で定義された関数を呼んでいる"
+    }
+}
+
 Describe 'プロジェクト候補の絞り込み' -Tag 'ui' {
     BeforeEach {
         $script:SuppressTemplate = 0
@@ -66,6 +104,23 @@ Describe 'プロジェクト候補の絞り込み' -Tag 'ui' {
         $script:ui.ProjectCombo.SelectedValue | Should -Be 'ABC001'
         $script:ProjectFilterText | Should -Be ''
         $script:ui.ProjectCombo.Items.Count | Should -Be 2
+    }
+
+    It '同じユニットコードの別パターンは、工程〜タスクのコードかキーで選び分ける' {
+        $script:TaskPatterns = @(
+            [pscustomobject]@{ id = 'P1'; processes = @([pscustomobject]@{ code = 'DSN'; task_groups = @() }) },
+            [pscustomobject]@{ id = 'P2'; processes = @([pscustomobject]@{ code = 'OPS'; task_groups = @() }) }
+        )
+        $script:ui.ProjectCombo.ItemsSource = @(
+            [pscustomobject]@{ unit_code = 'A'; task_pattern_id = 'P1'; item_key = 'A|P1|1'; display = '[A] x ‹P1›' },
+            [pscustomobject]@{ unit_code = 'A'; task_pattern_id = 'P2'; item_key = 'A|P2|2'; display = '[A] x ‹P2›' }
+        )
+        Select-ProjectCode 'A' -ProcessCode 'OPS'
+        $script:ui.ProjectCombo.SelectedItem.item_key | Should -Be 'A|P2|2'
+        Select-ProjectCode 'A' -ProcessCode 'DSN'
+        $script:ui.ProjectCombo.SelectedItem.item_key | Should -Be 'A|P1|1'
+        Select-ProjectCode 'A' -ItemKey 'A|P2|2'
+        $script:ui.ProjectCombo.SelectedItem.item_key | Should -Be 'A|P2|2'
     }
 
     It 'Select-ProjectCode の間は既定の適用を抑止し、終わったら戻す' {

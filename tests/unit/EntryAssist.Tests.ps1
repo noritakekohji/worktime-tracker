@@ -114,6 +114,48 @@ Describe 'Get-MissingWeekdays' -Tag 'unit' {
     }
 }
 
+Describe 'Find-ProjectForCodes (同じユニットコードで別パターン)' -Tag 'unit' {
+    BeforeAll {
+        $script:Patterns = @(
+            [pscustomobject]@{ id = 'P1'; name = 'パターン1'; processes = @(
+                [pscustomobject]@{ code = 'DSN'; task_groups = @(
+                    [pscustomobject]@{ code = 'DB'; tasks = @([pscustomobject]@{ code = 'ERD' }) }) }) },
+            [pscustomobject]@{ id = 'P2'; name = 'パターン2'; processes = @(
+                [pscustomobject]@{ code = 'DSN'; task_groups = @(
+                    [pscustomobject]@{ code = 'API'; tasks = @([pscustomobject]@{ code = 'SPEC' }) }) },
+                [pscustomobject]@{ code = 'OPS'; task_groups = @(
+                    [pscustomobject]@{ code = 'MON'; tasks = @([pscustomobject]@{ code = 'DAILY' }) }) }) }
+        )
+        $script:Items = @(
+            [pscustomobject]@{ unit_code = 'A'; task_pattern_id = 'P1'; key = 'A1' },
+            [pscustomobject]@{ unit_code = 'A'; task_pattern_id = 'P2'; key = 'A2' },
+            [pscustomobject]@{ unit_code = 'B'; task_pattern_id = 'P1'; key = 'B1' }
+        )
+    }
+
+    It 'タスクまで一致するパターンの項目を選ぶ' {
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A' -ProcessCode 'DSN' -TaskGroupCode 'API' -TaskCode 'SPEC').key | Should -Be 'A2'
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A' -ProcessCode 'DSN' -TaskGroupCode 'DB' -TaskCode 'ERD').key | Should -Be 'A1'
+    }
+
+    It '工程だけ一致する場合もその項目を選ぶ' {
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A' -ProcessCode 'OPS').key | Should -Be 'A2'
+    }
+
+    It 'コード無し・どれにも一致しない場合は先頭' {
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A').key | Should -Be 'A1'
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A' -ProcessCode 'ZZZ').key | Should -Be 'A1'
+    }
+
+    It 'タスクグループ全体 (task_code = -) はグループ一致で判定' {
+        (Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'A' -ProcessCode 'DSN' -TaskGroupCode 'API' -TaskCode '-').key | Should -Be 'A2'
+    }
+
+    It 'ユニットコードが無ければ $null' {
+        Find-ProjectForCodes -Items $script:Items -Patterns $script:Patterns -UnitCode 'Z' | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Test-ProjectFilterMatch' -Tag 'unit' {
     BeforeAll {
         $script:Item = [pscustomobject]@{ unit_code = 'ABC001'; display = '⭐ [ABC001] 顧客管理 (基幹刷新)' }

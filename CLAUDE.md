@@ -69,6 +69,7 @@ if ($b[0] -ne 0xEF -or $b[1] -ne 0xBB -or $b[2] -ne 0xBF) {
 | 症状 | 真因 | 対処 |
 |---|---|---|
 | `引数の型が一致しません` (ItemsSource 代入時) | `@($List[object] of PSCustomObject)` が ArgumentException を投げる | `foreach` で 1 要素ずつ `List[object]` にコピー (`Set-PivotGrid` 参照) |
+| `用語 'XXX' は認識されません` (起動時) | 起動時にトップレベルで呼ぶ関数 (例: `Set-ProjectComboItems`) の中から、それより後ろで定義された関数を呼んでいる。条件分岐の中だと特定データのときだけ落ちる | 後方定義の関数を呼ばない。`tests/ui/ProjectComboFilter.Tests.ps1` が AST で推移的に検査する |
 | `用語 'XXX' は認識されません` | 関数が dot-source されていないファイルから呼ばれている | 共通ヘルパは `DataStore.ps1` (全画面 dot-source 済み) に置く |
 | ComboBox に `System.Object[]` だけ表示される | 二重ラップ: `Write-Output -NoEnumerate` した戻り値を更に `@(...)` で囲んでいる | 呼出側の `@()` を外す |
 | AdminBtn を押しても無反応 | 旧 `.role -eq 'admin'` が残っている (roles 配列スキーマで silent return) | `Has-Role -Member $m -Role 'admin'` に置換。`tests/unit/RoleUsage.Tests.ps1` が検出 |
@@ -199,7 +200,7 @@ tests/
 ```
 
 実行: `tests\run-tests.cmd` または `tests\Invoke-Tests.ps1`  
-現在 **458 ケース PASS** (2026-10-06 時点)。
+現在 **465 ケース PASS** (2026-10-07 時点)。
 
 **新機能を追加したら、回帰防止テストを必ず追加すること**:
 - 過去事故と同じ pattern を tests/ で検出させる
