@@ -129,10 +129,17 @@ function Show-UserPrefsDialog {
             }
             foreach ($code in $removeSet) { [void]$newPrefs['unit_defaults'].Remove($code) }
             Set-UserPrefs -MemberId $MemberId -Prefs $newPrefs
-            # 書けたことをファイルから読み直して確かめる
+            # 書けたことをファイルから読み直して確かめる (お気に入り・初期プロジェクト・件数)
             $saved = Get-UserPrefs -MemberId $MemberId
-            if ([string]$saved['initial_project'] -ne $wantInitial) {
-                throw ("初期プロジェクトが保存できませんでした (保存先: {0})" -f (Get-UserPrefsPath))
+            $wantFavs = (@($favs.ToArray() | Sort-Object) -join ',')
+            $gotFavs  = (@($saved['favorite_projects'] | Sort-Object) -join ',')
+            $mismatch = New-Object System.Collections.Generic.List[string]
+            if ($gotFavs -ne $wantFavs) { $mismatch.Add(("お気に入り (保存: {0} / 読直し: {1})" -f $wantFavs, $gotFavs)) }
+            if ([string]$saved['initial_project'] -ne $wantInitial) { $mismatch.Add('初期プロジェクト') }
+            if ($newPrefs.ContainsKey('recent_combo_count') -and
+                [int]$saved['recent_combo_count'] -ne [int]$newPrefs['recent_combo_count']) { $mismatch.Add('最近の表示件数') }
+            if ($mismatch.Count -gt 0) {
+                throw ("保存した内容を読み直せませんでした: {0}`n保存先: {1}`nメンバー ID: {2}" -f ($mismatch -join ', '), (Get-UserPrefsPath), $MemberId)
             }
             if (Get-Command Write-FatalLog -ErrorAction SilentlyContinue) {
                 Write-FatalLog ("UserPrefs saved: member={0} initial='{1}' recent={2} favs={3}" -f `
@@ -141,6 +148,9 @@ function Show-UserPrefsDialog {
             $script:Result = $true
             $win.Close()
         } catch {
+            if (Get-Command Write-FatalLog -ErrorAction SilentlyContinue) {
+                Write-FatalLog ("UserPrefs save FAILED: member={0} path={1}: {2}" -f $MemberId, (Get-UserPrefsPath), $_.Exception.Message)
+            }
             [System.Windows.MessageBox]::Show(("個人設定の保存に失敗しました。`n`n{0}" -f $_.Exception.Message),
                 '個人設定', 'OK', 'Error') | Out-Null
         }

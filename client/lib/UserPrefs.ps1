@@ -41,7 +41,16 @@ function Load-UserPrefsAll {
         }
         return $h
     } catch {
-        Write-Warning "user_prefs.json 読込失敗: $_"
+        # 読めないファイルを空扱いのまま上書きすると、他の設定ごと消える。原因を追えるよう
+        # 壊れたファイルを退避してログに残す (Tracker は非表示コンソールなので Warning は誰にも見えない)
+        $msg = "user_prefs.json 読込失敗 ($p): $($_.Exception.Message)"
+        try {
+            $bak = '{0}.broken-{1}' -f $p, (Get-Date -Format 'yyyyMMddHHmmss')
+            Copy-Item -LiteralPath $p -Destination $bak -Force
+            $msg += " / 退避: $bak"
+        } catch { $msg += " / 退避失敗: $($_.Exception.Message)" }
+        if (Get-Command Write-FatalLog -ErrorAction SilentlyContinue) { Write-FatalLog $msg }
+        Write-Warning $msg
         return @{}
     }
 }

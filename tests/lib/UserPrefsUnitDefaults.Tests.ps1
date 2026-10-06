@@ -120,6 +120,19 @@ Describe '初期プロジェクト' -Tag 'unit' {
     }
 }
 
+Describe '読めない user_prefs.json' -Tag 'unit' {
+    It '空キーを含む JSON は既定値で読み、元ファイルを退避する' {
+        $path = Get-UserPrefsPath
+        Get-ChildItem -Path "$path.broken-*" -ErrorAction SilentlyContinue | Remove-Item -Force
+        # PS 5.1 の ConvertFrom-Json は空キーで失敗する
+        Set-Content -LiteralPath $path -Value '{"E001":{"favorite_projects":["A"],"x":{"":1}}}' -Encoding UTF8
+        @((Get-UserPrefs -MemberId 'E001' -WarningAction SilentlyContinue).favorite_projects).Count | Should -Be 0
+        @(Get-ChildItem -Path "$path.broken-*").Count | Should -BeGreaterThan 0
+        Get-ChildItem -Path "$path.broken-*" | Remove-Item -Force
+        Remove-Item -LiteralPath $path -Force
+    }
+}
+
 Describe 'お気に入り切替' -Tag 'unit' {
     BeforeEach {
         Remove-Item -LiteralPath (Get-UserPrefsPath) -Force -ErrorAction SilentlyContinue
