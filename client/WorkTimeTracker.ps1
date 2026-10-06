@@ -448,17 +448,19 @@ function Update-RecentCombos {
     if ($Script:RecentComboCount -le 0) { $ui.RecentCombosArea.Visibility = 'Collapsed'; return }
     $combos = Get-RecentEntryCombos -Entries $Script:Entries -Max $Script:RecentComboCount
     $rowStyle = $Script:Window.FindResource('RecentRow')
-    # 行の表示は「タスク + 工数」だけに絞る。同じタスク名が複数あるときだけユニット名を添えて見分ける
+    # 行の表示は「ユニットコード + タスク + 工数」。それでも同じ表示が複数あるとき (カテゴリ違い等) だけ
+    # カテゴリ名を添えて見分ける
     $rows = foreach ($c in $combos) {
         $n = Resolve-EntryNames -ProjCode $c.project_code -ProcCode $c.process_code -TgCode $c.task_group_code `
                                 -TaskCode $c.task_code -CatCode $c.category
-        $leaf = @($n.task_name, $n.task_group_name, $n.process_name, $n.project_name) | Where-Object { $_ } | Select-Object -First 1
-        [pscustomobject]@{ combo = $c; names = $n; label = [string]$leaf }
+        $leaf = @($n.task_name, $n.task_group_name, $n.process_name) | Where-Object { $_ } | Select-Object -First 1
+        $text = if ($leaf) { '[{0}] {1}' -f $c.project_code, $leaf } else { '[{0}]' -f $c.project_code }
+        [pscustomobject]@{ combo = $c; names = $n; label = $text }
     }
     $dupLabels = @($rows | Group-Object label | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
     foreach ($r in $rows) {
         $c = $r.combo; $n = $r.names
-        $label = if ($dupLabels -contains $r.label) { '{0} ({1})' -f $r.label, $n.project_name } else { $r.label }
+        $label = if ($dupLabels -contains $r.label -and $n.category_name) { '{0} ({1})' -f $r.label, $n.category_name } else { $r.label }
         $dock = New-Object System.Windows.Controls.DockPanel
         $hoursText = New-Object System.Windows.Controls.TextBlock
         $hoursText.Text = if ($c.hours -gt 0) { '{0:0.0#} h' -f $c.hours } else { '' }
