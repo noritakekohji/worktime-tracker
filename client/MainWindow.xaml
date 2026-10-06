@@ -201,9 +201,42 @@
             <Setter Property="FontWeight" Value="Normal"/>
         </Style>
 
+        <!-- 「最近」の 1 行 (クリックで入力)。左: タスク / 右: 工数 -->
+        <Style x:Key="RecentRow" TargetType="Button">
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Padding" Value="8,1"/>
+            <Setter Property="MinHeight" Value="20"/>
+            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#d1fae5"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource EmeraldL}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- 入力カード: 区分見出し / 行 / ラベル -->
         <Style x:Key="FormSection" TargetType="DockPanel">
-            <Setter Property="Margin" Value="0,10,0,4"/>
+            <Setter Property="Margin" Value="0,6,0,2"/>
         </Style>
         <Style x:Key="FormSectionTitle" TargetType="TextBlock">
             <Setter Property="DockPanel.Dock" Value="Left"/>
@@ -584,7 +617,8 @@
                         <DockPanel x:Name="RecentCombosArea" Style="{StaticResource FormRow}" Visibility="Collapsed"
                                    ToolTip="最近使ったプロジェクト〜カテゴリの組み合わせ。クリックで入力します (件数は『お気に入り』画面で変更)">
                             <TextBlock Text="最近" Style="{StaticResource FormLabel}" VerticalAlignment="Top" Margin="0,4,0,0"/>
-                            <WrapPanel x:Name="RecentCombosPanel"/>
+                            <!-- 1 列に並べる (各行: タスク + 工数) -->
+                            <StackPanel x:Name="RecentCombosPanel"/>
                         </DockPanel>
                         <DockPanel Style="{StaticResource FormRow}">
                             <TextBlock Text="プロジェクト" Style="{StaticResource FormLabel}"/>

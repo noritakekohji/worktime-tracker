@@ -113,21 +113,37 @@ function Show-UserPrefsDialog {
     $script:Result = $false
 
     $u.SaveBtn.Add_Click({
-        $favs = New-Object System.Collections.Generic.List[string]
-        foreach ($cb in $cbList) {
-            if ($cb.IsChecked) { $favs.Add([string]$cb.Tag) }
+        # 失敗を黙って捨てない (Tracker は非表示コンソールで動くため、未捕捉エラーは利用者に見えない)
+        try {
+            $favs = New-Object System.Collections.Generic.List[string]
+            foreach ($cb in $cbList) {
+                if ($cb.IsChecked) { $favs.Add([string]$cb.Tag) }
+            }
+            # 読み直してから差分だけ反映する (unit_defaults 等ほかのキーを消さない)
+            $newPrefs = Get-UserPrefs -MemberId $MemberId
+            $newPrefs['favorite_projects'] = $favs.ToArray()
+            $wantInitial = [string]$u.InitialProjectCombo.SelectedValue
+            $newPrefs['initial_project'] = $wantInitial
+            if ($null -ne $u.RecentCountCombo.SelectedValue) {
+                $newPrefs['recent_combo_count'] = _NormalizeRecentComboCount $u.RecentCountCombo.SelectedValue
+            }
+            foreach ($code in $removeSet) { [void]$newPrefs['unit_defaults'].Remove($code) }
+            Set-UserPrefs -MemberId $MemberId -Prefs $newPrefs
+            # 書けたことをファイルから読み直して確かめる
+            $saved = Get-UserPrefs -MemberId $MemberId
+            if ([string]$saved['initial_project'] -ne $wantInitial) {
+                throw ("初期プロジェクトが保存できませんでした (保存先: {0})" -f (Get-UserPrefsPath))
+            }
+            if (Get-Command Write-FatalLog -ErrorAction SilentlyContinue) {
+                Write-FatalLog ("UserPrefs saved: member={0} initial='{1}' recent={2} favs={3}" -f `
+                    $MemberId, $saved['initial_project'], $saved['recent_combo_count'], (@($saved['favorite_projects']) -join ','))
+            }
+            $script:Result = $true
+            $win.Close()
+        } catch {
+            [System.Windows.MessageBox]::Show(("個人設定の保存に失敗しました。`n`n{0}" -f $_.Exception.Message),
+                '個人設定', 'OK', 'Error') | Out-Null
         }
-        # 読み直してから差分だけ反映する (unit_defaults 等ほかのキーを消さない)
-        $newPrefs = Get-UserPrefs -MemberId $MemberId
-        $newPrefs['favorite_projects'] = $favs.ToArray()
-        $newPrefs['initial_project'] = [string]$u.InitialProjectCombo.SelectedValue
-        if ($null -ne $u.RecentCountCombo.SelectedValue) {
-            $newPrefs['recent_combo_count'] = _NormalizeRecentComboCount $u.RecentCountCombo.SelectedValue
-        }
-        foreach ($code in $removeSet) { [void]$newPrefs['unit_defaults'].Remove($code) }
-        Set-UserPrefs -MemberId $MemberId -Prefs $newPrefs
-        $script:Result = $true
-        $win.Close()
     })
     $u.CancelBtn.Add_Click({ $script:Result = $false; $win.Close() })
 

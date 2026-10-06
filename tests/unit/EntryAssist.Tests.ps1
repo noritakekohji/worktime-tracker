@@ -66,6 +66,17 @@ Describe 'Get-RecentEntryCombos' -Tag 'unit' {
         @($r | ForEach-Object { $_.project_code }) | Should -Be @('C', 'B')
     }
 
+    It '工数は同じ組み合わせの中で最も新しい行の値' {
+        $entries = @(
+            (New-E '2026-10-01' -Proj 'A' -Hours 2.0),
+            (New-E '2026-10-03' -Proj 'A' -Hours 3.5),
+            (New-E '2026-10-02' -Proj 'A' -Hours 1.0)
+        )
+        $r = Get-RecentEntryCombos -Entries $entries -Max 5
+        $r.Count | Should -Be 1
+        $r[0].hours | Should -Be 3.5
+    }
+
     It '工程やカテゴリが違えば別の組み合わせ' {
         $entries = @(
             (New-E '2026-10-01' -Cat 'DESIGN'),

@@ -30,7 +30,7 @@ function Find-PreviousWorkDayEntries {
 
 function Get-RecentEntryCombos {
     # 新しい日付順に「プロジェクト〜カテゴリ」の組み合わせを重複なしで最大 Max 件返す。
-    # 同じ日付の中では後から追加した行を新しいとみなす
+    # 同じ日付の中では後から追加した行を新しいとみなす。hours はその組み合わせの最新行の工数
     param($Entries, [int]$Max = 5)
     $indexed = New-Object System.Collections.Generic.List[object]
     $i = 0
@@ -46,12 +46,15 @@ function Get-RecentEntryCombos {
     foreach ($x in $sorted) {
         if ($out.Count -ge $Max) { break }
         $e = $x.entry
+        $hours = 0.0
+        [void][double]::TryParse((_EaStr $e.hours), [ref]$hours)
         $combo = [pscustomobject]@{
             project_code    = _EaStr $e.project_code
             process_code    = _EaStr $e.process_code
             task_group_code = _EaStr $e.task_group_code
             task_code       = _EaStr $e.task_code
             category        = _EaStr $e.category
+            hours           = $hours
         }
         $key = ($combo.project_code, $combo.process_code, $combo.task_group_code, $combo.task_code, $combo.category) -join '|'
         if ($seen.Add($key)) { $out.Add($combo) }

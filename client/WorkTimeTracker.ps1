@@ -447,18 +447,35 @@ function Update-RecentCombos {
     $ui.RecentCombosPanel.Children.Clear()
     if ($Script:RecentComboCount -le 0) { $ui.RecentCombosArea.Visibility = 'Collapsed'; return }
     $combos = Get-RecentEntryCombos -Entries $Script:Entries -Max $Script:RecentComboCount
-    $chipStyle = $Script:Window.FindResource('ChipButton')
-    foreach ($c in $combos) {
+    $rowStyle = $Script:Window.FindResource('RecentRow')
+    # 行の表示は「タスク + 工数」だけに絞る。同じタスク名が複数あるときだけユニット名を添えて見分ける
+    $rows = foreach ($c in $combos) {
         $n = Resolve-EntryNames -ProjCode $c.project_code -ProcCode $c.process_code -TgCode $c.task_group_code `
                                 -TaskCode $c.task_code -CatCode $c.category
-        $leaf = @($n.task_name, $n.task_group_name, $n.process_name) | Where-Object { $_ } | Select-Object -First 1
-        $label = if ($leaf) { '{0} / {1}' -f $n.project_name, $leaf } else { [string]$n.project_name }
+        $leaf = @($n.task_name, $n.task_group_name, $n.process_name, $n.project_name) | Where-Object { $_ } | Select-Object -First 1
+        [pscustomobject]@{ combo = $c; names = $n; label = [string]$leaf }
+    }
+    $dupLabels = @($rows | Group-Object label | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+    foreach ($r in $rows) {
+        $c = $r.combo; $n = $r.names
+        $label = if ($dupLabels -contains $r.label) { '{0} ({1})' -f $r.label, $n.project_name } else { $r.label }
+        $dock = New-Object System.Windows.Controls.DockPanel
+        $hoursText = New-Object System.Windows.Controls.TextBlock
+        $hoursText.Text = if ($c.hours -gt 0) { '{0:0.0#} h' -f $c.hours } else { '' }
+        $hoursText.FontWeight = 'Bold'
+        $hoursText.Margin = '8,0,0,0'
+        [System.Windows.Controls.DockPanel]::SetDock($hoursText, 'Right')
+        $taskText = New-Object System.Windows.Controls.TextBlock
+        $taskText.Text = $label
+        $taskText.TextTrimming = 'CharacterEllipsis'
+        [void]$dock.Children.Add($hoursText)
+        [void]$dock.Children.Add($taskText)
         $b = New-Object System.Windows.Controls.Button
-        $b.Style = $chipStyle
-        $b.Content = $label
+        $b.Style = $rowStyle
+        $b.Content = $dock
         $b.Tag = $c
-        $b.ToolTip = ("[{0}] {1}`n{2} / {3} / {4}`nカテゴリ: {5}" -f $c.project_code, $n.project_name,
-                      $n.process_name, $n.task_group_name, $n.task_name, $n.category_name)
+        $b.ToolTip = ("[{0}] {1}`n{2} / {3} / {4}`nカテゴリ: {5}`n工数: {6}" -f $c.project_code, $n.project_name,
+                      $n.process_name, $n.task_group_name, $n.task_name, $n.category_name, $hoursText.Text)
         $b.Add_Click({ param($s, $e) Apply-RecentCombo -Combo $s.Tag })
         [void]$ui.RecentCombosPanel.Children.Add($b)
     }
@@ -476,10 +493,11 @@ function Apply-RecentCombo {
         }
         $lost = Select-CascadeCodes -ProcessCode $Combo.process_code -TaskGroupCode $Combo.task_group_code -TaskCode $Combo.task_code
         if ($Combo.category) { [void](_SelectComboValue $ui.CategoryCombo $Combo.category) }
+        if ($Combo.hours -gt 0) { $ui.HoursBox.Text = ([double]$Combo.hours).ToString('0.0#') }
         if ($lost) {
             Set-Status ("最近の組み合わせを入力しました ({0} は現在の候補に無いため先頭を選択)" -f $lost) '#f9e2af'
         } else {
-            Set-Status '最近の組み合わせを入力しました。工数を確認して『追加』してください' '#89b4fa'
+            Set-Status '最近の内容を入力しました。工数を確認して『追加』してください' '#89b4fa'
         }
         $ui.HoursBox.Focus() | Out-Null
         $ui.HoursBox.SelectAll()
